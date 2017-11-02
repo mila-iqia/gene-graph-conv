@@ -1,0 +1,204 @@
+import argparse
+import datasets
+import numpy as np
+import models
+import torch
+import time
+from logger import Logger
+from torch.autograd import Variable
+import os
+import pickle
+
+def accuracy(data, model):
+    acc = 0.
+    total = 0.
+
+    for mini in data:
+        inputs = Variable(mini['sample'], requires_grad=False).float()
+        targets = Variable(mini['labels'], requires_grad=False).float()
+
+        max_index_target = targets.max(dim=1)[1].data
+        max_index_pred = model(inputs).max(dim=1)[1].data
+        acc += (max_index_target == max_index_pred).sum()
+        total += len(inputs)
+
+    acc = acc / float(total)
+    return acc
+
+def build_parser():
+    parser = argparse.ArgumentParser(
+        description="Model for convolution-graph network (CGN)")
+
+    parser.add_argument('--epoch', default=10, type=int, help='The number of epochs we want ot train the network.')
+    parser.add_argument('--seed', default=1993, type=int, help='Seed for random initialization and stuff.')
+    parser.add_argument('--batch-size', default=100, type=int, help="The batch size.")
+    parser.add_argument('--tensorboard-dir', default='./testing123/', help='The folder where to store the experiments. Will be created if not already exists.')
+    parser.add_argument('--lr', default=1e-3, type=float, help='learning rate')
+    parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
+    parser.add_argument('--data-dir', default='/u/dutilfra/tmplisa4/transcriptome/graph/', help='The folder contening the dataset.')
+    parser.add_argument('--dataset', choices=['random', 'tcga'], default='random', help='Which dataset to use.')
+    parser.add_argument('--scale-free', action='store_true', help='If we want a scale-free random adjacency matrix for the dataset.')
+    parser.add_argument('--on-cuda', action='store_true', help='If we want to run on gpu (TODO).')
+    parser.add_argument('--sparse', action='store_true', help='If we want to use sparse matrix implementation.')
+
+    # Model specific options
+    parser.add_argument('--num-channel', default=16, type=int, help='Number of channel in the CGN.')
+    parser.add_argument('--num-layer', default=1, type=int, help='Number of convolution layer in the CGN.')
+    parser.add_argument('--nb-class', default=None, type=int, help="Number of class for the dataset (won't work with random graph).")
+
+    return parser
+
+def parse_args(argv):
+
+    if type(argv) == list or argv is None:
+        opt = build_parser().parse_args(argv)
+    else:
+        opt = argv
+
+    return opt
+
+def main(argv=None):
+
+    opt = parse_args(argv)
+
+    batch_size = opt.batch_size
+    epoch = opt.epoch
+    seed = opt.seed
+    learning_rate = opt.lr
+    momentum = opt.momentum
+    num_channel = opt.num_channel
+    num_layer = opt.num_layer
+    sparse = opt.sparse
+    on_cuda = opt.on_cuda
+    tensorboard_dir = opt.tensorboard_dir
+    nb_class = opt.nb_class
+
+    # Dataset
+    dataset_name = opt.dataset
+    scale_free = opt.scale_free
+
+    # The experiment unique id.
+    #exp_name = str(hash(frozenset(vars(opt).items())))
+    exp_name = '_'.join(['{}={}'.format(k, v) for k, v, in vars(opt).iteritems()])
+    print vars(opt)
+
+
+    # creating the dataset
+    print "Getting the dataset..."
+
+    if dataset_name == 'random':
+
+        print "Getting a random graph"
+        dataset = datasets.RandomGraphDataset(nb_nodes=500, nb_edges=1000, nb_examples=10000,
+                                          transform_adj_func=datasets.ApprNormalizeLaplacian(), scale_free=scale_free)
+        nb_class = 2
+
+    elif dataset_name == 'tcga':
+
+        print "Getting TCGA"
+        compute_path = None if scale_free else '/u/dutilfra/tmplisa4/transcriptome/graph/tcga_ApprNormalizeLaplacian.npy'
+
+        # To have a feel of TCGA, take a look at 'view_graph_TCGA.ipynb'
+        dataset = datasets.TCGADataset(transform_adj_func=datasets.ApprNormalizeLaplacian(compute_path), # To delete
+            nb_class=nb_class, use_random_adj=scale_free)
+
+        if nb_class is None:
+            nb_class = len(dict(dataset.labels.attrs))/2
+
+    else:
+        raise ValueError
+
+    print "Nb of edges = ", dataset.nb_edges
+
+
+    # dataset loader
+    train_set, valid_set, test_set = datasets.split_dataset(dataset, batch_size=batch_size, seed=seed)
+
+    # Creating a model
+    # To have a feel of the model, please take a look at cgn.ipynb
+    print "Getting the model..."
+    cgn = models.CGN(dataset.nb_nodes, 1, [num_channel] * num_layer, dataset.get_adj(), nb_class,
+                     on_cuda=on_cuda, to_dense=sparse)
+
+    print "Our model:"
+    print cgn
+
+    # Train the cgn
+    criterion = torch.nn.MultiLabelSoftMarginLoss(size_average=True)
+    optimizer = torch.optim.SGD(cgn.parameters(), lr=learning_rate, momentum=momentum)
+
+    if on_cuda:
+        cgn.cuda()
+
+    # For tensorboard
+    exp_dir = os.path.join(tensorboard_dir, exp_name)
+    if not os.path.exists(exp_dir):
+        os.makedirs(exp_dir)
+
+    # dumping the options
+    pickle.dump(opt, open(os.path.join(exp_dir, 'options.pkl'), 'wb'))
+    writer = Logger(exp_dir)
+    print "We will log everything in ", os.path.join(tensorboard_dir, exp_name)
+
+
+    for t in range(epoch):
+
+        start_timer = time.time()
+
+        for no_b, mini in enumerate(train_set):
+
+            inputs, targets = mini['sample'], mini['labels']
+
+            inputs = Variable(inputs, requires_grad=False).float()
+            targets = Variable(targets, requires_grad=False).float()
+
+            if on_cuda:
+                inputs.cuda()
+                targets.cuda()
+
+            # Forward pass: Compute predicted y by passing x to the model
+            y_pred = cgn(inputs).float()
+
+            # Compute and print loss
+            loss = criterion(y_pred, targets)
+
+            if epoch == 1:
+                print "Done minibatch {}".format(no_b)
+                print(t, loss.data[0])
+
+            # Zero gradients, perform a backward pass, and update the weights.
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+        # Add some metric for tensorboard
+        # Loss
+        writer.scalar_summary('loss', loss[0].data.cpu().numpy(), t)
+
+        # time
+        time_this_epoch = time.time() - start_timer
+        writer.scalar_summary('time', time_this_epoch, t)
+
+        # accuracy, for all the sets
+        for my_set, set_name in zip([train_set, valid_set, test_set], ['train', 'valid', 'test']):
+            acc = accuracy(my_set, cgn)
+
+            writer.scalar_summary('accuracy_{}'.format(set_name), acc, t)
+
+
+        # small summary.
+        print "epoch {}, loss: {:.02f}, acc train: {:0.2f} acc valid: {:0.2f}, time: {:.02f} sec".format(t,
+                                                                                                         loss.data[0],
+                                                                                                         accuracy(
+                                                                                                             train_set,
+                                                                                                             cgn),
+                                                                                                         accuracy(
+                                                                                                             valid_set,
+                                                                                                             cgn),
+                                                                                                         time_this_epoch)
+
+    print "Done!"
+
+if __name__ == '__main__':
+
+    main()
