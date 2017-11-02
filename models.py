@@ -31,7 +31,8 @@ class CGN(nn.Module):
             print "Done!"
 
 
-        self.sparse_D_norm = Variable(self.sparse_D_norm, requires_grad=False)
+        #self.sparse_D_norm = Variable(self.sparse_D_norm, requires_grad=False)
+        self.register_buffer('sparse_D_norm', self.sparse_D_norm)
 
 
         dims = [input_dim] + channels
@@ -54,15 +55,17 @@ class CGN(nn.Module):
 
     def forward(self, x):
 
-        if self.on_cuda:
-            print "putting stuff on gpu..."
-            self.sparse_D_norm.cuda()
+        D_norm = Variable(self.sparse_D_norm, requires_grad=False).cuda()
+
+        #if self.on_cuda:
+        #    print "putting stuff on gpu..."
+        #    D_norm.cuda()
 
         nb_examples, nb_nodes, nb_channels = x.size()
 
         def batch_mul(x, D):
             nb_examples, nb_channels, nb_nodes = x.size()
-            x = x.view(-1, nb_nodes)
+            x = x.view(-1, nb_nodes).cuda()
 
             # Needs this hack to work: https://discuss.pytorch.org/t/does-pytorch-support-autograd-on-sparse-matrix/6156/7
             x = D.mm(x.t()).t()
@@ -71,13 +74,14 @@ class CGN(nn.Module):
             return x
 
         x = x.permute(0, 2, 1).contiguous()# from ex, node, ch, -> ex, ch, node
+        #x = x.cuda()
 
         # Do graph convolution for all
         for layer in self.my_layers:
 
             # TOTRY: see the big ass-multiplication as a convolution on the example.
 
-            x = batch_mul(x, self.sparse_D_norm)#.cuda()
+            x = batch_mul(x, D_norm)#.cuda()
             x = F.tanh(layer(x))  # or relu, sigmoid...
 
         if self.out_dim is not None:
