@@ -25,10 +25,10 @@ class TCGADataset(Dataset):
         """
 
         self.file = h5py.File(graph_file, 'r')
-        self.data = self.file['expression_data']
+        self.data = np.array(self.file['expression_data'])
         self.nb_nodes = self.data.shape[1]
         self.labels = self.file['labels_data']
-        self.adj = np.array(self.file['graph_data']) > 0. # right now we don't cake about the weights
+        self.adj = (np.array(self.file['graph_data']) > 0.).astype('float32') # right now we don't cake about the weights
         self.sample_names = self.file['sample_names']
         self. use_random_adj = use_random_adj
         self.nb_class = nb_class
@@ -45,6 +45,10 @@ class TCGADataset(Dataset):
 
         if transform_adj_func is not None:
             self.transform_adj = transform_adj_func(self.adj)
+
+        # Center
+        self.data = self.data - self.data.mean(axis=0)
+
 
     def __len__(self):
         return self.data.shape[0]
