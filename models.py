@@ -56,11 +56,6 @@ class CGN(nn.Module):
     def forward(self, x):
 
         D_norm = Variable(self.sparse_D_norm, requires_grad=False).cuda()
-
-        #if self.on_cuda:
-        #    print "putting stuff on gpu..."
-        #    D_norm.cuda()
-
         nb_examples, nb_nodes, nb_channels = x.size()
 
         def batch_mul(x, D):
@@ -74,14 +69,13 @@ class CGN(nn.Module):
             return x
 
         x = x.permute(0, 2, 1).contiguous()# from ex, node, ch, -> ex, ch, node
-        #x = x.cuda()
 
         # Do graph convolution for all
         for layer in self.my_layers:
 
             # TOTRY: see the big ass-multiplication as a convolution on the example.
 
-            x = batch_mul(x, D_norm)#.cuda()
+            x = batch_mul(x, D_norm)
             x = F.tanh(layer(x))  # or relu, sigmoid...
 
         if self.out_dim is not None:
@@ -89,3 +83,43 @@ class CGN(nn.Module):
             x = F.softmax(x)
 
         return x
+
+
+# Create a module for the CGN:
+class MLP(nn.Module):
+    def __init__(self,input_dim, channels, out_dim=None, on_cuda=True):
+        super(MLP, self).__init__()
+
+        self.my_layers = []
+        self.out_dim = out_dim
+        self.on_cuda = on_cuda
+
+        dims = [input_dim] + channels
+
+        print "Constructing the network..."
+        layers = []
+        for c_in, c_out in zip(dims[:-1], dims[1:]):
+            layer = nn.Linear(c_in, c_out)
+            layers.append(layer)
+        self.my_layers = nn.ModuleList(layers)
+
+        if channels:
+            self.last_layer = nn.Linear(channels[-1], out_dim)
+        else:
+            self.last_layer = nn.Linear(input_dim, out_dim)
+
+        print "Done!"
+
+    def forward(self, x):
+        nb_examples, nb_nodes, nb_channels = x.size()
+
+        x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
+        for layer in self.my_layers:
+            x = F.tanh(layer(x.view(nb_examples, -1)))  # or relu, sigmoid...
+
+
+        x = self.last_layer(x.view(nb_examples, -1))
+        x = F.softmax(x)
+
+        return x
+
