@@ -1,10 +1,10 @@
+from logger import Logger
 import argparse
 import datasets
 import numpy as np
 import models
 import torch
 import time
-from logger import Logger
 from torch.autograd import Variable
 import os
 import pickle
