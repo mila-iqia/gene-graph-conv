@@ -13,7 +13,7 @@ import networkx
 class TCGADataset(Dataset):
     """TCGA Dataset."""
 
-    def __init__(self, graph_file="/u/dutilfra/tmplisa4/transcriptome/graph/dataset.hdf5", transform=None,
+    def __init__(self, graph_file="/data/milatmp1/dutilfra/transcriptome/graph/dataset.hdf5", transform=None,
                  transform_adj_func=None, use_random_adj=False, nb_class=None):
         """
         Args:
@@ -145,6 +145,12 @@ class RandomGraphDataset(Dataset):
             return self.adj
         else:
             return self.transform_adj
+
+    def labels_name(self, l):
+
+        labels = {0: 'neg', 'neg':0, 'pos':1, 1:'pos'}
+
+        return labels[l]
 
 def split_dataset(dataset, batch_size=100, random=False, train_ratio=0.8, seed=1993, nb_samples=None, nb_per_class=None):
 

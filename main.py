@@ -9,7 +9,7 @@ from torch.autograd import Variable
 import os
 import pickle
 
-def accuracy(data, model):
+def accuracy(data, model, no_class = None):
     acc = 0.
     total = 0.
 
@@ -17,13 +17,64 @@ def accuracy(data, model):
         inputs = Variable(mini['sample'], requires_grad=False).float().cuda()
         targets = Variable(mini['labels'], requires_grad=False).float().cuda()
 
-        max_index_target = targets.max(dim=1)[1].data.cpu().long()
-        max_index_pred = model(inputs).max(dim=1)[1].data.cpu().long()
-        acc += (max_index_target == max_index_pred).sum()
-        total += len(inputs)
+        max_index_target = targets.max(dim=1)[1].data.cpu().long().numpy()
+        max_index_pred = model(inputs).max(dim=1)[1].data.cpu().long().numpy()
+
+        id_to_keep = np.ones_like(max_index_target)
+        if no_class is not None:
+            id_to_keep = max_index_target == no_class
+
+        acc += ((max_index_target == max_index_pred) * id_to_keep).sum()
+        total += sum(id_to_keep)
 
     acc = acc / float(total)
     return acc
+
+def get_most_important_gene(data, model):
+
+    for mini in data:
+        inputs = Variable(mini['sample'], requires_grad=False).float().cuda()
+
+        max_index_pred = model(inputs).max(dim=1)[1].data.cpu().long()
+
+
+def accuracy_per_class(data, model, nb_class, idx_to_str):
+
+    acc = {}
+
+    all_target = None
+    all_pred = None
+
+    # Get the predictions
+    for mini in data:
+        inputs = Variable(mini['sample'], requires_grad=False).float().cuda()
+        targets = Variable(mini['labels'], requires_grad=False).float().cuda()
+
+        max_index_target = targets.max(dim=1)[1].data.cpu().long().numpy()
+        max_index_pred = model(inputs).max(dim=1)[1].data.cpu().long().numpy()
+
+        if all_target is None:
+            all_target = max_index_target
+        else:
+            all_target = np.concatenate([all_target, max_index_target])
+
+        if all_pred is None:
+            all_pred = max_index_pred
+        else:
+            all_pred = np.concatenate([all_pred, max_index_pred])
+
+    # Get the class specific
+    for cl in range(nb_class):
+
+        id_to_keep = all_target == cl
+
+        tmp = ((all_target == all_pred) * id_to_keep).sum()
+        total = sum(id_to_keep)
+        acc[idx_to_str(cl)] = tmp / float(total)
+
+    return acc
+
+
 
 def build_parser():
     parser = argparse.ArgumentParser(
@@ -37,7 +88,7 @@ def build_parser():
     parser.add_argument('--weight-decay', default=0., type=float, help='weight decay (L2 loss).')
     parser.add_argument('--l1-loss', default=0., type=float, help='L1 loss.')
     parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
-    parser.add_argument('--data-dir', default='/u/dutilfra/tmplisa4/transcriptome/graph/', help='The folder contening the dataset.')
+    parser.add_argument('--data-dir', default='/data/milatmp1/dutilfra/transcriptome/graph/', help='The folder contening the dataset.')
     parser.add_argument('--dataset', choices=['random', 'tcga'], default='random', help='Which dataset to use.')
     parser.add_argument('--scale-free', action='store_true', help='If we want a scale-free random adjacency matrix for the dataset.')
     parser.add_argument('--cuda', action='store_true', help='If we want to run on gpu.')
@@ -46,8 +97,8 @@ def build_parser():
     parser.add_argument('--name', type=str, default=None, help="If we want to add a random str to the folder.")
 
     # Model specific options
-    parser.add_argument('--num-channel', default=16, type=int, help='Number of channel in the CGN.')
-    parser.add_argument('--model', default=16, choices=['cgn', 'mlp'], help='Number of channel in the CGN.')
+    parser.add_argument('--num-channel', default=32, type=int, help='Number of channel in the CGN.')
+    parser.add_argument('--model', default='cgn', choices=['cgn', 'mlp'], help='Number of channel in the CGN.')
     parser.add_argument('--num-layer', default=1, type=int, help='Number of convolution layer in the CGN.')
     parser.add_argument('--nb-class', default=None, type=int, help="Number of class for the dataset (won't work with random graph).")
     parser.add_argument('--nb-examples', default=None, type=int, help="Number of samples to train on.")
@@ -133,7 +184,7 @@ def main(argv=None):
     elif dataset_name == 'tcga':
 
         print "Getting TCGA"
-        compute_path = None if scale_free else '/u/dutilfra/tmplisa4/transcriptome/graph/tcga_ApprNormalizeLaplacian.npy'
+        compute_path = None if scale_free else '/data/milatmp1/dutilfra/transcriptome/graph/tcga_ApprNormalizeLaplacian.npy'
         transform_adj_func = None if not_norm_adj or num_layer == 0 or model != 'cgn' else datasets.ApprNormalizeLaplacian(compute_path)
 
         # To have a feel of TCGA, take a look at 'view_graph_TCGA.ipynb'
@@ -176,6 +227,9 @@ def main(argv=None):
         my_model.cuda()
 
     # For tensorboard
+    if not os.path.exists(tensorboard_dir):
+        os.mkdir(tensorboard_dir)
+
     exp_dir = os.path.join(tensorboard_dir, exp_name)
     if not os.path.exists(exp_dir):
         os.mkdir(exp_dir)
@@ -231,6 +285,10 @@ def main(argv=None):
 
             writer.scalar_summary('accuracy_{}'.format(set_name), acc[set_name], t)
 
+            # accuracy for a different class
+            acc_per_class = accuracy_per_class(my_set, my_model, nb_class, lambda x: dataset.labels_name(x))
+            for k, v in acc_per_class.iteritems():
+                writer.scalar_summary('accuracy_{}/{}'.format(set_name, k), v, t)
 
         # small summary.
         print "epoch {}, loss: {:.03f}, acc train: {:0.2f} acc valid: {:0.2f}, time: {:.02f} sec".format(t,
