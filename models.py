@@ -21,7 +21,7 @@ class CGN(nn.Module):
 
         self.adj = adj # The normalization transformation (need to be precomputed)
         self.edges = torch.LongTensor(np.array(np.where(self.adj))) # The list of edges
-        flat_adj = self.D_norm.flatten()[np.where(self.adj.flatten())] # get the value
+        flat_adj = self.adj.flatten()[np.where(self.adj.flatten())] # get the value
         flat_adj = torch.FloatTensor(flat_adj)
 
         # Constructing a sparse matrix
@@ -69,7 +69,10 @@ class CGN(nn.Module):
     def _adj_mul(self, x, D):
 
         nb_examples, nb_channels, nb_nodes = x.size()
-        x = x.view(-1, nb_nodes).cuda()
+        x = x.view(-1, nb_nodes)
+
+        if self.on_cuda:
+            x = x.cuda()
 
         # Needs this hack to work: https://discuss.pytorch.org/t/does-pytorch-support-autograd-on-sparse-matrix/6156/7
         x = D.mm(x.t()).t()
@@ -79,7 +82,11 @@ class CGN(nn.Module):
 
     def forward(self, x):
 
-        D_norm = Variable(self.sparse_D_norm, requires_grad=False).cuda()
+        D_norm = Variable(self.sparse_D_norm, requires_grad=False)
+
+        if self.on_cuda:
+            D_norm.cuda()
+
         out = None
         nb_examples, nb_nodes, nb_channels = x.size()
 
@@ -151,7 +158,7 @@ class MLP(nn.Module):
 
         return x
 
-class CGN2(nn.Module):
+class LCG(nn.Module):
     def __init__(self,input_dim, A, channels=1, out_dim=2, on_cuda=False):
         super(CGN2, self).__init__()
 
@@ -165,7 +172,7 @@ class CGN2(nn.Module):
         print "Constructing the network..."   
         
         
-        edges_np = np.asarray(np.where(A == 1)).T
+        edges_np = np.asarray(np.where(A > 0.)).T
         print edges_np
         self.edges = torch.LongTensor(edges_np)
         
@@ -193,7 +200,9 @@ class CGN2(nn.Module):
         
         x = x.clone()
         #x = x.view(batch_size, -1)
-        x = x[:,channel,:]
+        x = x[:, :, channel]
+        #import ipdb; ipdb.set_trace()
+        #print x
         tocompute = torch.index_select(x, 1, Variable(edges.contiguous().view(-1))).view(batch_size, -1, 2)
         #print tocompute
         conv = tocompute*weights
@@ -215,9 +224,10 @@ class CGN2(nn.Module):
         
     def forward(self, x):
         nb_examples, nb_nodes, nb_channels = x.size()
-        
+        #import ipdb; ipdb.set_trace()
+
         #print x
-        self.GraphConv(x, self.edges, 0, nb_examples, self.weights1)
+        x = self.GraphConv(x, self.edges, 0, nb_examples, self.weights1)
 
         x = self.last_layer(x.view(nb_examples, -1))
         x = F.softmax(x)

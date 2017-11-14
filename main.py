@@ -9,13 +9,18 @@ from torch.autograd import Variable
 import os
 import pickle
 
-def accuracy(data, model, no_class = None):
+def accuracy(data, model, no_class = None, on_cuda=False):
     acc = 0.
     total = 0.
 
     for mini in data:
-        inputs = Variable(mini['sample'], requires_grad=False).float().cuda()
-        targets = Variable(mini['labels'], requires_grad=False).float().cuda()
+
+        inputs = Variable(mini['sample'], requires_grad=False).float()
+        targets = Variable(mini['labels'], requires_grad=False).float()
+
+        if on_cuda:
+            inputs = inputs.cuda()
+            targets = targets.cuda()
 
         max_index_target = targets.max(dim=1)[1].data.cpu().long().numpy()
         max_index_pred = model(inputs).max(dim=1)[1].data.cpu().long().numpy()
@@ -38,7 +43,7 @@ def get_most_important_gene(data, model):
         max_index_pred = model(inputs).max(dim=1)[1].data.cpu().long()
 
 
-def accuracy_per_class(data, model, nb_class, idx_to_str):
+def accuracy_per_class(data, model, nb_class, idx_to_str, on_cuda=False):
 
     acc = {}
 
@@ -47,8 +52,14 @@ def accuracy_per_class(data, model, nb_class, idx_to_str):
 
     # Get the predictions
     for mini in data:
-        inputs = Variable(mini['sample'], requires_grad=False).float().cuda()
-        targets = Variable(mini['labels'], requires_grad=False).float().cuda()
+
+        inputs = Variable(mini['sample'], requires_grad=False).float()
+        targets = Variable(mini['labels'], requires_grad=False).float()
+
+        if on_cuda:
+            inputs = inputs.cuda()
+            targets = targets.cuda()
+
 
         max_index_target = targets.max(dim=1)[1].data.cpu().long().numpy()
         max_index_pred = model(inputs).max(dim=1)[1].data.cpu().long().numpy()
@@ -177,7 +188,7 @@ def main(argv=None):
         nb_samples = 10000 if nb_examples is None else nb_examples
 
         # TODO: add parametrisation of the fake dataset, or would it polute everything?
-        dataset = datasets.RandomGraphDataset(nb_nodes=10000, nb_edges=20000, nb_examples=nb_samples,
+        dataset = datasets.RandomGraphDataset(nb_nodes=100, nb_edges=200, nb_examples=nb_samples,
                                           transform_adj_func=transform_adj_func, scale_free=scale_free)
         nb_class = 2 # Right now we only have 2 class
 
@@ -214,8 +225,8 @@ def main(argv=None):
     elif model == 'mlp':
         my_model = models.MLP(dataset.nb_nodes, [num_channel] * num_layer, nb_class,
                      on_cuda=on_cuda)
-    elif model == 'cgn2':
-        my_model = models.CGN2(dataset.nb_nodes, dataset.get_adj())
+    elif model == 'lcg':
+        my_model = models.LCG(dataset.nb_nodes, dataset.get_adj())
     else:
         print "unknown model"
 
@@ -285,12 +296,12 @@ def main(argv=None):
         # accuracy, for all the sets
         acc = {}
         for my_set, set_name in zip([train_set, valid_set, test_set], ['train', 'valid']):#, 'test']):
-            acc[set_name] = accuracy(my_set, my_model)
+            acc[set_name] = accuracy(my_set, my_model, on_cuda=on_cuda)
 
             writer.scalar_summary('accuracy_{}'.format(set_name), acc[set_name], t)
 
             # accuracy for a different class
-            acc_per_class = accuracy_per_class(my_set, my_model, nb_class, lambda x: dataset.labels_name(x))
+            acc_per_class = accuracy_per_class(my_set, my_model, nb_class, lambda x: dataset.labels_name(x), on_cuda=on_cuda)
             for k, v in acc_per_class.iteritems():
                 writer.scalar_summary('accuracy_{}/{}'.format(set_name, k), v, t)
 
