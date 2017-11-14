@@ -1,10 +1,10 @@
+from logger import Logger
 import argparse
 import datasets
 import numpy as np
 import models
 import torch
 import time
-from logger import Logger
 from torch.autograd import Variable
 import os
 import pickle
@@ -98,7 +98,7 @@ def build_parser():
 
     # Model specific options
     parser.add_argument('--num-channel', default=32, type=int, help='Number of channel in the CGN.')
-    parser.add_argument('--model', default='cgn', choices=['cgn', 'mlp'], help='Number of channel in the CGN.')
+    parser.add_argument('--model', default='cgn', choices=['cgn', 'mlp', 'cgn2'], help='Number of channel in the CGN.')
     parser.add_argument('--num-layer', default=1, type=int, help='Number of convolution layer in the CGN.')
     parser.add_argument('--nb-class', default=None, type=int, help="Number of class for the dataset (won't work with random graph).")
     parser.add_argument('--nb-examples', default=None, type=int, help="Number of samples to train on.")
@@ -165,7 +165,7 @@ def main(argv=None):
         torch.cuda.manual_seed_all(seed)
     else:
         torch.manual_seed(seed)
-        torch.manual_seed_all(seed)
+        #torch.manual_seed_all(seed)
 
     # creating the dataset
     print "Getting the dataset..."
@@ -211,9 +211,13 @@ def main(argv=None):
     if model == 'cgn':
         my_model = models.CGN(dataset.nb_nodes, 1, [num_channel] * num_layer, dataset.get_adj(), nb_class,
                      on_cuda=on_cuda, to_dense=sparse)
-    else:
+    elif model == 'mlp':
         my_model = models.MLP(dataset.nb_nodes, [num_channel] * num_layer, nb_class,
                      on_cuda=on_cuda)
+    elif model == 'cgn2':
+        my_model = models.CGN2(dataset.nb_nodes, dataset.get_adj())
+    else:
+        print "unknown model"
 
     print "Our model:"
     print my_model
