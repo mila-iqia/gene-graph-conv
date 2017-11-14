@@ -280,7 +280,7 @@ def main(argv=None):
 
         # accuracy, for all the sets
         acc = {}
-        for my_set, set_name in zip([train_set, valid_set, test_set], ['train', 'valid', 'test']):
+        for my_set, set_name in zip([train_set, valid_set, test_set], ['train', 'valid']):#, 'test']):
             acc[set_name] = accuracy(my_set, my_model)
 
             writer.scalar_summary('accuracy_{}'.format(set_name), acc[set_name], t)
