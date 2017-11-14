@@ -177,7 +177,7 @@ def main(argv=None):
         nb_samples = 10000 if nb_examples is None else nb_examples
 
         # TODO: add parametrisation of the fake dataset, or would it polute everything?
-        dataset = datasets.RandomGraphDataset(nb_nodes=10, nb_edges=20, nb_examples=nb_samples,
+        dataset = datasets.RandomGraphDataset(nb_nodes=10000, nb_edges=20000, nb_examples=nb_samples,
                                           transform_adj_func=transform_adj_func, scale_free=scale_free)
         nb_class = 2 # Right now we only have 2 class
 
