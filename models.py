@@ -9,7 +9,7 @@ import time
 # Create a module for the CGN:
 class CGN(nn.Module):
 
-    def __init__(self, nb_nodes, input_dim, channels, D_norm, out_dim,
+    def __init__(self, nb_nodes, input_dim, channels, adj, out_dim,
                  on_cuda=True, to_dense=False, add_residual=False,
                  ):
         super(CGN, self).__init__()
@@ -19,21 +19,20 @@ class CGN(nn.Module):
         self.on_cuda = on_cuda
         self.add_residual = add_residual
 
-        self.D_norm = D_norm # The normalization transformation (need to be precomputed)
-        self.edges = torch.LongTensor(np.array(np.where(self.D_norm))) # The list of edges
-        flat_D_norm = self.D_norm.flatten()[np.where(self.D_norm.flatten())] # get the value
-        flat_D_norm = torch.FloatTensor(flat_D_norm)
+        self.adj = adj # The normalization transformation (need to be precomputed)
+        self.edges = torch.LongTensor(np.array(np.where(self.adj))) # The list of edges
+        flat_adj = self.D_norm.flatten()[np.where(self.adj.flatten())] # get the value
+        flat_adj = torch.FloatTensor(flat_adj)
 
         # Constructing a sparse matrix
         print "Constructing the sparse matrix..."
-        self.sparse_D_norm = torch.sparse.FloatTensor(self.edges, flat_D_norm, torch.Size([nb_nodes ,nb_nodes]))#.to_dense()
+        self.sparse_D_norm = torch.sparse.FloatTensor(self.edges, flat_adj, torch.Size([nb_nodes ,nb_nodes]))#.to_dense()
         if to_dense:
             print "Converting the matrix to a dense one, might take some time..."
             self.sparse_D_norm = self.sparse_D_norm.to_dense()
             print "Done!"
 
 
-        #self.sparse_D_norm = Variable(self.sparse_D_norm, requires_grad=False)
         self.register_buffer('sparse_D_norm', self.sparse_D_norm)
 
 
@@ -48,7 +47,6 @@ class CGN(nn.Module):
 
 
         logistic_layer = []
-        logistic_in_dim = []
 
         if not channels: # Only have one layer
             logistic_in_dim = [nb_nodes * input_dim]
@@ -63,14 +61,10 @@ class CGN(nn.Module):
             logistic_layer.append(layer)
 
         self.my_logistic_layers = nn.ModuleList(logistic_layer)
-
-        # If we have only one target per graph, we have a linear layer.
-        #if channels:
-        #    self.last_layer = nn.Linear(nb_nodes * channels[-1], out_dim)
-        #else:
-        #    self.last_layer = nn.Linear(nb_nodes * input_dim, out_dim)
-
         print "Done!"
+
+        # The gradient of the inputs/intermediate variable.
+        self.saved_grad = {}
 
     def _adj_mul(self, x, D):
 
@@ -93,6 +87,8 @@ class CGN(nn.Module):
 
         # Do graph convolution for all
         for num, layer in enumerate(self.my_layers):
+
+            #x.register_hook((lambda y: print y))
 
             if self.add_residual: # skip connection
                 if out is None:
