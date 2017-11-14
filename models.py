@@ -156,40 +156,53 @@ class MLP(nn.Module):
         return x
 
 class CGN2(nn.Module):
-    def __init__(self,input_dim, edges, channels=1, out_dim=2, on_cuda=True):
+    def __init__(self,input_dim, A, channels=1, out_dim=2, on_cuda=False):
         super(CGN2, self).__init__()
 
         self.my_layers = []
         self.out_dim = out_dim
         self.on_cuda = on_cuda
-        self.edges = edges
+        
         self.channels = channels
         #dims = [input_dim] + channels
         
         print "Constructing the network..."   
         
         
-        self.weights1 = nn.Parameter(torch.rand(edges.shape), requires_grad=True)
+        edges_np = np.asarray(np.where(A == 1)).T
+        print edges_np
+        self.edges = torch.LongTensor(edges_np)
+        
+        self.weights1 = nn.Parameter(torch.rand(self.edges.shape), requires_grad=True)
         print self.weights1.size()
 
         self.last_layer = nn.Linear(input_dim, out_dim)
         self.my_layers = nn.ModuleList([self.last_layer])
 
+        
+        
+        
+        self.edge_selector = np.array([np.where(edges_np[:,0] == i)[0] for i in range(input_dim)])
+        print "edge_selector", self.edge_selector
+        
+        
+        
+        
+        
         print "Done!"
 
-        
-    #batch_size = 2
+
     #print x
-    def GraphConv(self, x, edges, batch_size, weights):
+    def GraphConv(self, x, edges, channel, batch_size, weights):
         
         x = x.clone()
-        x = x.view(batch_size, -1)
-        
-        tocompute = torch.index_select(x, 1, Variable(edges.view(-1))).view(batch_size, -1, 2)
+        #x = x.view(batch_size, -1)
+        x = x[:,channel,:]
+        tocompute = torch.index_select(x, 1, Variable(edges.contiguous().view(-1))).view(batch_size, -1, 2)
         #print tocompute
         conv = tocompute*weights
         #print conv
-        for i, edges_to_select in enumerate(edge_selector):
+        for i, edges_to_select in enumerate(self.edge_selector):
             #print "x", conv
             #print "e", edges_to_select
             selected_edges = torch.index_select(conv, 1, Variable(torch.LongTensor(edges_to_select)))
@@ -207,7 +220,8 @@ class CGN2(nn.Module):
     def forward(self, x):
         nb_examples, nb_nodes, nb_channels = x.size()
         
-        self.GraphConv(x,self.edges, nb_examples, self.weights1)
+        #print x
+        self.GraphConv(x, self.edges, 0, nb_examples, self.weights1)
 
         x = self.last_layer(x.view(nb_examples, -1))
         x = F.softmax(x)
