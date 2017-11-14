@@ -160,7 +160,7 @@ class MLP(nn.Module):
 
 class LCG(nn.Module):
     def __init__(self,input_dim, A, channels=1, out_dim=2, on_cuda=False):
-        super(CGN2, self).__init__()
+        super(LCG, self).__init__()
 
         self.my_layers = []
         self.out_dim = out_dim
