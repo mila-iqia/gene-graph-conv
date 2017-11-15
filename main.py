@@ -109,7 +109,7 @@ def build_parser():
 
     # Model specific options
     parser.add_argument('--num-channel', default=32, type=int, help='Number of channel in the CGN.')
-    parser.add_argument('--model', default='cgn', choices=['cgn', 'mlp', 'cgn2'], help='Number of channel in the CGN.')
+    parser.add_argument('--model', default='cgn', choices=['cgn', 'mlp', 'lcg'], help='Number of channel in the CGN.')
     parser.add_argument('--num-layer', default=1, type=int, help='Number of convolution layer in the CGN.')
     parser.add_argument('--nb-class', default=None, type=int, help="Number of class for the dataset (won't work with random graph).")
     parser.add_argument('--nb-examples', default=None, type=int, help="Number of samples to train on.")
@@ -188,8 +188,8 @@ def main(argv=None):
         nb_samples = 10000 if nb_examples is None else nb_examples
 
         # TODO: add parametrisation of the fake dataset, or would it polute everything?
-        dataset = datasets.RandomGraphDataset(nb_nodes=100, nb_edges=200, nb_examples=nb_samples,
-                                          transform_adj_func=transform_adj_func, scale_free=scale_free)
+        dataset = datasets.RandomGraphDataset(nb_nodes=1000, nb_edges=2000, nb_examples=nb_samples,
+                                          transform_adj_func=transform_adj_func, scale_free=scale_free, seed=seed)
         nb_class = 2 # Right now we only have 2 class
 
     elif dataset_name == 'tcga':
@@ -226,7 +226,7 @@ def main(argv=None):
         my_model = models.MLP(dataset.nb_nodes, [num_channel] * num_layer, nb_class,
                      on_cuda=on_cuda)
     elif model == 'lcg':
-        my_model = models.LCG(dataset.nb_nodes, dataset.get_adj())
+        my_model = models.LCG(dataset.nb_nodes, dataset.get_adj(), on_cuda=on_cuda)
     else:
         print "unknown model"
 

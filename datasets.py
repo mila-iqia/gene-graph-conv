@@ -100,8 +100,9 @@ class RandomGraphDataset(Dataset):
     """
 
     def __init__(self, nb_nodes=1000, nb_edges=2000, nb_examples=1000,
-                 transform=None, transform_adj_func=None, scale_free=True):
+                 transform=None, transform_adj_func=None, scale_free=True, seed=1993):
 
+        np.random.seed(seed)
         self.nb_nodes = nb_nodes
         self.nb_examples = nb_examples
 

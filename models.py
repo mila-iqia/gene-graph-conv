@@ -165,32 +165,37 @@ class LCG(nn.Module):
         self.my_layers = []
         self.out_dim = out_dim
         self.on_cuda = on_cuda
-        
+        self.nb_nodes = A.shape[0]
+
         self.channels = channels
         #dims = [input_dim] + channels
         
         print "Constructing the network..."   
-        
-        
-        edges_np = np.asarray(np.where(A > 0.)).T
-        print edges_np
+        self.max_edges = max((A > 0.).sum(0))
+
+
+        #edges_np = np.asarray(np.where(A > 0.)).T
+        edges_np = [np.concatenate([np.asarray(np.where(A[i:i+1] > 0.)).T,
+                                    [[0, i]] * (self.max_edges - len(np.asarray(np.where(A[i:i+1] > 0.)).T))]) if len(np.asarray(np.where(A[i:i+1] > 0.)).T) < self.max_edges
+                    else np.asarray(np.where(A[i:i+1] > 0.)).T
+                    for i in range(len(A))]
+
+        for i in range(len(edges_np)):
+            edges_np[i][:, 0] = i
+
+        edges_np = np.array(edges_np).reshape(-1, 2)
+
         self.edges = torch.LongTensor(edges_np)
-        
         self.weights1 = nn.Parameter(torch.rand(self.edges.shape), requires_grad=True)
-        print self.weights1.size()
 
         self.last_layer = nn.Linear(input_dim, out_dim)
         self.my_layers = nn.ModuleList([self.last_layer])
 
         
         
-        
-        self.edge_selector = np.array([np.where(edges_np[:,0] == i)[0] for i in range(input_dim)])
-        print "edge_selector", self.edge_selector
-        
-        
-        
-        
+        self.edge_selector = [np.where(edges_np[:,0] == i)[0] for i in range(input_dim)]
+        self.register_buffer('edges', self.edges)
+
         
         print "Done!"
 
@@ -203,31 +208,33 @@ class LCG(nn.Module):
         x = x[:, :, channel]
         #import ipdb; ipdb.set_trace()
         #print x
-        tocompute = torch.index_select(x, 1, Variable(edges.contiguous().view(-1))).view(batch_size, -1, 2)
+        edges = edges.contiguous().view(-1)
+        edges = Variable(edges, requires_grad=False)
+        if self.on_cuda:
+            edges = edges.cuda()
+
+
+        tocompute = torch.index_select(x, 1, edges).view(batch_size, -1, 2)
         #print tocompute
+
+        #import ipdb;
+        #ipdb.set_trace()
+
         conv = tocompute*weights
         #print conv
-        for i, edges_to_select in enumerate(self.edge_selector):
-            #print "x", conv
-            #print "e", edges_to_select
-            selected_edges = torch.index_select(conv, 1, Variable(torch.LongTensor(edges_to_select)))
-            #print "m", selected_edges
-            selected_edges = selected_edges.view(-1,edges_to_select.shape[0]*2)
-            #print "m", selected_edges
-            pooled_edges = torch.max(selected_edges,1)[0]
-            #print "mmo",pooled_edges
-            x[:,i] = pooled_edges
-            #print "xx",x[:,i]
-        return x
-
-        
+        conv = conv.sum(-1).view(-1, self.nb_nodes, self.max_edges).sum(-1)
+        return conv
         
     def forward(self, x):
         nb_examples, nb_nodes, nb_channels = x.size()
         #import ipdb; ipdb.set_trace()
+        edges = Variable(self.edges, requires_grad=False)
+
+        if self.on_cuda:
+            edges = edges.cuda()
 
         #print x
-        x = self.GraphConv(x, self.edges, 0, nb_examples, self.weights1)
+        x = self.GraphConv(x, edges.data, 0, nb_examples, self.weights1)
 
         x = self.last_layer(x.view(nb_examples, -1))
         x = F.softmax(x)
