@@ -1,4 +1,3 @@
-from logger import Logger
 import argparse
 import datasets
 import numpy as np
@@ -94,7 +93,7 @@ def build_parser():
     parser.add_argument('--epoch', default=10, type=int, help='The number of epochs we want ot train the network.')
     parser.add_argument('--seed', default=1993, type=int, help='Seed for random initialization and stuff.')
     parser.add_argument('--batch-size', default=100, type=int, help="The batch size.")
-    parser.add_argument('--tensorboard-dir', default='./testing123/', help='The folder where to store the experiments. Will be created if not already exists.')
+    parser.add_argument('--tensorboard', default='./testing123/', help='The folder where to store the experiments. Will be created if not already exists.')
     parser.add_argument('--lr', default=1e-3, type=float, help='learning rate')
     parser.add_argument('--weight-decay', default=0., type=float, help='weight decay (L2 loss).')
     parser.add_argument('--l1-loss', default=0., type=float, help='L1 loss.')
@@ -105,6 +104,7 @@ def build_parser():
     parser.add_argument('--cuda', action='store_true', help='If we want to run on gpu.')
     parser.add_argument('--sparse', action='store_true', help='If we want to use sparse matrix implementation.')
     parser.add_argument('--not-norm-adj', action='store_true', help="If we don't want to normalize the adjancy matrix.")
+    parser.add_argument('--make-it-work-for-Joseph', action='store_true', help="Don't store anything in tensorboard, otherwise a segfault can happen.")
     parser.add_argument('--name', type=str, default=None, help="If we want to add a random str to the folder.")
 
     # Model specific options
@@ -141,7 +141,7 @@ def main(argv=None):
     num_layer = opt.num_layer
     sparse = opt.sparse
     on_cuda = opt.cuda
-    tensorboard_dir = opt.tensorboard_dir
+    tensorboard = opt.tensorboard
     nb_class = opt.nb_class
     not_norm_adj = opt.not_norm_adj
     nb_examples = opt.nb_examples
@@ -157,9 +157,10 @@ def main(argv=None):
     # The experiment unique id.
     param = vars(opt).copy()
     del param['data_dir']
-    del param['tensorboard_dir']
+    del param['tensorboard']
     del param['cuda']
     del param['sparse']
+    del param['make_it_work_for_Joseph']
     v_to_delete = []
     for v in param:
         if param[v] is None:
@@ -226,7 +227,8 @@ def main(argv=None):
         my_model = models.MLP(dataset.nb_nodes, [num_channel] * num_layer, nb_class,
                      on_cuda=on_cuda)
     elif model == 'lcg':
-        my_model = models.LCG(dataset.nb_nodes, dataset.get_adj(), on_cuda=on_cuda)
+        my_model = models.LCG(dataset.nb_nodes, dataset.get_adj(), out_dim=nb_class,
+                              on_cuda=on_cuda, channels=num_channel, num_layers=num_layer)
     else:
         print "unknown model"
 
@@ -242,18 +244,23 @@ def main(argv=None):
         my_model.cuda()
 
     # For tensorboard
-    if not os.path.exists(tensorboard_dir):
-        os.mkdir(tensorboard_dir)
+    writer = None
+    if not opt.make_it_work_for_Joseph:
+        from logger import Logger
 
-    exp_dir = os.path.join(tensorboard_dir, exp_name)
-    if not os.path.exists(exp_dir):
-        os.mkdir(exp_dir)
+        if not os.path.exists(tensorboard):
+            os.mkdir(tensorboard)
 
-    # dumping the options
-    pickle.dump(opt, open(os.path.join(exp_dir, 'options.pkl'), 'wb'))
-    writer = Logger(exp_dir)
-    print "We will log everything in ", exp_dir
+        exp_dir = os.path.join(tensorboard, exp_name)
+        if not os.path.exists(exp_dir):
+            os.mkdir(exp_dir)
 
+        # dumping the options
+        pickle.dump(opt, open(os.path.join(exp_dir, 'options.pkl'), 'wb'))
+        writer = Logger(exp_dir)
+        print "We will log everything in ", exp_dir
+    else:
+        print "Nothing will be log, everything will only be shown on screen."
 
     for t in range(epoch):
 
@@ -287,23 +294,29 @@ def main(argv=None):
 
         # Add some metric for tensorboard
         # Loss
-        writer.scalar_summary('loss', loss[0].data.cpu().numpy(), t) # TODO pretty sure there is a bug here.
+        if writer is not None:
+            writer.scalar_summary('loss', loss[0].data.cpu().numpy(), t) # TODO pretty sure there is a bug here.
 
         # time
         time_this_epoch = time.time() - start_timer
-        writer.scalar_summary('time', time_this_epoch, t)
+
+        if writer is not None:
+            writer.scalar_summary('time', time_this_epoch, t)
 
         # accuracy, for all the sets
         acc = {}
         for my_set, set_name in zip([train_set, valid_set, test_set], ['train', 'valid']):#, 'test']):
             acc[set_name] = accuracy(my_set, my_model, on_cuda=on_cuda)
 
-            writer.scalar_summary('accuracy_{}'.format(set_name), acc[set_name], t)
+            if writer is not None:
+                writer.scalar_summary('accuracy_{}'.format(set_name), acc[set_name], t)
 
             # accuracy for a different class
             acc_per_class = accuracy_per_class(my_set, my_model, nb_class, lambda x: dataset.labels_name(x), on_cuda=on_cuda)
-            for k, v in acc_per_class.iteritems():
-                writer.scalar_summary('accuracy_{}/{}'.format(set_name, k), v, t)
+
+            if writer is not None:
+                for k, v in acc_per_class.iteritems():
+                    writer.scalar_summary('accuracy_{}/{}'.format(set_name, k), v, t)
 
         # small summary.
         print "epoch {}, loss: {:.03f}, acc train: {:0.2f} acc valid: {:0.2f}, time: {:.02f} sec".format(t,
