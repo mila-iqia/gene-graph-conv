@@ -41,7 +41,7 @@ class CGN(nn.Module):
         print "Constructing the network..."
         layers = []
         for c_in, c_out in zip(dims[:-1], dims[1:]):
-            layer = nn.Conv1d(c_in, c_out, 1, bias=False)
+            layer = nn.Conv1d(c_in, c_out, 1, bias=True)
             layers.append(layer)
         self.my_layers = nn.ModuleList(layers)
 
@@ -85,7 +85,7 @@ class CGN(nn.Module):
         D_norm = Variable(self.sparse_D_norm, requires_grad=False)
 
         if self.on_cuda:
-            D_norm.cuda()
+            D_norm = D_norm.cuda()
 
         out = None
         nb_examples, nb_nodes, nb_channels = x.size()
@@ -159,83 +159,102 @@ class MLP(nn.Module):
         return x
 
 class LCG(nn.Module):
-    def __init__(self,input_dim, A, channels=1, out_dim=2, on_cuda=False):
+    def __init__(self,input_dim, A, channels=16, out_dim=2, on_cuda=False, num_layers = 1, arg_max = -200):
         super(LCG, self).__init__()
 
         self.my_layers = []
         self.out_dim = out_dim
         self.on_cuda = on_cuda
         self.nb_nodes = A.shape[0]
+        self.num_layers = num_layers
 
         self.channels = channels
         #dims = [input_dim] + channels
-        
+
+        #import ipdb; ipdb.set_trace()
+
         print "Constructing the network..."   
-        self.max_edges = max((A > 0.).sum(0))
+        self.max_edges = sorted((A > 0.).sum(0))[arg_max]
+        #self.max_edges = max((A > 0.).sum(0))
+
+        print "Each node will have {} edges.".format(self.max_edges)
 
 
-        #edges_np = np.asarray(np.where(A > 0.)).T
-        edges_np = [np.concatenate([np.asarray(np.where(A[i:i+1] > 0.)).T,
-                                    [[0, i]] * (self.max_edges - len(np.asarray(np.where(A[i:i+1] > 0.)).T))]) if len(np.asarray(np.where(A[i:i+1] > 0.)).T) < self.max_edges
-                    else np.asarray(np.where(A[i:i+1] > 0.)).T
-                    for i in range(len(A))]
+        edges_np = [np.asarray(np.where(A[i:i+1] > 0.)).T for i in range(len(A))]
+        edges_np = [np.concatenate([x, [[0, i]] * (self.max_edges - len(x))]) if len(x) < self.max_edges
+                    else x[:self.max_edges] if len(x) > self.max_edges # Some Nodes has to many connection!
+                    else x
+                    for i, x in enumerate(edges_np)]
 
         for i in range(len(edges_np)):
             edges_np[i][:, 0] = i
 
         edges_np = np.array(edges_np).reshape(-1, 2)
+        edges_np = edges_np[:, 0:1]
+        print edges_np.shape
 
         self.edges = torch.LongTensor(edges_np)
-        self.weights1 = nn.Parameter(torch.rand(self.edges.shape), requires_grad=True)
+        self.super_edges = torch.cat([self.edges] * channels)
 
-        self.last_layer = nn.Linear(input_dim, out_dim)
+        self.my_weights = [nn.Parameter(torch.rand(self.edges.shape[0], channels), requires_grad=True)]
+        self.my_bias = [nn.Parameter(torch.zeros(self.nb_nodes, channels), requires_grad=True)]
+
+        self.last_layer = nn.Linear(input_dim * channels, out_dim)
         self.my_layers = nn.ModuleList([self.last_layer])
 
-        
-        
-        self.edge_selector = [np.where(edges_np[:,0] == i)[0] for i in range(input_dim)]
+        #self.edge_selector = [np.where(edges_np[:,0] == i)[0] for i in range(input_dim)]
         self.register_buffer('edges', self.edges)
 
-        
         print "Done!"
 
-
-    #print x
-    def GraphConv(self, x, edges, channel, batch_size, weights):
+    def GraphConv(self, x, edges, batch_size, weights, bias):
         
-        x = x.clone()
-        #x = x.view(batch_size, -1)
-        x = x[:, :, channel]
-        #import ipdb; ipdb.set_trace()
-        #print x
         edges = edges.contiguous().view(-1)
-        edges = Variable(edges, requires_grad=False)
+
         if self.on_cuda:
             edges = edges.cuda()
+            weights = weights.cuda()
+            bias = bias.cuda()
 
-
-        tocompute = torch.index_select(x, 1, edges).view(batch_size, -1, 2)
-        #print tocompute
-
-        #import ipdb;
-        #ipdb.set_trace()
-
-        conv = tocompute*weights
-        #print conv
-        conv = conv.sum(-1).view(-1, self.nb_nodes, self.max_edges).sum(-1)
-        return conv
-        
-    def forward(self, x):
-        nb_examples, nb_nodes, nb_channels = x.size()
         #import ipdb; ipdb.set_trace()
-        edges = Variable(self.edges, requires_grad=False)
+
+        # We have some memory issues when using big
+        # convs = []
+        # nb = 100000
+        # for i in range(edges.size(0)/nb + 1):
+        #
+        #     if i* nb >= edges.size(0):
+        #         break
+        #
+        #
+        #     sub_edges = edges[i*nb:min((i+1)*nb, edges.size(0))]
+        #     sub_weight = weights[i*nb/weights.size(-1):min((i+1)*nb, edges.size(0))/weights.size(-1)]
+        #
+        #     tocompute = torch.index_select(x, 1, sub_edges).view(batch_size, -1, sub_weight.size(-1))#, 2)
+        #
+        #     print i*nb,(i+1)*nb, weights.size(0)
+        #     conv = tocompute*sub_weight
+        #     convs.append(conv)
+        #
+        # import ipdb;
+        # ipdb.set_trace()
+        # conv = torch.cat(convs, dim=1)
+
+        tocompute = torch.index_select(x, 1, edges).view(batch_size, -1, weights.size(-1))
+        conv = tocompute * weights
+        conv = conv.view(-1, self.nb_nodes, self.max_edges, weights.size(-1)).sum(2)
+        #conv = conv + bias
+        return F.tanh(conv)
+
+    def forward(self, x):
+
+        nb_examples, nb_nodes, nb_channels = x.size()
+        edges = Variable(self.super_edges, requires_grad=False)
 
         if self.on_cuda:
             edges = edges.cuda()
 
-        #print x
-        x = self.GraphConv(x, edges.data, 0, nb_examples, self.weights1)
-
+        x = self.GraphConv(x, edges.data, nb_examples, self.my_weights[0], self.my_bias[0])
         x = self.last_layer(x.view(nb_examples, -1))
         x = F.softmax(x)
 
