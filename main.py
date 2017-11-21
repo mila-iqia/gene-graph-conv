@@ -99,7 +99,7 @@ def build_parser():
     parser.add_argument('--l1-loss', default=0., type=float, help='L1 loss.')
     parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
     parser.add_argument('--data-dir', default='/data/milatmp1/dutilfra/transcriptome/graph/', help='The folder contening the dataset.')
-    parser.add_argument('--dataset', choices=['random', 'tcga'], default='random', help='Which dataset to use.')
+    parser.add_argument('--dataset', choices=['random', 'tcga-tissue', 'tcga-brca'], default='random', help='Which dataset to use.')
     parser.add_argument('--scale-free', action='store_true', help='If we want a scale-free random adjacency matrix for the dataset.')
     parser.add_argument('--cuda', action='store_true', help='If we want to run on gpu.')
     parser.add_argument('--sparse', action='store_true', help='If we want to use sparse matrix implementation.')
@@ -193,14 +193,27 @@ def main(argv=None):
                                           transform_adj_func=transform_adj_func, scale_free=scale_free, seed=seed)
         nb_class = 2 # Right now we only have 2 class
 
-    elif dataset_name == 'tcga':
+    elif dataset_name == 'tcga-tissue':
 
-        print "Getting TCGA"
-        compute_path = None if scale_free else '/data/milatmp1/dutilfra/transcriptome/graph/tcga_ApprNormalizeLaplacian.npy'
+        print "Getting TCGA tissue type"
+        compute_path = None if scale_free else '/data/milatmp1/dutilfra/transcriptome/graph/tcga_tissue_ApprNormalizeLaplacian.npy'
         transform_adj_func = None if not_norm_adj or num_layer == 0 or model != 'cgn' else datasets.ApprNormalizeLaplacian(compute_path)
 
         # To have a feel of TCGA, take a look at 'view_graph_TCGA.ipynb'
-        dataset = datasets.TCGADataset(transform_adj_func=transform_adj_func, # To delete
+        dataset = datasets.TCGATissue(transform_adj_func=transform_adj_func, # To delete
+            nb_class=nb_class, use_random_adj=scale_free)
+
+        if nb_class is None: # means we keep all the class (29 I think)
+            nb_class = len(dict(dataset.labels.attrs))/2
+
+    elif dataset_name == 'tcga-brca':
+
+        print "Getting TCGA BRCA type"
+        compute_path = None if scale_free else '/data/milatmp1/dutilfra/transcriptome/graph/tcga_brca_ApprNormalizeLaplacian.npy'
+        transform_adj_func = None if not_norm_adj or num_layer == 0 or model != 'cgn' else datasets.ApprNormalizeLaplacian(compute_path)
+
+        # To have a feel of TCGA, take a look at 'view_graph_TCGA.ipynb'
+        dataset = datasets.BRCACoexpr(transform_adj_func=transform_adj_func, # To delete
             nb_class=nb_class, use_random_adj=scale_free)
 
         if nb_class is None: # means we keep all the class (29 I think)

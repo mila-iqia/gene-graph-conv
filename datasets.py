@@ -1,20 +1,17 @@
 import os
-import torch
-import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
-from torchvision import transforms, utils
 import h5py
 import networkx
 
 
-class TCGADataset(Dataset):
-    """TCGA Dataset."""
+class GraphGeneDataset(Dataset):
+    """General Dataset to load different graph gene dataset."""
 
-    def __init__(self, graph_file="/data/milatmp1/dutilfra/transcriptome/graph/dataset.hdf5", transform=None,
-                 transform_adj_func=None, use_random_adj=False, nb_class=None):
+    def __init__(self, graph_dir, graph_file,
+                 transform=None,
+                 transform_adj_func=None, use_random_adj=False, nb_class=None, sub_class=None):
         """
         Args:
             graph_file (string): Path to the h5df file.
@@ -24,6 +21,8 @@ class TCGADataset(Dataset):
                 Will be applied once at the beginning
         """
 
+        graph_file = os.path.join(graph_dir, graph_file)
+
         self.file = h5py.File(graph_file, 'r')
         self.data = np.array(self.file['expression_data'])
         self.nb_nodes = self.data.shape[1]
@@ -31,9 +30,20 @@ class TCGADataset(Dataset):
         self.adj = (np.array(self.file['graph_data']) > 0.).astype('float32') # right now we don't cake about the weights
         self.sample_names = self.file['sample_names']
         self. use_random_adj = use_random_adj
+        self.label_name = self.labels.attrs
 
         self.nb_class = nb_class if nb_class is not None else len(self.labels[0])
         self.reduce_number_of_classes = nb_class is not None
+
+        # Take a number of subclasses
+        if sub_class is not None:
+            self.data = self.data[sum([(self.labels[:, i] == 1.) for i in sub_class]) >= 1]
+            self.labels = self.labels[sum([(self.labels[:, i] == 1.) for i in sub_class]) >= 1, :]
+            self.labels = self.labels[:, sub_class]
+
+            # Update the labels, since qe only take a subset.
+            self.label_name = {str(i): self.label_name[str(k)] for i, k in enumerate(sub_class)}
+            self.label_name.update({self.label_name[str(k)] : str(k) for k in self.label_name.keys()})
 
         # If we want a random adjancy matrix:
         if use_random_adj:
@@ -41,8 +51,6 @@ class TCGADataset(Dataset):
             dim = range(self.adj.shape[0])
             np.random.shuffle(dim)
             self.adj = self.adj[dim][:, dim]
-
-            #self.adj = random_adjacency_matrix(self.nb_nodes, self.adj.sum(), scale_free=True)
 
         self.nb_edges = (self.adj.sum() - self.nb_nodes) / 2
 
@@ -91,10 +99,37 @@ class TCGADataset(Dataset):
             return self.transform_adj
 
     def labels_name(self, l):
-        return self.labels.attrs[str(l)]
+        return self.label_name[str(l)]
+
+
+class TCGATissue(GraphGeneDataset):
+
+    """TCGA Dataset. We predict tissue."""
+
+    def __init__(self, graph_dir='/data/lisa/data/genomics/TCGA/', graph_file='TCGA_tissue_ppi.hdf5', **kwargs):
+        super(TCGATissue, self).__init__(graph_dir=graph_dir, graph_file=graph_file, **kwargs)
+
+class BRCACoexpr(GraphGeneDataset):
+
+    """Breast cancer, with coexpression graph. """
+
+    def __init__(self, graph_dir='/data/lisa/data/genomics/TCGA/', graph_file='BRCA_coexpr.hdf5', nb_class=None, **kwargs):
+
+        # For this dataset, when we chose 2 classes, it's the 'Infiltrating Ductal Carcinoma'
+        # and the 'Infiltrating Lobular Carcinoma'
+
+        sub_class = None
+        if nb_class == 2:
+            nb_class = None
+            sub_class = [0, 7]
+
+        super(BRCACoexpr, self).__init__(graph_dir=graph_dir, graph_file=graph_file,
+                                         nb_class=nb_class, sub_class=sub_class,
+                                         **kwargs)
 
 
 class RandomGraphDataset(Dataset):
+
     """
     A random dataset with a random graph for debugging porpucess
     """
