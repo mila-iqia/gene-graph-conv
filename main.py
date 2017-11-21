@@ -7,6 +7,7 @@ import time
 from torch.autograd import Variable
 import os
 import pickle
+import feature_selection
 
 def accuracy(data, model, no_class = None, on_cuda=False):
     acc = 0.
@@ -33,13 +34,6 @@ def accuracy(data, model, no_class = None, on_cuda=False):
 
     acc = acc / float(total)
     return acc
-
-def get_most_important_gene(data, model):
-
-    for mini in data:
-        inputs = Variable(mini['sample'], requires_grad=False).float().cuda()
-
-        max_index_pred = model(inputs).max(dim=1)[1].data.cpu().long()
 
 
 def accuracy_per_class(data, model, nb_class, idx_to_str, on_cuda=False):
@@ -235,7 +229,7 @@ def main(argv=None):
     my_model = None
     if model == 'cgn':
         my_model = models.CGN(dataset.nb_nodes, 1, [num_channel] * num_layer, dataset.get_adj(), nb_class,
-                     on_cuda=on_cuda, to_dense=sparse)
+                     on_cuda=on_cuda, to_dense= not sparse)
     elif model == 'mlp':
         my_model = models.MLP(dataset.nb_nodes, [num_channel] * num_layer, nb_class,
                      on_cuda=on_cuda)
@@ -258,6 +252,7 @@ def main(argv=None):
 
     # For tensorboard
     writer = None
+    exp_dir = None
     if not opt.make_it_work_for_Joseph:
         from logger import Logger
 
@@ -305,6 +300,8 @@ def main(argv=None):
             loss.backward()
             optimizer.step()
 
+
+
         # Add some metric for tensorboard
         # Loss
         if writer is not None:
@@ -339,6 +336,12 @@ def main(argv=None):
                                                                                                          time_this_epoch)
 
     print "Done!"
+
+    if not opt.make_it_work_for_Joseph:
+        print "Extracting the important features..."
+        features = feature_selection.feature_selection(my_model, dataset, opt)
+        pickle.dump(features, open(os.path.join(exp_dir, 'features.pkl'), 'wb'))
+        print "Done!"
 
 if __name__ == '__main__':
 

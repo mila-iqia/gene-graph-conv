@@ -29,6 +29,7 @@ class GraphGeneDataset(Dataset):
         self.labels = self.file['labels_data']
         self.adj = (np.array(self.file['graph_data']) > 0.).astype('float32') # right now we don't cake about the weights
         self.sample_names = self.file['sample_names']
+        self.node_names = np.array(self.file['gene_names'])
         self. use_random_adj = use_random_adj
         self.label_name = self.labels.attrs
 
@@ -43,7 +44,7 @@ class GraphGeneDataset(Dataset):
 
             # Update the labels, since qe only take a subset.
             self.label_name = {str(i): self.label_name[str(k)] for i, k in enumerate(sub_class)}
-            self.label_name.update({self.label_name[str(k)] : str(k) for k in self.label_name.keys()})
+            self.label_name.update({self.label_name[str(k)]: str(k) for k in self.label_name.keys()})
 
         # If we want a random adjancy matrix:
         if use_random_adj:
@@ -146,6 +147,7 @@ class RandomGraphDataset(Dataset):
         self.adj = random_adjacency_matrix(nb_nodes, nb_edges, scale_free)
         self.nb_edges = (self.adj.sum() - nb_nodes) / 2
         self.nb_class = 2
+        self.node_names = list(range(nb_nodes))
 
         # Generating the data
         self.data = np.random.randn(nb_examples, nb_nodes, 1)
@@ -205,9 +207,6 @@ def split_dataset(dataset, batch_size=100, random=False, train_ratio=0.8, seed=1
     # Since the
     if nb_per_class is not None:
 
-        #import ipdb;
-        #ipdb.set_trace()
-
         idx_train = []
         idx_rest = []
 
@@ -262,7 +261,6 @@ def random_adjacency_matrix(nb_nodes, approx_nb_edges, scale_free=True):
     nodes = np.arange(nb_nodes)
 
     # roughly nb_edges edges (sorry, it's not exact, but heh)
-
     if scale_free:
         # Read: https://en.wikipedia.org/wiki/Scale-free_network
 

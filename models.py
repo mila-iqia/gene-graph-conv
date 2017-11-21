@@ -10,7 +10,7 @@ import time
 class CGN(nn.Module):
 
     def __init__(self, nb_nodes, input_dim, channels, adj, out_dim,
-                 on_cuda=True, to_dense=False, add_residual=False,
+                 on_cuda=True, to_dense=False, add_residual=True,
                  ):
         super(CGN, self).__init__()
 
@@ -18,6 +18,8 @@ class CGN(nn.Module):
         self.out_dim = out_dim
         self.on_cuda = on_cuda
         self.add_residual = add_residual
+        self.nb_nodes = nb_nodes
+        self.nb_channels = channels
 
         self.adj = adj # The normalization transformation (need to be precomputed)
         self.edges = torch.LongTensor(np.array(np.where(self.adj))) # The list of edges
@@ -84,7 +86,7 @@ class CGN(nn.Module):
 
         D_norm = Variable(self.sparse_D_norm, requires_grad=False)
 
-        if self.on_cuda:
+        if self.on_cuda and len(self.my_layers) > 0:
             D_norm = D_norm.cuda()
 
         out = None
@@ -145,12 +147,10 @@ class MLP(nn.Module):
 
     def forward(self, x):
         nb_examples, nb_nodes, nb_channels = x.size()
-        representations = []
 
         x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
         for layer in self.my_layers:
             x = F.tanh(layer(x.view(nb_examples, -1)))  # or relu, sigmoid...
-            representations.append(x)
 
         x = self.last_layer(x.view(nb_examples, -1))
         x = F.softmax(x)
@@ -199,8 +199,8 @@ class LCG(nn.Module):
         self.my_weights = [nn.Parameter(torch.rand(self.edges.shape[0], channels), requires_grad=True)]
         self.my_bias = [nn.Parameter(torch.zeros(self.nb_nodes, channels), requires_grad=True)]
 
-        self.last_layer = nn.Linear(input_dim * channels, out_dim)
-        self.my_layers = nn.ModuleList([self.last_layer])
+        last_layer = nn.Linear(input_dim * channels, out_dim)
+        self.my_logistic_layers = nn.ModuleList([last_layer])
 
         #self.edge_selector = [np.where(edges_np[:,0] == i)[0] for i in range(input_dim)]
         self.register_buffer('edges', self.edges)
@@ -255,7 +255,7 @@ class LCG(nn.Module):
             edges = edges.cuda()
 
         x = self.GraphConv(x, edges.data, nb_examples, self.my_weights[0], self.my_bias[0])
-        x = self.last_layer(x.view(nb_examples, -1))
+        x = self.my_logistic_layers[-1](x.view(nb_examples, -1))
         x = F.softmax(x)
 
         return x
