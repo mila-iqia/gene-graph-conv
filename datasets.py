@@ -42,9 +42,10 @@ class GraphGeneDataset(Dataset):
             self.labels = self.labels[sum([(self.labels[:, i] == 1.) for i in sub_class]) >= 1, :]
             self.labels = self.labels[:, sub_class]
 
-            # Update the labels, since qe only take a subset.
+            # Update the labels, since we only take a subset.
             self.label_name = {str(i): self.label_name[str(k)] for i, k in enumerate(sub_class)}
             self.label_name.update({self.label_name[str(k)]: str(k) for k in self.label_name.keys()})
+            self.nb_class = len(sub_class)
 
         # If we want a random adjancy matrix:
         if use_random_adj:
@@ -319,3 +320,61 @@ class ApprNormalizeLaplacian(object):
             print "Done!"
 
         return norm_transform
+
+def get_dataset(opt):
+
+    """
+    Get a dataset based on the options.
+    :param opt:
+    :return:
+    """
+
+    dataset_name = opt.dataset
+    not_norm_adj = opt.not_norm_adj
+    nb_examples = opt.nb_examples
+    scale_free = opt.scale_free
+    nb_class = opt.nb_class
+    model = opt.model
+    num_layer = opt.num_layer
+
+    if dataset_name == 'random':
+
+        print "Getting a random graph"
+        transform_adj_func = None if not_norm_adj else ApprNormalizeLaplacian()
+        nb_samples = 10000 if nb_examples is None else nb_examples
+
+        # TODO: add parametrisation of the fake dataset, or would it polute everything?
+        dataset = RandomGraphDataset(nb_nodes=1000, nb_edges=2000, nb_examples=nb_samples,
+                                          transform_adj_func=transform_adj_func, scale_free=scale_free, seed=seed)
+        nb_class = 2 # Right now we only have 2 class
+
+    elif dataset_name == 'tcga-tissue':
+
+        print "Getting TCGA tissue type"
+        compute_path = None if scale_free else '/data/milatmp1/dutilfra/transcriptome/graph/tcga_tissue_ApprNormalizeLaplacian.npy'
+        transform_adj_func = None if not_norm_adj or num_layer == 0 or model != 'cgn' else ApprNormalizeLaplacian(compute_path)
+
+        # To have a feel of TCGA, take a look at 'view_graph_TCGA.ipynb'
+        dataset = TCGATissue(transform_adj_func=transform_adj_func, # To delete
+            nb_class=nb_class, use_random_adj=scale_free)
+
+        if nb_class is None: # means we keep all the class (29 I think)
+            nb_class = len(dict(dataset.labels.attrs))/2
+
+    elif dataset_name == 'tcga-brca':
+
+        print "Getting TCGA BRCA type"
+        compute_path = None if scale_free else '/data/milatmp1/dutilfra/transcriptome/graph/tcga_brca_ApprNormalizeLaplacian.npy'
+        transform_adj_func = None if not_norm_adj or num_layer == 0 or model != 'cgn' else ApprNormalizeLaplacian(compute_path)
+
+        # To have a feel of TCGA, take a look at 'view_graph_TCGA.ipynb'
+        dataset = BRCACoexpr(transform_adj_func=transform_adj_func, # To delete
+            nb_class=nb_class, use_random_adj=scale_free)
+
+        if nb_class is None: # means we keep all the class (29 I think)
+            nb_class = len(dict(dataset.labels.attrs))/2
+
+    else:
+        raise ValueError
+
+    return dataset, nb_class

@@ -3,14 +3,13 @@ import numpy as np
 from torch.autograd import Variable
 import torch.nn.functional as F
 from torch import nn
-import time
 
 
 # Create a module for the CGN:
 class CGN(nn.Module):
 
     def __init__(self, nb_nodes, input_dim, channels, adj, out_dim,
-                 on_cuda=True, to_dense=False, add_residual=True,
+                 on_cuda=True, add_residual=False,
                  ):
         super(CGN, self).__init__()
 
@@ -29,12 +28,6 @@ class CGN(nn.Module):
         # Constructing a sparse matrix
         print "Constructing the sparse matrix..."
         self.sparse_D_norm = torch.sparse.FloatTensor(self.edges, flat_adj, torch.Size([nb_nodes ,nb_nodes]))#.to_dense()
-        if to_dense:
-            print "Converting the matrix to a dense one, might take some time..."
-            self.sparse_D_norm = self.sparse_D_norm.to_dense()
-            print "Done!"
-
-
         self.register_buffer('sparse_D_norm', self.sparse_D_norm)
 
 
@@ -65,26 +58,24 @@ class CGN(nn.Module):
         self.my_logistic_layers = nn.ModuleList(logistic_layer)
         print "Done!"
 
-        # The gradient of the inputs/intermediate variable.
-        self.saved_grad = {}
-
     def _adj_mul(self, x, D):
 
         nb_examples, nb_channels, nb_nodes = x.size()
         x = x.view(-1, nb_nodes)
 
-        if self.on_cuda:
-            x = x.cuda()
+        #if self.on_cuda:
+        #    x = x.cuda()
 
         # Needs this hack to work: https://discuss.pytorch.org/t/does-pytorch-support-autograd-on-sparse-matrix/6156/7
         x = D.mm(x.t()).t()
-
         x = x.contiguous().view(nb_examples, nb_channels, nb_nodes)
         return x
 
     def forward(self, x):
 
         D_norm = Variable(self.sparse_D_norm, requires_grad=False)
+
+        #import ipdb; ipdb.set_trace()
 
         if self.on_cuda and len(self.my_layers) > 0:
             D_norm = D_norm.cuda()
@@ -96,8 +87,6 @@ class CGN(nn.Module):
 
         # Do graph convolution for all
         for num, layer in enumerate(self.my_layers):
-
-            #x.register_hook((lambda y: print y))
 
             if self.add_residual: # skip connection
                 if out is None:
@@ -259,3 +248,33 @@ class LCG(nn.Module):
         x = F.softmax(x)
 
         return x
+
+def get_model(opt, dataset, nb_class):
+
+    """
+    Return a model based on the options.
+    :param opt:
+    :param dataset:
+    :param nb_class:
+    :return:
+    """
+
+    model = opt.model
+    num_channel = opt.num_channel
+    num_layer = opt.num_layer
+    on_cuda = opt.cuda
+
+    if model == 'cgn':
+        # To have a feel of the model, please take a look at cgn.ipynb
+        my_model = CGN(dataset.nb_nodes, 1, [num_channel] * num_layer, dataset.get_adj(), nb_class, on_cuda=on_cuda)
+
+    elif model == 'mlp':
+        my_model = MLP(dataset.nb_nodes, [num_channel] * num_layer, nb_class, on_cuda=on_cuda)
+
+    elif model == 'lcg':
+        my_model = LCG(dataset.nb_nodes, dataset.get_adj(), out_dim=nb_class,
+                              on_cuda=on_cuda, channels=num_channel, num_layers=num_layer)
+    else:
+        raise ValueError
+
+    return my_model

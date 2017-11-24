@@ -96,7 +96,6 @@ def build_parser():
     parser.add_argument('--dataset', choices=['random', 'tcga-tissue', 'tcga-brca'], default='random', help='Which dataset to use.')
     parser.add_argument('--scale-free', action='store_true', help='If we want a scale-free random adjacency matrix for the dataset.')
     parser.add_argument('--cuda', action='store_true', help='If we want to run on gpu.')
-    parser.add_argument('--sparse', action='store_true', help='If we want to use sparse matrix implementation.')
     parser.add_argument('--not-norm-adj', action='store_true', help="If we don't want to normalize the adjancy matrix.")
     parser.add_argument('--make-it-work-for-Joseph', action='store_true', help="Don't store anything in tensorboard, otherwise a segfault can happen.")
     parser.add_argument('--name', type=str, default=None, help="If we want to add a random str to the folder.")
@@ -131,29 +130,18 @@ def main(argv=None):
     learning_rate = opt.lr
     weight_decay = opt.weight_decay
     momentum = opt.momentum
-    num_channel = opt.num_channel
-    num_layer = opt.num_layer
-    sparse = opt.sparse
     on_cuda = opt.cuda
     tensorboard = opt.tensorboard
-    nb_class = opt.nb_class
-    not_norm_adj = opt.not_norm_adj
     nb_examples = opt.nb_examples
     nb_per_class = opt.nb_per_class
     train_ratio = opt.train_ratio
-    l1_loss = opt.l1_loss
-    model = opt.model
-
-    # Dataset
-    dataset_name = opt.dataset
-    scale_free = opt.scale_free
+    l1_loss = opt.l1_loss # TODO: add
 
     # The experiment unique id.
     param = vars(opt).copy()
     del param['data_dir']
     del param['tensorboard']
     del param['cuda']
-    del param['sparse']
     del param['make_it_work_for_Joseph']
     v_to_delete = []
     for v in param:
@@ -171,52 +159,11 @@ def main(argv=None):
         torch.cuda.manual_seed_all(seed)
     else:
         torch.manual_seed(seed)
-        #torch.manual_seed_all(seed)
 
     # creating the dataset
     print "Getting the dataset..."
-
-    if dataset_name == 'random':
-
-        print "Getting a random graph"
-        transform_adj_func = None if not_norm_adj else datasets.ApprNormalizeLaplacian()
-        nb_samples = 10000 if nb_examples is None else nb_examples
-
-        # TODO: add parametrisation of the fake dataset, or would it polute everything?
-        dataset = datasets.RandomGraphDataset(nb_nodes=1000, nb_edges=2000, nb_examples=nb_samples,
-                                          transform_adj_func=transform_adj_func, scale_free=scale_free, seed=seed)
-        nb_class = 2 # Right now we only have 2 class
-
-    elif dataset_name == 'tcga-tissue':
-
-        print "Getting TCGA tissue type"
-        compute_path = None if scale_free else '/data/milatmp1/dutilfra/transcriptome/graph/tcga_tissue_ApprNormalizeLaplacian.npy'
-        transform_adj_func = None if not_norm_adj or num_layer == 0 or model != 'cgn' else datasets.ApprNormalizeLaplacian(compute_path)
-
-        # To have a feel of TCGA, take a look at 'view_graph_TCGA.ipynb'
-        dataset = datasets.TCGATissue(transform_adj_func=transform_adj_func, # To delete
-            nb_class=nb_class, use_random_adj=scale_free)
-
-        if nb_class is None: # means we keep all the class (29 I think)
-            nb_class = len(dict(dataset.labels.attrs))/2
-
-    elif dataset_name == 'tcga-brca':
-
-        print "Getting TCGA BRCA type"
-        compute_path = None if scale_free else '/data/milatmp1/dutilfra/transcriptome/graph/tcga_brca_ApprNormalizeLaplacian.npy'
-        transform_adj_func = None if not_norm_adj or num_layer == 0 or model != 'cgn' else datasets.ApprNormalizeLaplacian(compute_path)
-
-        # To have a feel of TCGA, take a look at 'view_graph_TCGA.ipynb'
-        dataset = datasets.BRCACoexpr(transform_adj_func=transform_adj_func, # To delete
-            nb_class=nb_class, use_random_adj=scale_free)
-
-        if nb_class is None: # means we keep all the class (29 I think)
-            nb_class = len(dict(dataset.labels.attrs))/2
-
-    else:
-        raise ValueError
-
-    print "Nb of edges = ", dataset.nb_edges
+    dataset, nb_class = datasets.get_dataset(opt)
+    print "Nb of edges =", dataset.nb_edges
 
 
     # dataset loader
@@ -224,21 +171,8 @@ def main(argv=None):
                                                             nb_samples=nb_examples, train_ratio=train_ratio, nb_per_class=nb_per_class)
 
     # Creating a model
-    # To have a feel of the model, please take a look at cgn.ipynb
     print "Getting the model..."
-    my_model = None
-    if model == 'cgn':
-        my_model = models.CGN(dataset.nb_nodes, 1, [num_channel] * num_layer, dataset.get_adj(), nb_class,
-                     on_cuda=on_cuda, to_dense= not sparse)
-    elif model == 'mlp':
-        my_model = models.MLP(dataset.nb_nodes, [num_channel] * num_layer, nb_class,
-                     on_cuda=on_cuda)
-    elif model == 'lcg':
-        my_model = models.LCG(dataset.nb_nodes, dataset.get_adj(), out_dim=nb_class,
-                              on_cuda=on_cuda, channels=num_channel, num_layers=num_layer)
-    else:
-        print "unknown model"
-
+    my_model = models.get_model(opt, dataset, nb_class)
     print "Our model:"
     print my_model
 
@@ -270,6 +204,7 @@ def main(argv=None):
     else:
         print "Nothing will be log, everything will only be shown on screen."
 
+    # The training.
     for t in range(epoch):
 
         start_timer = time.time()
@@ -300,12 +235,10 @@ def main(argv=None):
             loss.backward()
             optimizer.step()
 
-
-
         # Add some metric for tensorboard
         # Loss
         if writer is not None:
-            writer.scalar_summary('loss', loss[0].data.cpu().numpy(), t) # TODO pretty sure there is a bug here.
+            writer.scalar_summary('loss', loss[0].data.cpu().numpy(), t)
 
         # time
         time_this_epoch = time.time() - start_timer
