@@ -93,7 +93,10 @@ def build_parser():
     parser.add_argument('--l1-loss', default=0., type=float, help='L1 loss.')
     parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
     parser.add_argument('--data-dir', default='/data/milatmp1/dutilfra/transcriptome/graph/', help='The folder contening the dataset.')
-    parser.add_argument('--dataset', choices=['random', 'tcga-tissue', 'tcga-brca'], default='random', help='Which dataset to use.')
+    parser.add_argument('--dataset', choices=['random', 'tcga-tissue', 'tcga-brca', "tcga-label"], default='random', help='Which dataset to use.')
+    parser.add_argument('--clinical-file', type=str, default='PANCAN_clinicalMatrix.gz', help='File to read labels from')
+    parser.add_argument('--clinical-label', type=str, default='gender', help='Label to join with data')
+    
     parser.add_argument('--scale-free', action='store_true', help='If we want a scale-free random adjacency matrix for the dataset.')
     parser.add_argument('--cuda', action='store_true', help='If we want to run on gpu.')
     parser.add_argument('--sparse', action='store_true', help='If we want to use sparse matrix implementation.')
@@ -200,6 +203,22 @@ def main(argv=None):
         if nb_class is None: # means we keep all the class (29 I think)
             nb_class = len(dict(dataset.labels.attrs))/2
 
+    elif dataset_name == 'tcga-label':
+
+        print "Getting TCGA tissue with custom label"
+        compute_path = None if scale_free else '/data/milatmp1/dutilfra/transcriptome/graph/tcga_tissue_ApprNormalizeLaplacian.npy'
+        transform_adj_func = None if not_norm_adj or num_layer == 0 or model != 'cgn' else datasets.ApprNormalizeLaplacian(compute_path)
+
+        # To have a feel of TCGA, take a look at 'view_graph_TCGA.ipynb'
+        dataset = datasets.TCGAForLabel(transform_adj_func=transform_adj_func, # To delete
+                nb_class=nb_class, 
+                use_random_adj=scale_free, 
+                clinical_file=opt.clinical_file,
+                clinical_label=opt.clinical_label)
+
+        if nb_class is None: # means we keep all the class (29 I think)
+            nb_class = dataset.labels.shape[1]
+            
     elif dataset_name == 'tcga-brca':
 
         print "Getting TCGA BRCA type"

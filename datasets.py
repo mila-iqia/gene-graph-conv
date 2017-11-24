@@ -127,6 +127,12 @@ class TCGAForLabel(GraphGeneDataset):
         
         clinical_raw = pd.read_csv(graph_dir + clinical_file, compression='gzip', header=0, sep='\t', quotechar='"')
         clinical_raw = clinical_raw.set_index("sampleID");
+        
+        
+        print "Possible labels to select from ", clinical_file, " are ", list(clinical_raw.columns)
+        print "Selected label is ", clinical_label
+        
+        
         clinical = clinical_raw[[clinical_label]]
         clinical = clinical.dropna()
 
@@ -139,9 +145,6 @@ class TCGAForLabel(GraphGeneDataset):
         data_joined = data_joined.dropna()
         clinical_joined = clinical.loc[data_joined.index]
 
-        
-        print "Possible labels to select from ", clinical_file, " are ", list(clinical_raw.columns)
-        print "Selected label is ", clinical_label
         
         print "clinical_raw", clinical_raw.shape, ", clinical", clinical.shape, ", clinical_joined", clinical_joined.shape
         print "data_raw", data_raw.shape, "data_joined", data_joined.shape
