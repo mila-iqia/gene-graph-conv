@@ -35,10 +35,38 @@ def accuracy(data, model, no_class = None, on_cuda=False):
     acc = acc / float(total)
     return acc
 
+def recall(preds, gts, cl):
 
-def accuracy_per_class(data, model, nb_class, idx_to_str, on_cuda=False):
+    #import ipdb; ipdb.set_trace()
 
-    acc = {}
+    ids_from_that_class = gts == cl # ids_to_keep total number in class
+
+    tmp = ((gts == preds) * ids_from_that_class).sum()
+    total = sum(ids_from_that_class)
+    return tmp / float(total)
+
+def precision(preds, gts, cl):
+
+    ids_from_that_class = gts == cl  # total number predicted for that class
+
+    tmp = ((gts == preds) * ids_from_that_class).sum()
+    total = sum(cl == preds)
+    return tmp / float(total)
+
+def f1_score(preds, gts, cl):
+
+    re = recall(preds, gts, cl)
+    pre = precision(preds, gts, cl)
+
+    return 2 * re * pre / (re + pre)
+
+# TODO: move all of that to it's own file
+def compute_metrics_per_class(data, model, nb_class, idx_to_str, on_cuda=False,
+                     metrics_foo={'recall': recall,
+                                  'precision': precision,
+                                  'f1_score': f1_score}):
+
+    metrics = {k: {} for k in metrics_foo.keys()}
 
     all_target = None
     all_pred = None
@@ -70,13 +98,10 @@ def accuracy_per_class(data, model, nb_class, idx_to_str, on_cuda=False):
     # Get the class specific
     for cl in range(nb_class):
 
-        id_to_keep = all_target == cl
+        for i, m in metrics_foo.iteritems():
+            metrics[i][idx_to_str(cl)] = m(all_pred, all_target, cl)
 
-        tmp = ((all_target == all_pred) * id_to_keep).sum()
-        total = sum(id_to_keep)
-        acc[idx_to_str(cl)] = tmp / float(total)
-
-    return acc
+    return metrics
 
 
 
@@ -101,7 +126,8 @@ def build_parser():
     parser.add_argument('--name', type=str, default=None, help="If we want to add a random str to the folder.")
 
     # Model specific options
-    parser.add_argument('--num-channel', default=32, type=int, help='Number of channel in the CGN.')
+    parser.add_argument('--num-channel', default=32, type=int, help='Number of channel in the model.')
+    parser.add_argument('--skip-connections', action='store_true', help='If we want to add skip connection from every layer to the last.')
     parser.add_argument('--model', default='cgn', choices=['cgn', 'mlp', 'lcg'], help='Number of channel in the CGN.')
     parser.add_argument('--num-layer', default=1, type=int, help='Number of convolution layer in the CGN.')
     parser.add_argument('--nb-class', default=None, type=int, help="Number of class for the dataset (won't work with random graph).")
@@ -246,7 +272,7 @@ def main(argv=None):
         if writer is not None:
             writer.scalar_summary('time', time_this_epoch, t)
 
-        # accuracy, for all the sets
+        # compute the metrics for all the sets, for all the classes. right now it's precision/recall/f1-score, for train and valid.
         acc = {}
         for my_set, set_name in zip([train_set, valid_set, test_set], ['train', 'valid']):#, 'test']):
             acc[set_name] = accuracy(my_set, my_model, on_cuda=on_cuda)
@@ -255,14 +281,15 @@ def main(argv=None):
                 writer.scalar_summary('accuracy_{}'.format(set_name), acc[set_name], t)
 
             # accuracy for a different class
-            acc_per_class = accuracy_per_class(my_set, my_model, nb_class, lambda x: dataset.labels_name(x), on_cuda=on_cuda)
+            metric_per_class = compute_metrics_per_class(my_set, my_model, nb_class, lambda x: dataset.labels_name(x), on_cuda=on_cuda)
 
             if writer is not None:
-                for k, v in acc_per_class.iteritems():
-                    writer.scalar_summary('accuracy_{}/{}'.format(set_name, k), v, t)
+                for m, value in metric_per_class.iteritems():
+                   for cl, v in value.iteritems():
+                        writer.scalar_summary('{}/{}/{}'.format(m, set_name, cl), v, t) # metric/set/class
 
         # small summary.
-        print "epoch {}, loss: {:.03f}, acc train: {:0.2f} acc valid: {:0.2f}, time: {:.02f} sec".format(t,
+        print "epoch {}, loss: {:.03f}, precision train: {:0.2f} precision valid: {:0.2f}, time: {:.02f} sec".format(t,
                                                                                                          loss.data[0],
                                                                                                          acc['train'],
                                                                                                          acc['valid'],
