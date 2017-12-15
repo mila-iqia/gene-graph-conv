@@ -14,10 +14,10 @@ here is the example of output:
   </tr>
   <tr>
     <th>
-      <img src="https://raw.githubusercontent.com/ieee8023/conv-graph/master/Dataset/SyntheticData/Fig/Example_1.png" width="400">
+      <img src="https://github.com/ieee8023/conv-graph/raw/master/Dataset/SyntheticData/Fig/Example_1.png" width="400">
     </th>
     <th>
-      <img src="https://raw.githubusercontent.com/ieee8023/conv-graph/master/Dataset/SyntheticData/Fig/Example_2.png" width="400">
+      <img src="https://github.com/ieee8023/conv-graph/raw/master/Dataset/SyntheticData/Fig/Example_2.png" width="400">
     </th>
   </tr>
 </table>
