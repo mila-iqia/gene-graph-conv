@@ -266,3 +266,51 @@ def get_model(opt, dataset, nb_class):
         raise ValueError
 
     return my_model
+
+#spectral graph conv
+class SGC(nn.Module):
+    def __init__(self,input_dim, A, channels=16, out_dim=2, on_cuda=False, num_layers = 1, arg_max = -200):
+        super(SGC, self).__init__()
+
+        self.my_layers = []
+        self.out_dim = out_dim
+        self.on_cuda = on_cuda
+        self.nb_nodes = A.shape[0]
+        self.num_layers = num_layers
+
+        self.channels = channels
+        #dims = [input_dim] + channels
+
+        #import ipdb; ipdb.set_trace()
+
+        print "Constructing the eigenvectors..."   
+        
+        D = np.diag(A.sum(axis=1))
+        self.L = D-A
+        self.L = torch.FloatTensor(self.L)
+        if self.on_cuda:
+            self.L = self.L.cuda()
+        self.g, self.V = torch.eig(self.L, eigenvectors=True)
+        
+        
+        self.F = [nn.Parameter(torch.rand(self.nb_nodes, self.nb_nodes), requires_grad=True)]
+        self.my_bias = [nn.Parameter(torch.zeros(self.nb_nodes, channels), requires_grad=True)]
+
+        last_layer = nn.Linear(input_dim * channels, out_dim)
+        self.my_logistic_layers = nn.ModuleList([last_layer])
+
+
+        print "Done!"
+
+    def forward(self, x):
+
+        nb_examples, nb_nodes, nb_channels = x.size()
+
+        #First draft. There needs to be a nonlinearity here. 
+        #The output shape is wrong because we should get a vector back.
+        x = self.V*self.F*torch.transpose(self.V, 0,1)*x
+            
+        x = self.my_logistic_layers[-1](x.view(nb_examples, -1))
+        x = F.softmax(x)
+
+        return x

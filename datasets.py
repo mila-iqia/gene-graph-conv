@@ -4,6 +4,8 @@ from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 import h5py
 import networkx
+import pandas as pd
+import collections
 
 
 class GraphGeneDataset(Dataset):
@@ -130,6 +132,51 @@ class TCGATissue(GraphGeneDataset):
 
     def __init__(self, graph_dir='/data/lisa/data/genomics/TCGA/', graph_file='TCGA_tissue_ppi.hdf5', **kwargs):
         super(TCGATissue, self).__init__(graph_dir=graph_dir, graph_file=graph_file, **kwargs)
+        
+class TCGAForLabel(GraphGeneDataset):
+
+    """TCGA Dataset."""
+
+    def __init__(self, 
+                 graph_dir='/data/lisa/data/genomics/TCGA/', 
+                 graph_file='TCGA_tissue_ppi.hdf5', 
+                 clinical_file = "PANCAN_clinicalMatrix.gz",
+                 clinical_label = "gender",
+                 **kwargs):
+        super(TCGAForLabel, self).__init__(graph_dir=graph_dir, graph_file=graph_file, **kwargs)
+                
+        dataset = self
+        
+        clinical_raw = pd.read_csv(graph_dir + clinical_file, compression='gzip', header=0, sep='\t', quotechar='"')
+        clinical_raw = clinical_raw.set_index("sampleID");
+        
+        
+        print "Possible labels to select from ", clinical_file, " are ", list(clinical_raw.columns)
+        print "Selected label is ", clinical_label
+        
+        
+        clinical = clinical_raw[[clinical_label]]
+        clinical = clinical.dropna()
+
+        data_raw = pd.DataFrame(dataset.data, index=dataset.sample_names)
+        data_raw.index.name ="sampleID"
+        samples = pd.DataFrame(np.asarray(dataset.sample_names), index=dataset.sample_names)
+        samples.index.name ="sampleID"
+
+        data_joined = data_raw.loc[clinical.index]
+        data_joined = data_joined.dropna()
+        clinical_joined = clinical.loc[data_joined.index]
+
+        
+        print "clinical_raw", clinical_raw.shape, ", clinical", clinical.shape, ", clinical_joined", clinical_joined.shape
+        print "data_raw", data_raw.shape, "data_joined", data_joined.shape
+        print "Counter for " + clinical_label + ": "
+        print collections.Counter(clinical_joined[clinical_label].as_matrix())
+        
+        self.labels = pd.get_dummies(clinical_joined).as_matrix().astype(np.float)
+        self.data = data_joined.as_matrix()
+        
+        
 
 class BRCACoexpr(GraphGeneDataset):
 
@@ -185,6 +232,74 @@ class RandomGraphDataset(Dataset):
         if transform_adj_func is not None:
             self.transform_adj = transform_adj_func(self.adj)
 
+    def __len__(self):
+        return self.data.shape[0]
+
+    def __getitem__(self, idx):
+
+        sample = self.data[idx]
+        sample = {'sample': sample, 'labels': self.labels[idx]}
+
+        if self.transform:
+            sample = self.transform(sample)
+
+        return sample
+
+    def get_adj(self, transform=True):
+
+        if self.transform_adj is None:
+            return self.adj
+        else:
+            return self.transform_adj
+
+    def labels_name(self, l):
+
+        labels = {0: 'neg', 'neg':0, 'pos':1, 1:'pos'}
+
+        return labels[l]
+    
+class RandomGraphDatasetHard(Dataset):
+    """
+    A random dataset with a random graph for debugging
+    """
+    def __init__(self, nb_nodes=10, nb_edges=5, nb_examples=1000,
+                 transform=None, transform_adj_func=None, scale_free=True, seed=1993):
+        
+        np.random.seed(seed)
+        self.nb_nodes = nb_nodes
+        self.nb_examples = nb_examples
+
+        # Creating the graph
+        # Degree matrix
+        self.adj = random_adjacency_matrix(nb_nodes, nb_edges, scale_free)
+        
+        ## ensure we have relationships between nodes for labels 
+        
+        print self.adj
+        
+        
+        self.nb_edges = (self.adj.sum() - nb_nodes) / 2
+        self.nb_class = 2
+
+        # Generating the data
+        self.data = np.random.randn(nb_examples, nb_nodes, 1)
+        
+        # It's technically a binary classification problem, but to make it more general I treat it as a classification problem
+        self.labels = np.zeros((nb_examples, 2))
+        self.labels[:, 0] = self.gt_fn(self.data).reshape(-1)
+        self.labels[:, 1] = 1 - self.labels[:, 0]
+
+        # Transform and stuff
+        self.transform = transform
+        self.transform_adj = None
+
+        if transform_adj_func is not None:
+            self.transform_adj = transform_adj_func(self.adj)
+
+            
+    def gt_fn(self,x):
+        return (np.max(x[:,[0,1]], axis=1) > ((x[:,2]) + x[:,3]/2.0))*1.0
+           
     def __len__(self):
         return self.data.shape[0]
 
