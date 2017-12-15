@@ -37,7 +37,7 @@ def accuracy(data, model, no_class = None, on_cuda=False):
 
 def recall(preds, gts, cl):
 
-    #import ipdb; ipdb.set_trace()
+    # How many revelant item are selected?
 
     ids_from_that_class = gts == cl # ids_to_keep total number in class
 
@@ -46,6 +46,8 @@ def recall(preds, gts, cl):
     return tmp / float(total)
 
 def precision(preds, gts, cl):
+
+    # How many selected item are revelant?
 
     ids_from_that_class = gts == cl  # total number predicted for that class
 
@@ -134,6 +136,8 @@ def build_parser():
     parser.add_argument('--nb-examples', default=None, type=int, help="Number of samples to train on.")
     parser.add_argument('--nb-per-class', default=None, type=int, help="Number of samples per class.")
     parser.add_argument('--train-ratio', default=0.8, type=float, help="The ratio of data to be used in the training set.")
+    parser.add_argument('--percentile', default=100, type=float, help="How many edges to keep.")
+    parser.add_argument('--add-self', action='store_true', help="Add self references in the graph.")
 
     return parser
 
@@ -165,10 +169,15 @@ def main(argv=None):
 
     # The experiment unique id.
     param = vars(opt).copy()
+    # Removing a bunch of useless tag
     del param['data_dir']
     del param['tensorboard']
     del param['cuda']
     del param['make_it_work_for_Joseph']
+    del param['train_ratio']
+    del param['epoch']
+    del param['batch_size']
+
     v_to_delete = []
     for v in param:
         if param[v] is None:

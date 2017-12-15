@@ -11,7 +11,7 @@ class GraphGeneDataset(Dataset):
 
     def __init__(self, graph_dir, graph_file,
                  transform=None,
-                 transform_adj_func=None, use_random_adj=False, nb_class=None, sub_class=None):
+                 transform_adj_func=None, use_random_adj=False, nb_class=None, sub_class=None, percentile=50, add_self=False):
         """
         Args:
             graph_file (string): Path to the h5df file.
@@ -27,7 +27,7 @@ class GraphGeneDataset(Dataset):
         self.data = np.array(self.file['expression_data'])
         self.nb_nodes = self.data.shape[1]
         self.labels = self.file['labels_data']
-        self.adj = (np.array(self.file['graph_data']) > 0.).astype('float32') # right now we don't cake about the weights
+        self.adj = np.array(self.file['graph_data']).astype('float32')
         self.sample_names = self.file['sample_names']
         self.node_names = np.array(self.file['gene_names'])
         self. use_random_adj = use_random_adj
@@ -53,6 +53,26 @@ class GraphGeneDataset(Dataset):
             dim = range(self.adj.shape[0])
             np.random.shuffle(dim)
             self.adj = self.adj[dim][:, dim]
+
+        # if we want to sub-sample the edges, based on the edges value
+        if percentile < 100:
+
+            # small trick to ignore the 0.
+            nan_adj = np.ma.masked_where(self.adj == 0., self.adj)
+            nan_adj = np.ma.filled(nan_adj, np.nan)
+
+            threshold = np.nanpercentile(nan_adj, 100 - percentile)
+            print "We will remove all the adges that has a value smaller than {}".format(threshold)
+
+            to_keep = self.adj >= threshold # throw away all the edges that are bigger than what we have.
+            self.adj = self.adj * to_keep
+
+        self.adj = self.adj > 0. # Don't care about the weights
+
+        # Add self references in the graph
+        if add_self:
+            print "Adding self-references"
+            np.fill_diagonal(self.adj, 1.)
 
         self.nb_edges = (self.adj.sum() - self.nb_nodes) / 2
 
@@ -336,6 +356,9 @@ def get_dataset(opt):
     nb_class = opt.nb_class
     model = opt.model
     num_layer = opt.num_layer
+    seed = opt.seed
+    add_self = opt.add_self
+    percentile = opt.percentile
 
     if dataset_name == 'random':
 
@@ -356,7 +379,7 @@ def get_dataset(opt):
 
         # To have a feel of TCGA, take a look at 'view_graph_TCGA.ipynb'
         dataset = TCGATissue(transform_adj_func=transform_adj_func, # To delete
-            nb_class=nb_class, use_random_adj=scale_free)
+            nb_class=nb_class, use_random_adj=scale_free, add_self=add_self, percentile=percentile)
 
         if nb_class is None: # means we keep all the class (29 I think)
             nb_class = len(dict(dataset.labels.attrs))/2
@@ -369,7 +392,7 @@ def get_dataset(opt):
 
         # To have a feel of TCGA, take a look at 'view_graph_TCGA.ipynb'
         dataset = BRCACoexpr(transform_adj_func=transform_adj_func, # To delete
-            nb_class=nb_class, use_random_adj=scale_free)
+            nb_class=nb_class, use_random_adj=scale_free, add_self=add_self, percentile=percentile)
 
         if nb_class is None: # means we keep all the class (29 I think)
             nb_class = len(dict(dataset.labels.attrs))/2
