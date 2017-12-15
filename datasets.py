@@ -5,6 +5,7 @@ from torch.utils.data.sampler import SubsetRandomSampler
 import h5py
 import networkx
 import pandas as pd
+import collections
 
 
 class GraphGeneDataset(Dataset):
@@ -148,6 +149,8 @@ class TCGAForLabel(GraphGeneDataset):
         
         print "clinical_raw", clinical_raw.shape, ", clinical", clinical.shape, ", clinical_joined", clinical_joined.shape
         print "data_raw", data_raw.shape, "data_joined", data_joined.shape
+        print "Counter for " + clinical_label + ": "
+        print collections.Counter(clinical_joined[clinical_label].as_matrix())
         
         self.labels = pd.get_dummies(clinical_joined).as_matrix().astype(np.float)
         self.data = data_joined.as_matrix()
