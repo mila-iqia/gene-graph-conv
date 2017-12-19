@@ -326,6 +326,83 @@ class RandomGraphDatasetHard(Dataset):
 
         return labels[l]
 
+class PercolateDataset(Dataset):
+
+    """
+    A random dataset where the goal if to find if we can percolate from one side of the graph to the other.
+    """
+
+    def __init__(self, graph_dir='Dataset/SyntheticData/', graph_file='test.hdf5', transform=None, transform_adj_func=None,
+                 add_self=False, use_random_adj=False):
+
+        graph_file = os.path.join(graph_dir, graph_file)
+
+        self.file = h5py.File(graph_file, 'r')
+        self.data = np.array(self.file['expression_data'])
+        self.nb_nodes = self.data.shape[1]
+        self.labels = self.file['labels_data']
+        self.adj = np.array(self.file['graph_data']).astype('float32')
+        self.sample_names = np.array(range(self.data.shape[0]))
+        self.node_names = np.array(range(self.data.shape[1]))
+
+        # Transform and stuff
+        self.transform = transform
+        self.transform_adj = None
+
+        # It's technically a binary classification problem, but to make it more general I treat it as a classification problem
+        self.labels = np.zeros((self.data.shape[0], 2))
+        self.labels[:, 1] = self.file['labels_data']
+        self.labels[:, 0] = 1 - self.labels[:, 1]
+
+        if transform_adj_func is not None:
+            self.transform_adj = transform_adj_func(self.adj)
+
+        # If we want a random adjancy matrix:
+        if use_random_adj:
+            print "Overwriting the adjacency matrix to have a random (scale-free) one..."
+            dim = range(self.adj.shape[0])
+            np.random.shuffle(dim)
+            self.adj = self.adj[dim][:, dim]
+
+        # Add self references in the graph
+        if add_self:
+            print "Adding self-references"
+            np.fill_diagonal(self.adj, 1.)
+
+        self.nb_edges = (self.adj.sum() - self.nb_nodes)/2 + self.nb_nodes if add_self else self.adj.sum()/2
+
+
+    def __len__(self):
+        return self.data.shape[0]
+
+    def __getitem__(self, idx):
+
+        sample = self.data[idx]
+        sample = np.expand_dims(sample, -1) # Addin a dim for the channels
+
+        sample = {'sample': sample, 'labels': self.labels[idx]}
+
+        if self.transform:
+            sample = self.transform(sample)
+
+        #import ipdb;
+        #ipdb.set_trace()
+
+        return sample
+
+    def get_adj(self, transform=True):
+
+        if self.transform_adj is None:
+            return self.adj
+        else:
+            return self.transform_adj
+
+    def labels_name(self, l):
+
+        labels = {0: 'neg', 'neg':0, 'pos':1, 1:'pos'}
+
+        return labels[l]
+
 def split_dataset(dataset, batch_size=100, random=False, train_ratio=0.8, seed=1993, nb_samples=None, nb_per_class=None):
 
     all_idx = range(len(dataset))
@@ -512,7 +589,15 @@ def get_dataset(opt):
         if nb_class is None: # means we keep all the class (29 I think)
             nb_class = len(dict(dataset.labels.attrs))/2
 
+    elif dataset_name == 'percolate':
+
+        print "Getting the percolate dataset"
+        transform_adj_func = None if not_norm_adj else ApprNormalizeLaplacian()
+        dataset = PercolateDataset(transform_adj_func=transform_adj_func, use_random_adj=scale_free, add_self=add_self)
+        nb_class = 2
+
+
     else:
         raise ValueError
 
-    return dataset, nb_class
+    return dataset, nb_class # TODO: factorize
