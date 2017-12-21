@@ -4,12 +4,69 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 from torch import nn
 
+def agregate_nodes(x, opt='mean'):
+
+    if opt == 'mean':
+        return x.mean(dim=2)
+    elif opt == 'max':
+        return x.max(dim=2)[0]
+
+    return x
+
+class EmbeddingLayer(nn.Module):
+
+    def __init__(self, nb_emb, emb_size=32):
+
+        self.emb_size = emb_size
+        super(EmbeddingLayer, self).__init__()
+
+        # The embeddings
+        self.emb_size = emb_size
+        self.emb = nn.Parameter(torch.rand(nb_emb, emb_size))
+
+    def forward(self, x):
+
+        #import ipdb; ipdb.set_trace()
+
+        emb = x * self.emb
+        return emb
+
+
+
+class AttentionLayer(nn.Module):
+
+    def __init__(self, in_dim):
+
+        self.in_dim = in_dim
+        super(AttentionLayer, self).__init__()
+
+        # The view vector.
+        self.attn = nn.Linear(self.in_dim, 1)
+        self.temperature = 1.
+
+    def forward(self, x):
+        nb_examples, nb_channels, nb_nodes = x.size()
+        x = x.permute(0, 2, 1).contiguous()  # from ex, ch, node -> ex, node, ch
+        x = x.view(-1, nb_channels)
+
+        # attn_weights = F.softmax(self.attn(x), dim=1)# Should be able to do that,
+        # I have some problem with pytorch right now, so I'm doing i manually. Also between you and me, the pytorch example for attention sucks.
+        attn_weights = torch.exp(self.attn(x)*self.temperature)
+        attn_weights = attn_weights.view(nb_examples, nb_nodes, 1)
+        attn_weights = attn_weights / attn_weights.sum(dim=1).unsqueeze(-1) # normalizing
+
+        x = x.view(nb_examples, nb_nodes, nb_channels)
+        attn_applied = x * attn_weights
+        attn_applied = attn_applied.sum(dim=1)
+        #print attn_weights[0].max()
+
+        return attn_applied
 
 # Create a module for the CGN:
 class CGN(nn.Module):
 
     def __init__(self, nb_nodes, input_dim, channels, adj, out_dim,
-                 on_cuda=True, add_residual=False,
+                 on_cuda=True, add_residual=False, attention_layer=0, add_emb=False
                  ):
         super(CGN, self).__init__()
 
@@ -19,6 +76,8 @@ class CGN(nn.Module):
         self.add_residual = add_residual
         self.nb_nodes = nb_nodes
         self.nb_channels = channels
+        self.attention_layer = attention_layer
+        self.add_emb = add_emb
 
         self.adj = adj # The normalization transformation (need to be precomputed)
         self.edges = torch.LongTensor(np.array(np.where(self.adj))) # The list of edges
@@ -30,13 +89,17 @@ class CGN(nn.Module):
         self.sparse_D_norm = torch.sparse.FloatTensor(self.edges, flat_adj, torch.Size([nb_nodes ,nb_nodes]))#.to_dense()
         self.register_buffer('sparse_D_norm', self.sparse_D_norm)
 
+        if add_emb:
+            print "Adding node embeddings."
+            self.emb = EmbeddingLayer(nb_nodes)
+            input_dim = self.emb.emb_size
 
         dims = [input_dim] + channels
 
         print "Constructing the network..."
         layers = []
         for c_in, c_out in zip(dims[:-1], dims[1:]):
-            layer = nn.Conv1d(c_in, c_out, 1, bias=False)
+            layer = nn.Conv1d(c_in, c_out, 1, bias=True)
             layers.append(layer)
         self.my_layers = nn.ModuleList(layers)
 
@@ -46,10 +109,16 @@ class CGN(nn.Module):
         if not channels: # Only have one layer
             logistic_in_dim = [nb_nodes * input_dim]
         elif not add_residual:
-            logistic_in_dim = [nb_nodes * channels[-1]]
+            if attention_layer > 0:
+                logistic_in_dim = [channels[-1] * attention_layer]  # Changed
+            else:
+                logistic_in_dim = [nb_nodes * channels[-1]] # Changed here
         else:
             print "Adding skip connections..."
-            logistic_in_dim = [d * nb_nodes for d in dims]
+            if attention_layer > 0:
+                logistic_in_dim = [d * nb_nodes for d in dims]
+            else:
+                logistic_in_dim = [d * attention_layer for d in dims]
 
         for d in logistic_in_dim:
             layer = nn.Linear(d, out_dim)
@@ -57,6 +126,10 @@ class CGN(nn.Module):
 
         self.my_logistic_layers = nn.ModuleList(logistic_layer)
         print "Done!"
+
+        if attention_layer > 0:
+            print "Adding {} attentions layer.".format(attention_layer)
+            self.att = nn.ModuleList([AttentionLayer(channels[-1])] * attention_layer)
 
     def _adj_mul(self, x, D):
 
@@ -75,13 +148,13 @@ class CGN(nn.Module):
 
         D_norm = Variable(self.sparse_D_norm, requires_grad=False)
 
-        #import ipdb; ipdb.set_trace()
-
         if self.on_cuda and len(self.my_layers) > 0:
             D_norm = D_norm.cuda()
 
         out = None
         nb_examples, nb_nodes, nb_channels = x.size()
+        if self.add_emb:
+            x = self.emb(x)
 
         x = x.permute(0, 2, 1).contiguous()# from ex, node, ch, -> ex, ch, node
 
@@ -96,16 +169,17 @@ class CGN(nn.Module):
 
 
             x = self._adj_mul(x, D_norm) # local average
-            x = F.tanh(layer(x))  # or relu, sigmoid...
+            x = F.relu(layer(x))  # or relu, sigmoid...
 
-
+        # agrgate the node
+        #x = agregate_nodes(x)
+        if self.attention_layer > 0:
+            x = torch.stack([att(x) for att in self.att], dim=-1)
 
         if out is None:
             out = self.my_logistic_layers[-1](x.view(nb_examples, -1))
         else:
             out += self.my_logistic_layers[-1](x.view(nb_examples, -1))
-
-        out = F.softmax(out)
 
         return out
 
@@ -139,11 +213,9 @@ class MLP(nn.Module):
 
         x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
         for layer in self.my_layers:
-            x = F.tanh(layer(x.view(nb_examples, -1)))  # or relu, sigmoid...
+            x = F.relu(layer(x.view(nb_examples, -1)))  # or relu, sigmoid...
 
         x = self.last_layer(x.view(nb_examples, -1))
-        x = F.softmax(x)
-
 
         return x
 
@@ -187,11 +259,8 @@ class LCG(nn.Module):
         self.super_edges = torch.cat([self.edges] * channels)
 
         # we add a weight the fake node (that we introduced in the padding)
-        self.my_weights = [nn.Parameter(torch.rand(self.edges.shape[0], channels), requires_grad=True)] # TODO add layer
-
-        # But that weight to zero
-        #for w in self.my_weights:
-        #    w.data[-1] = 0.
+        my_weights = [nn.Parameter(torch.rand(self.edges.shape[0], channels), requires_grad=True) for _ in range(num_layers)]
+        self.my_weights = nn.ParameterList(my_weights)
 
         last_layer = nn.Linear(input_dim * channels, out_dim)
         self.my_logistic_layers = nn.ModuleList([last_layer])
@@ -203,7 +272,7 @@ class LCG(nn.Module):
     def GraphConv(self, x, edges, batch_size, weights):
         
         edges = edges.contiguous().view(-1)
-        useless_node = torch.zeros(x.size(0), 1, x.size(2))
+        useless_node = Variable(torch.zeros(x.size(0), 1, x.size(2)))
 
         if self.on_cuda:
             edges = edges.cuda()
@@ -211,14 +280,11 @@ class LCG(nn.Module):
             useless_node = useless_node.cuda()
 
         x = torch.cat([x, useless_node], 1) # add a random filler node
-        tocompute = torch.index_select(x, 1, edges).view(batch_size, -1, weights.size(-1))
-
-
-        #import ipdb; ipdb.set_trace()
+        tocompute = torch.index_select(x, 1, Variable(edges)).view(batch_size, -1, weights.size(-1))
 
         conv = tocompute * weights
         conv = conv.view(-1, self.nb_nodes, self.max_edges, weights.size(-1)).sum(2)
-        return F.tanh(conv)
+        return F.relu(conv)
 
     def forward(self, x):
 
@@ -228,10 +294,11 @@ class LCG(nn.Module):
         if self.on_cuda:
             edges = edges.cuda()
 
+        for i in range(self.num_layers):
+            x = self.GraphConv(x, edges.data, nb_examples, self.my_weights[i])
 
-        x = self.GraphConv(x, edges.data, nb_examples, self.my_weights[0]) # TODO: add more layer
         x = self.my_logistic_layers[-1](x.view(nb_examples, -1))
-        x = F.softmax(x)
+        #x = F.softmax(x)
 
         return x
 
@@ -254,14 +321,14 @@ def get_model(opt, dataset, nb_class):
     if model == 'cgn':
         # To have a feel of the model, please take a look at cgn.ipynb
         my_model = CGN(dataset.nb_nodes, 1, [num_channel] * num_layer, dataset.get_adj(), nb_class,
-                       on_cuda=on_cuda, add_residual=skip_connections)
+                       on_cuda=on_cuda, add_residual=skip_connections, attention_layer=opt.attention_layer)
 
     elif model == 'mlp':
-        my_model = MLP(dataset.nb_nodes, [num_channel] * num_layer, nb_class, on_cuda=on_cuda)
+        my_model = MLP(dataset.nb_nodes, [num_channel] * num_layer, nb_class, on_cuda=on_cuda) # TODO: add a bunch of the options
 
     elif model == 'lcg':
         my_model = LCG(dataset.nb_nodes, dataset.get_adj(), out_dim=nb_class,
-                              on_cuda=on_cuda, channels=num_channel, num_layers=num_layer)
+                              on_cuda=on_cuda, channels=num_channel, num_layers=num_layer)# TODO: add a bunch of the options
     else:
         raise ValueError
 

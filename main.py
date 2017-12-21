@@ -22,8 +22,15 @@ def accuracy(data, model, no_class = None, on_cuda=False):
             inputs = inputs.cuda()
             targets = targets.cuda()
 
-        max_index_target = targets.max(dim=1)[1].data.cpu().long().numpy()
+        #import ipdb; ipdb.set_trace()
+
+        if len(targets.size()) > 2:
+            max_index_target = targets.max(dim=1)[1].data.cpu().long().numpy()
+        else:
+            max_index_target = targets.data.cpu().long().numpy()
+
         max_index_pred = model(inputs).max(dim=1)[1].data.cpu().long().numpy()
+
 
         id_to_keep = np.ones_like(max_index_target)
         if no_class is not None:
@@ -84,7 +91,11 @@ def compute_metrics_per_class(data, model, nb_class, idx_to_str, on_cuda=False,
             targets = targets.cuda()
 
 
-        max_index_target = targets.max(dim=1)[1].data.cpu().long().numpy()
+        if len(targets.size()) > 2:
+            max_index_target = targets.max(dim=1)[1].data.cpu().long().numpy()
+        else:
+            max_index_target = targets.data.cpu().long().numpy()
+
         max_index_pred = model(inputs).max(dim=1)[1].data.cpu().long().numpy()
 
         if all_target is None:
@@ -141,6 +152,7 @@ def build_parser():
     parser.add_argument('--train-ratio', default=0.8, type=float, help="The ratio of data to be used in the training set.")
     parser.add_argument('--percentile', default=100, type=float, help="How many edges to keep.")
     parser.add_argument('--add-self', action='store_true', help="Add self references in the graph.")
+    parser.add_argument('--attention-layer', default=0, type=int, help="The number of attention layer to add to the last layer. Only implemented for CGN.")
 
     return parser
 
@@ -216,7 +228,7 @@ def main(argv=None):
     print my_model
 
     # Train the cgn
-    criterion = torch.nn.MultiLabelSoftMarginLoss(size_average=True)
+    criterion = torch.nn.CrossEntropyLoss(size_average=True)#torch.nn.MultiLabelSoftMarginLoss(size_average=True)
     optimizer = torch.optim.SGD(my_model.parameters(), lr=learning_rate, momentum=momentum, weight_decay=weight_decay)
 
     if on_cuda:
@@ -253,7 +265,8 @@ def main(argv=None):
             inputs, targets = mini['sample'], mini['labels']
 
             inputs = Variable(inputs, requires_grad=False).float()
-            targets = Variable(targets, requires_grad=False).float()
+            targets = Variable(targets, requires_grad=False).long()
+            #print targets.sum(dim=1)
 
             if on_cuda:
                 inputs = inputs.cuda()

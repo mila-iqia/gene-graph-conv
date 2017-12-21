@@ -76,7 +76,7 @@ class GraphGeneDataset(Dataset):
             print "Adding self-references"
             np.fill_diagonal(self.adj, 1.)
 
-        self.nb_edges = (self.adj.sum() - self.nb_nodes) / 2
+        self.nb_edges = (self.adj.sum() - self.nb_nodes) / 2 + self.nb_nodes if add_self else self.adj.sum() / 2
 
         self.transform = transform
         self.transform_adj = None
@@ -104,9 +104,13 @@ class GraphGeneDataset(Dataset):
             if len(label.shape) == 2:
                 label = np.delete(label, np.s_[self.nb_class::], 1)
                 label[:, self.nb_class-1] = 1 - label.sum(axis=1)
+                #label = self.labels[idx].max(axis=-1)
+                #print label
             else:
                 label = np.delete(label, np.s_[self.nb_class::], 0)
                 label[self.nb_class-1] = 1 - label.sum(axis=0)
+                #print label
+        label = self.labels[idx].argmax(axis=-1)
 
         sample = {'sample': sample, 'labels': label}
 
@@ -345,14 +349,11 @@ class PercolateDataset(Dataset):
         self.sample_names = np.array(range(self.data.shape[0]))
         self.node_names = np.array(range(self.data.shape[1]))
 
+        self.data = self.data - self.data.mean(axis=0)
+
         # Transform and stuff
         self.transform = transform
         self.transform_adj = None
-
-        # It's technically a binary classification problem, but to make it more general I treat it as a classification problem
-        self.labels = np.zeros((self.data.shape[0], 2))
-        self.labels[:, 1] = self.file['labels_data']
-        self.labels[:, 0] = 1 - self.labels[:, 1]
 
         if transform_adj_func is not None:
             self.transform_adj = transform_adj_func(self.adj)
@@ -532,6 +533,63 @@ class ApprNormalizeLaplacian(object):
             print "Done!"
 
         return norm_transform
+
+
+class PruneGraph(object):
+
+    def __init__(self, deep=None, step=1, nb=None, please_ignore=True):
+
+        self.deep = deep
+        self.step = step
+        self.nb = nb
+        self.please_ignore = please_ignore
+
+    def __call__(self, adj):
+
+        """
+        Iterativaly prune a graph until no node are left.
+        :param adj: The adj matrix
+        :param deep: If we want to cap the pruning
+        :param step: If we want to prune fore rapidly
+        :param nb: The number of intermediate graph to send.
+        :param please_ignore: We are not doing pruning, this option is to make things more consistant.
+        :return:
+        """
+
+        deep = self.deep
+        step = self.step
+        nb = self.nb
+        please_ignore = self.please_ignore
+
+        # We don't do pruning.
+        if please_ignore or nb == 1:
+            return [adj] * nb
+
+        adjs = []
+
+        degree = adj.sum(axis=0)
+        nb_edges = sorted(set(degree))
+
+        if deep == None:
+            deep = len(nb_edges)
+
+        for i in range(0, min(step * deep, len(nb_edges))):
+            adj_c = adj.copy()
+
+            to_erase = np.where(degree <= nb_edges[min(step * i, len(nb_edges) - 1)])[0]
+            adj_c[to_erase] = 0
+            adj_c[:, to_erase] = 0
+
+            if adj_c.sum() != 0:
+                adjs.append(adj_c)
+
+        if nb is not None:
+            adjs = [x for i, x in enumerate(adjs) if i % len(adjs) / (nb-1) == 0]
+
+        assert len(adjs) == (nb - 1)
+
+        return [adj.copy()] + adjs
+
 
 def get_dataset(opt):
 
