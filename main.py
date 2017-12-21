@@ -153,6 +153,8 @@ def build_parser():
     parser.add_argument('--percentile', default=100, type=float, help="How many edges to keep.")
     parser.add_argument('--add-self', action='store_true', help="Add self references in the graph.")
     parser.add_argument('--attention-layer', default=0, type=int, help="The number of attention layer to add to the last layer. Only implemented for CGN.")
+    parser.add_argument('--prune-graph', action='store_true', help="If we want to prune the graph.")
+    parser.add_argument('--use-emb', default=None, type=int, help="If we want to add node embeddings.")
 
     return parser
 

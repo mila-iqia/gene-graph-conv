@@ -3,7 +3,7 @@ import numpy as np
 
 def feature_selection(model, dataset, opt, top=25):
 
-    top_features = []
+    top_features = [] # TODO: export emb.
     if opt.attention_layer > 0:
         print "Feature selection when using attention is implemented yet."
         return top_features

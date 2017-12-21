@@ -6,7 +6,7 @@ import h5py
 import networkx
 import pandas as pd
 import collections
-
+from torchvision import transforms, utils
 
 class GraphGeneDataset(Dataset):
     """General Dataset to load different graph gene dataset."""
@@ -510,29 +510,40 @@ class ApprNormalizeLaplacian(object):
 
     def __call__(self, adj):
 
-        adj = np.array(adj)
+        if type(adj) != list:
+            adj = [adj]
+        retn = []
 
-        if self.processed_path and os.path.exists(self.processed_path) and not self.overwrite:
-            print "returning a saved transformation."
-            return np.load(self.processed_path)
+        for i, a in enumerate(adj):
 
-        print "Doing the approximation..."
-        # Fill the diagonal
-        np.fill_diagonal(adj, 1.)
+            a = np.array(a)
+            processed_path = None
+            if self.processed_path:
+                processed_path = self.processed_path.split('.')
+                processed_path = processed_path[:-1] + ['_{}'.format(i)] + processed_path[-1]
 
-        D = adj.sum(axis=1)
-        D_inv = np.diag(1. / np.sqrt(D))
-        norm_transform = D_inv.dot(adj).dot(D_inv)
+            if processed_path and os.path.exists(processed_path) and not self.overwrite:
+                print "returning a saved transformation."
+                return np.load(self.processed_path)
 
-        print "Done!"
+            print "Doing the approximation..."
+            # Fill the diagonal
+            np.fill_diagonal(a, 1.)
 
-        # saving the processed approximation
-        if self.processed_path:
-            print "Saving the approximation in {}".format(self.processed_path)
-            np.save(self.processed_path, norm_transform)
+            D = a.sum(axis=1)
+            D_inv = np.diag(1. / np.sqrt(D))
+            norm_transform = D_inv.dot(a).dot(D_inv)
+
             print "Done!"
 
-        return norm_transform
+            # saving the processed approximation
+            if self.processed_path:
+                print "Saving the approximation in {}".format(self.processed_path)
+                np.save(self.processed_path, norm_transform)
+                print "Done!"
+
+            retn.append(norm_transform)
+        return retn
 
 
 class PruneGraph(object):
@@ -564,6 +575,8 @@ class PruneGraph(object):
         # We don't do pruning.
         if please_ignore or nb == 1:
             return [adj] * nb
+        else:
+            print "Pruning the graph."
 
         adjs = []
 
@@ -571,22 +584,30 @@ class PruneGraph(object):
         nb_edges = sorted(set(degree))
 
         if deep == None:
-            deep = len(nb_edges)
+            deep = nb
 
-        for i in range(0, min(step * deep, len(nb_edges))):
+        for i in range(0, step * deep):
             adj_c = adj.copy()
 
-            to_erase = np.where(degree <= nb_edges[min(step * i, len(nb_edges) - 1)])[0]
-            adj_c[to_erase] = 0
-            adj_c[:, to_erase] = 0
+            try:
+                to_erase = np.where(degree <= nb_edges[step * i])[0]
+                adj_c[to_erase] = 0
+                adj_c[:, to_erase] = 0
 
-            if adj_c.sum() != 0:
-                adjs.append(adj_c)
+                if adj_c.sum() != 0:
+                    adjs.append(adj_c)
+                else:
+                    adjs.append(adjs[-1])
+
+            except IndexError: # It's all zero, with just add the last in memory
+                adjs.append(adjs[-1])
+
 
         if nb is not None:
             adjs = [x for i, x in enumerate(adjs) if i % len(adjs) / (nb-1) == 0]
 
         assert len(adjs) == (nb - 1)
+
 
         return [adj.copy()] + adjs
 
@@ -616,9 +637,11 @@ def get_dataset(opt):
         transform_adj_func = None if not_norm_adj else ApprNormalizeLaplacian()
         nb_samples = 10000 if nb_examples is None else nb_examples
 
+        transform = transforms.Compose([PruneGraph(nb=num_layer, please_ignore=not opt.prune_graph), transform_adj_func])
+
         # TODO: add parametrisation of the fake dataset, or would it polute everything?
         dataset = RandomGraphDataset(nb_nodes=1000, nb_edges=2000, nb_examples=nb_samples,
-                                          transform_adj_func=transform_adj_func, scale_free=scale_free, seed=seed)
+                                          transform_adj_func=transform, scale_free=scale_free, seed=seed)
         nb_class = 2 # Right now we only have 2 class
 
     elif dataset_name == 'tcga-tissue':
@@ -626,9 +649,10 @@ def get_dataset(opt):
         print "Getting TCGA tissue type"
         compute_path = None if scale_free else '/data/milatmp1/dutilfra/transcriptome/graph/tcga_tissue_ApprNormalizeLaplacian.npy'
         transform_adj_func = None if not_norm_adj or num_layer == 0 or model != 'cgn' else ApprNormalizeLaplacian(compute_path)
+        transform = transforms.Compose([PruneGraph(nb=num_layer, please_ignore=not opt.prune_graph), transform_adj_func])
 
         # To have a feel of TCGA, take a look at 'view_graph_TCGA.ipynb'
-        dataset = TCGATissue(transform_adj_func=transform_adj_func, # To delete
+        dataset = TCGATissue(transform_adj_func=transform, # To delete
             nb_class=nb_class, use_random_adj=scale_free, add_self=add_self, percentile=percentile)
 
         if nb_class is None: # means we keep all the class (29 I think)
@@ -639,9 +663,11 @@ def get_dataset(opt):
         print "Getting TCGA BRCA type"
         compute_path = None if scale_free else '/data/milatmp1/dutilfra/transcriptome/graph/tcga_brca_ApprNormalizeLaplacian.npy'
         transform_adj_func = None if not_norm_adj or num_layer == 0 or model != 'cgn' else ApprNormalizeLaplacian(compute_path)
+        transform = transforms.Compose(
+            [PruneGraph(nb=num_layer, please_ignore=not opt.prune_graph), transform_adj_func])
 
         # To have a feel of TCGA, take a look at 'view_graph_TCGA.ipynb'
-        dataset = BRCACoexpr(transform_adj_func=transform_adj_func, # To delete
+        dataset = BRCACoexpr(transform_adj_func=transform, # To delete
             nb_class=nb_class, use_random_adj=scale_free, add_self=add_self, percentile=percentile)
 
         if nb_class is None: # means we keep all the class (29 I think)
@@ -651,7 +677,9 @@ def get_dataset(opt):
 
         print "Getting the percolate dataset"
         transform_adj_func = None if not_norm_adj else ApprNormalizeLaplacian()
-        dataset = PercolateDataset(transform_adj_func=transform_adj_func, use_random_adj=scale_free, add_self=add_self)
+        transform = transforms.Compose([PruneGraph(nb=num_layer, please_ignore=not opt.prune_graph), transform_adj_func])
+
+        dataset = PercolateDataset(transform_adj_func=transform, use_random_adj=scale_free, add_self=add_self)
         nb_class = 2
 
 

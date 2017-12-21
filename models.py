@@ -25,9 +25,6 @@ class EmbeddingLayer(nn.Module):
         self.emb = nn.Parameter(torch.rand(nb_emb, emb_size))
 
     def forward(self, x):
-
-        #import ipdb; ipdb.set_trace()
-
         emb = x * self.emb
         return emb
 
@@ -62,11 +59,55 @@ class AttentionLayer(nn.Module):
 
         return attn_applied
 
+class CGNLayer(nn.Module):
+
+    def __init__(self, nb_nodes, adj, on_cuda=True):
+        super(CGNLayer, self).__init__()
+
+        self.my_layers = []
+        self.on_cuda = on_cuda
+        self.nb_nodes = nb_nodes
+
+        self.adj = adj # The normalization transformation (need to be precomputed)
+        self.edges = torch.LongTensor(np.array(np.where(self.adj))) # The list of edges
+        flat_adj = self.adj.flatten()[np.where(self.adj.flatten())] # get the value
+        flat_adj = torch.FloatTensor(flat_adj)
+
+        # Constructing a sparse matrix
+        print "Constructing the sparse matrix..."
+        #print self.edges
+        #print flat_adj
+
+        self.sparse_D_norm = torch.sparse.FloatTensor(self.edges, flat_adj, torch.Size([nb_nodes ,nb_nodes]))#.to_dense()
+        self.register_buffer('sparse_D_norm', self.sparse_D_norm)
+
+    def _adj_mul(self, x, D):
+
+        nb_examples, nb_channels, nb_nodes = x.size()
+        x = x.view(-1, nb_nodes)
+
+        # Needs this hack to work: https://discuss.pytorch.org/t/does-pytorch-support-autograd-on-sparse-matrix/6156/7
+        x = D.mm(x.t()).t()
+        x = x.contiguous().view(nb_examples, nb_channels, nb_nodes)
+        return x
+
+    def forward(self, x):
+
+        D_norm = Variable(self.sparse_D_norm, requires_grad=False)
+
+        if self.on_cuda:
+            D_norm = D_norm.cuda()
+
+        x = self._adj_mul(x, D_norm) # local average
+
+        return x
+
+
 # Create a module for the CGN:
 class CGN(nn.Module):
 
     def __init__(self, nb_nodes, input_dim, channels, adj, out_dim,
-                 on_cuda=True, add_residual=False, attention_layer=0, add_emb=False
+                 on_cuda=True, add_residual=False, attention_layer=0, add_emb=None
                  ):
         super(CGN, self).__init__()
 
@@ -79,36 +120,37 @@ class CGN(nn.Module):
         self.attention_layer = attention_layer
         self.add_emb = add_emb
 
-        self.adj = adj # The normalization transformation (need to be precomputed)
-        self.edges = torch.LongTensor(np.array(np.where(self.adj))) # The list of edges
-        flat_adj = self.adj.flatten()[np.where(self.adj.flatten())] # get the value
-        flat_adj = torch.FloatTensor(flat_adj)
+        if type(adj) != list:
+            adj = [adj] * len(channels)
 
-        # Constructing a sparse matrix
-        print "Constructing the sparse matrix..."
-        self.sparse_D_norm = torch.sparse.FloatTensor(self.edges, flat_adj, torch.Size([nb_nodes ,nb_nodes]))#.to_dense()
-        self.register_buffer('sparse_D_norm', self.sparse_D_norm)
+        self.adj = adj # the list of adjacency matrix
 
         if add_emb:
             print "Adding node embeddings."
-            self.emb = EmbeddingLayer(nb_nodes)
+            self.emb = EmbeddingLayer(nb_nodes, add_emb)
             input_dim = self.emb.emb_size
 
         dims = [input_dim] + channels
 
         print "Constructing the network..."
+        # The normal layer
         layers = []
         for c_in, c_out in zip(dims[:-1], dims[1:]):
             layer = nn.Conv1d(c_in, c_out, 1, bias=True)
             layers.append(layer)
         self.my_layers = nn.ModuleList(layers)
 
+        # The convolutional layer
+        convs = []
+        for i in range(len(adj)):
+            convs.append(CGNLayer(nb_nodes, adj[i], on_cuda))
+        self.my_convs = nn.ModuleList(convs)
 
+        # The logistic layer
         logistic_layer = []
-
         if not channels: # Only have one layer
             logistic_in_dim = [nb_nodes * input_dim]
-        elif not add_residual:
+        elif not add_residual: # Adding a final logistic regression.
             if attention_layer > 0:
                 logistic_in_dim = [channels[-1] * attention_layer]  # Changed
             else:
@@ -131,25 +173,7 @@ class CGN(nn.Module):
             print "Adding {} attentions layer.".format(attention_layer)
             self.att = nn.ModuleList([AttentionLayer(channels[-1])] * attention_layer)
 
-    def _adj_mul(self, x, D):
-
-        nb_examples, nb_channels, nb_nodes = x.size()
-        x = x.view(-1, nb_nodes)
-
-        #if self.on_cuda:
-        #    x = x.cuda()
-
-        # Needs this hack to work: https://discuss.pytorch.org/t/does-pytorch-support-autograd-on-sparse-matrix/6156/7
-        x = D.mm(x.t()).t()
-        x = x.contiguous().view(nb_examples, nb_channels, nb_nodes)
-        return x
-
     def forward(self, x):
-
-        D_norm = Variable(self.sparse_D_norm, requires_grad=False)
-
-        if self.on_cuda and len(self.my_layers) > 0:
-            D_norm = D_norm.cuda()
 
         out = None
         nb_examples, nb_nodes, nb_channels = x.size()
@@ -159,7 +183,7 @@ class CGN(nn.Module):
         x = x.permute(0, 2, 1).contiguous()# from ex, node, ch, -> ex, ch, node
 
         # Do graph convolution for all
-        for num, layer in enumerate(self.my_layers):
+        for num, [conv, layer] in enumerate(zip(self.my_convs, self.my_layers)):
 
             if self.add_residual: # skip connection
                 if out is None:
@@ -167,12 +191,10 @@ class CGN(nn.Module):
                 else:
                     out += self.my_logistic_layers[num](x.view(nb_examples, -1))
 
-
-            x = self._adj_mul(x, D_norm) # local average
+            x = conv(x) # conv
             x = F.relu(layer(x))  # or relu, sigmoid...
 
-        # agrgate the node
-        #x = agregate_nodes(x)
+        # agregate the node
         if self.attention_layer > 0:
             x = torch.stack([att(x) for att in self.att], dim=-1)
 
@@ -321,7 +343,7 @@ def get_model(opt, dataset, nb_class):
     if model == 'cgn':
         # To have a feel of the model, please take a look at cgn.ipynb
         my_model = CGN(dataset.nb_nodes, 1, [num_channel] * num_layer, dataset.get_adj(), nb_class,
-                       on_cuda=on_cuda, add_residual=skip_connections, attention_layer=opt.attention_layer)
+                       on_cuda=on_cuda, add_residual=skip_connections, attention_layer=opt.attention_layer, add_emb=opt.use_emb)
 
     elif model == 'mlp':
         my_model = MLP(dataset.nb_nodes, [num_channel] * num_layer, nb_class, on_cuda=on_cuda) # TODO: add a bunch of the options
