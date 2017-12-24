@@ -362,7 +362,7 @@ def get_model(opt, dataset, nb_class):
 
 #spectral graph conv
 class SGC(nn.Module):
-    def __init__(self,input_dim, A, channels=16, out_dim=2, on_cuda=False, num_layers = 1, arg_max = -200):
+    def __init__(self,input_dim, A, channels=1, out_dim=2, on_cuda=False, num_layers = 1, arg_max = -200):
         super(SGC, self).__init__()
 
         A = A[0] # no idea why
@@ -370,10 +370,10 @@ class SGC(nn.Module):
         self.my_layers = []
         self.out_dim = out_dim
         self.on_cuda = on_cuda
-        self.nb_nodes = A.shape[0]
+        self.nb_nodes = input_dim
         self.num_layers = num_layers
 
-        self.channels = channels
+        self.channels = 1#channels
         #dims = [input_dim] + channels
 
         #import ipdb; ipdb.set_trace()
@@ -387,7 +387,7 @@ class SGC(nn.Module):
             self.L = self.L.cuda()
         self.g, self.V = torch.eig(self.L, eigenvectors=True)
         
-        
+        print "self.nb_nodes", self.nb_nodes
         self.F = nn.Parameter(torch.rand(self.nb_nodes, self.nb_nodes).cuda(), requires_grad=True)
         self.my_bias = nn.Parameter(torch.zeros(self.nb_nodes, channels).cuda(), requires_grad=True)
         
@@ -396,7 +396,7 @@ class SGC(nn.Module):
 #            self.F = self.F.cuda()
 #            self.my_bias = self.my_bias.cuda()
 
-        last_layer = nn.Linear(input_dim * channels, out_dim)
+        last_layer = nn.Linear(self.nb_nodes * self.channels, out_dim)
         self.my_logistic_layers = nn.ModuleList([last_layer])
 
 
@@ -411,6 +411,7 @@ class SGC(nn.Module):
         #import ipdb; ipdb.set_trace()
         x = torch.matmul(Variable(self.V),torch.matmul(self.F, torch.matmul(torch.transpose(Variable(self.V), 0,1),x)))
             
+        #import ipdb; ipdb.set_trace()
         x = self.my_logistic_layers[-1](x.view(nb_examples, -1))
         x = F.softmax(x)
 
