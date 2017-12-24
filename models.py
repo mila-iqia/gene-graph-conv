@@ -351,6 +351,10 @@ def get_model(opt, dataset, nb_class):
     elif model == 'lcg':
         my_model = LCG(dataset.nb_nodes, dataset.get_adj(), out_dim=nb_class,
                               on_cuda=on_cuda, channels=num_channel, num_layers=num_layer)# TODO: add a bunch of the options
+        
+    elif model == 'sgc':
+        my_model = SGC(dataset.nb_nodes, dataset.get_adj(), out_dim=nb_class,
+                              on_cuda=on_cuda, channels=num_channel, num_layers=num_layer)
     else:
         raise ValueError
 
@@ -361,6 +365,8 @@ class SGC(nn.Module):
     def __init__(self,input_dim, A, channels=16, out_dim=2, on_cuda=False, num_layers = 1, arg_max = -200):
         super(SGC, self).__init__()
 
+        A = A[0] # no idea why
+        
         self.my_layers = []
         self.out_dim = out_dim
         self.on_cuda = on_cuda
@@ -382,8 +388,13 @@ class SGC(nn.Module):
         self.g, self.V = torch.eig(self.L, eigenvectors=True)
         
         
-        self.F = [nn.Parameter(torch.rand(self.nb_nodes, self.nb_nodes), requires_grad=True)]
-        self.my_bias = [nn.Parameter(torch.zeros(self.nb_nodes, channels), requires_grad=True)]
+        self.F = nn.Parameter(torch.rand(self.nb_nodes, self.nb_nodes).cuda(), requires_grad=True)
+        self.my_bias = nn.Parameter(torch.zeros(self.nb_nodes, channels).cuda(), requires_grad=True)
+        
+#        if self.on_cuda:
+#            self.V = self.V.cuda()
+#            self.F = self.F.cuda()
+#            self.my_bias = self.my_bias.cuda()
 
         last_layer = nn.Linear(input_dim * channels, out_dim)
         self.my_logistic_layers = nn.ModuleList([last_layer])
@@ -397,7 +408,8 @@ class SGC(nn.Module):
 
         #First draft. There needs to be a nonlinearity here. 
         #The output shape is wrong because we should get a vector back.
-        x = self.V*self.F*torch.transpose(self.V, 0,1)*x
+        #import ipdb; ipdb.set_trace()
+        x = torch.matmul(Variable(self.V),torch.matmul(self.F, torch.matmul(torch.transpose(Variable(self.V), 0,1),x)))
             
         x = self.my_logistic_layers[-1](x.view(nb_examples, -1))
         x = F.softmax(x)
