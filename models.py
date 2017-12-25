@@ -245,6 +245,8 @@ class LCG(nn.Module):
     def __init__(self,input_dim, A, channels=16, out_dim=2, on_cuda=False, num_layers = 1, arg_max = -1):
         super(LCG, self).__init__()
 
+        A = A[0] # just use first graph
+        
         self.my_layers = []
         self.out_dim = out_dim
         self.on_cuda = on_cuda
@@ -365,7 +367,7 @@ class SGC(nn.Module):
     def __init__(self,input_dim, A, channels=1, out_dim=2, on_cuda=False, num_layers = 1, arg_max = -200):
         super(SGC, self).__init__()
 
-        A = A[0] # no idea why
+        A = A[0] # just use first graph
         
         self.my_layers = []
         self.out_dim = out_dim
@@ -379,15 +381,19 @@ class SGC(nn.Module):
         def if_cuda(x):
             return x.cuda() if self.on_cuda else x
 
-        #import ipdb; ipdb.set_trace()
-
         print "Constructing the eigenvectors..."   
         
         D = np.diag(A.sum(axis=1))
         self.L = D-A
         self.L = torch.FloatTensor(self.L)
         self.L = if_cuda(self.L)
-        self.g, self.V = torch.eig(self.L, eigenvectors=True)
+        
+        eg = load_eigenvectors("",self.L)
+        if eg != None:
+            self.g, self.V = if_cuda(eg[0]),if_cuda(eg[1])
+        else:
+            self.g, self.V = torch.eig(self.L, eigenvectors=True)
+            save_eigenvectors("",self.L, self.g, self.V)
         
         print "self.nb_nodes", self.nb_nodes
         self.F = nn.Parameter(if_cuda(torch.rand(self.nb_nodes, self.nb_nodes)), requires_grad=True)
@@ -413,3 +419,26 @@ class SGC(nn.Module):
         x = F.softmax(x, dim=1)
 
         return x
+
+
+import os
+def get_eigenvectors_filename(name,L):
+    cachepath="./cache/"
+    matrix_hash=str(hash(L.cpu().numpy().tostring()))
+    return cachepath + matrix_hash + ".npz"
+
+def load_eigenvectors(name,L):
+    filename = get_eigenvectors_filename(name,L)
+    if os.path.isfile(filename):
+        print "loading", filename
+        eg = np.load(open(filename))
+        return (torch.FloatTensor(eg["g"]),torch.FloatTensor(eg["V"]))
+    
+def save_eigenvectors(name,L,g,V):
+    filename = get_eigenvectors_filename(name,L)
+    print "saving", filename
+    return np.savez(open(filename,'w+'),g=g.cpu().numpy(),V=V.cpu().numpy())
+    
+    
+    
+    
