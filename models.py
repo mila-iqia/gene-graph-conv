@@ -376,6 +376,9 @@ class SGC(nn.Module):
         self.channels = 1#channels
         #dims = [input_dim] + channels
 
+        def if_cuda(x):
+            return x.cuda() if self.on_cuda else x
+
         #import ipdb; ipdb.set_trace()
 
         print "Constructing the eigenvectors..."   
@@ -383,22 +386,15 @@ class SGC(nn.Module):
         D = np.diag(A.sum(axis=1))
         self.L = D-A
         self.L = torch.FloatTensor(self.L)
-        if self.on_cuda:
-            self.L = self.L.cuda()
+        self.L = if_cuda(self.L)
         self.g, self.V = torch.eig(self.L, eigenvectors=True)
         
         print "self.nb_nodes", self.nb_nodes
-        self.F = nn.Parameter(torch.rand(self.nb_nodes, self.nb_nodes).cuda(), requires_grad=True)
-        self.my_bias = nn.Parameter(torch.zeros(self.nb_nodes, channels).cuda(), requires_grad=True)
-        
-#        if self.on_cuda:
-#            self.V = self.V.cuda()
-#            self.F = self.F.cuda()
-#            self.my_bias = self.my_bias.cuda()
+        self.F = nn.Parameter(if_cuda(torch.rand(self.nb_nodes, self.nb_nodes)), requires_grad=True)
+        self.my_bias = nn.Parameter(if_cuda(torch.zeros(self.nb_nodes, channels)), requires_grad=True)
 
         last_layer = nn.Linear(self.nb_nodes * self.channels, out_dim)
         self.my_logistic_layers = nn.ModuleList([last_layer])
-
 
         print "Done!"
 
@@ -406,13 +402,14 @@ class SGC(nn.Module):
 
         nb_examples, nb_nodes, nb_channels = x.size()
 
-        #First draft. There needs to be a nonlinearity here. 
-        #The output shape is wrong because we should get a vector back.
         #import ipdb; ipdb.set_trace()
-        x = torch.matmul(Variable(self.V),torch.matmul(self.F, torch.matmul(torch.transpose(Variable(self.V), 0,1),x)))
+        Vx = torch.matmul(torch.transpose(Variable(self.V), 0,1),x)
+        FVx = torch.matmul(self.F, Vx)
+        VFVx = torch.matmul(Variable(self.V),FVx)
+        x = VFVx
             
         #import ipdb; ipdb.set_trace()
         x = self.my_logistic_layers[-1](x.view(nb_examples, -1))
-        x = F.softmax(x)
+        x = F.softmax(x, dim=1)
 
         return x
