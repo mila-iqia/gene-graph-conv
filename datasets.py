@@ -663,11 +663,13 @@ def get_dataset(opt):
         print "Getting TCGA BRCA type"
         compute_path = None if scale_free else '/data/milatmp1/dutilfra/transcriptome/graph/tcga_brca_ApprNormalizeLaplacian.npy'
         transform_adj_func = None if not_norm_adj or num_layer == 0 or model != 'cgn' else ApprNormalizeLaplacian(compute_path)
-        transform = transforms.Compose(
-            [PruneGraph(nb=num_layer, please_ignore=not opt.prune_graph), transform_adj_func])
+        
+        if not transform_adj_func == None:
+            transform_adj_func = transforms.Compose(
+                [PruneGraph(nb=num_layer, please_ignore=not opt.prune_graph), transform_adj_func])
 
         # To have a feel of TCGA, take a look at 'view_graph_TCGA.ipynb'
-        dataset = BRCACoexpr(transform_adj_func=transform, # To delete
+        dataset = BRCACoexpr(transform_adj_func=transform_adj_func, # To delete
             nb_class=nb_class, use_random_adj=scale_free, add_self=add_self, percentile=percentile)
 
         if nb_class is None: # means we keep all the class (29 I think)
