@@ -225,9 +225,9 @@ class RandomGraphDataset(Dataset):
         self.data = np.random.randn(nb_examples, nb_nodes, 1)
 
         # It's technically a binary classification problem, but to make it more general I treat it as a classification problem
-        self.labels = np.zeros((nb_examples, 2))
-        self.labels[:, 0] = (np.sum(self.data, axis=1) > 0.)[:, 0]  # try to predict if the sum. is > than 0.
-        self.labels[:, 1] = 1 - self.labels[:, 0]
+        # JPC Fixed to long vector to work with the updated code
+        self.labels = np.zeros((nb_examples))
+        self.labels = (np.sum(self.data, axis=1) > 0.)[:, 0].astype(np.long)  # try to predict if the sum. is > than 0.
 
         # Transform and stuff
         self.transform = transform
@@ -640,7 +640,7 @@ def get_dataset(opt):
         transform = transforms.Compose([PruneGraph(nb=num_layer, please_ignore=not opt.prune_graph), transform_adj_func])
 
         # TODO: add parametrisation of the fake dataset, or would it polute everything?
-        dataset = RandomGraphDataset(nb_nodes=1000, nb_edges=2000, nb_examples=nb_samples,
+        dataset = RandomGraphDataset(nb_nodes=100, nb_edges=100, nb_examples=nb_samples,
                                           transform_adj_func=transform, scale_free=scale_free, seed=seed)
         nb_class = 2 # Right now we only have 2 class
 
