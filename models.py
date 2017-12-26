@@ -289,7 +289,7 @@ class LCG(nn.Module):
         last_layer = nn.Linear(input_dim * channels, out_dim)
         self.my_logistic_layers = nn.ModuleList([last_layer])
 
-        self.register_buffer('edges', self.edges)
+        #self.register_buffer('edges', self.edges)
 
         print "Done!"
 
