@@ -395,11 +395,15 @@ class SGC(nn.Module):
             self.g, self.V = torch.eig(self.L, eigenvectors=True)
             save_eigenvectors("",self.L, self.g, self.V)
         
+        self.V = if_cuda(self.V.cpu().half())
+        self.g = if_cuda(self.g.cpu().half())
+        
         print "self.nb_nodes", self.nb_nodes
-        self.F = nn.Parameter(if_cuda(torch.rand(self.nb_nodes, self.nb_nodes)), requires_grad=True)
+        self.F = nn.Parameter(if_cuda(torch.rand(self.nb_nodes, self.nb_nodes).half()), requires_grad=True)
         self.my_bias = nn.Parameter(if_cuda(torch.zeros(self.nb_nodes, channels)), requires_grad=True)
 
-        last_layer = nn.Linear(self.nb_nodes * self.channels, out_dim)
+        
+        last_layer = nn.Linear(self.nb_nodes * self.channels, out_dim).half()
         self.my_logistic_layers = nn.ModuleList([last_layer])
 
         print "Done!"
@@ -408,16 +412,19 @@ class SGC(nn.Module):
 
         nb_examples, nb_nodes, nb_channels = x.size()
 
-        #import ipdb; ipdb.set_trace()
+        def if_cuda(x):
+            return x.cuda().half() if self.on_cuda else x.half()
+        
+        x = if_cuda(x.cpu())
         Vx = torch.matmul(torch.transpose(Variable(self.V), 0,1),x)
         FVx = torch.matmul(self.F, Vx)
         VFVx = torch.matmul(Variable(self.V),FVx)
         x = VFVx
-            
-        #import ipdb; ipdb.set_trace()
+        
+        
         x = self.my_logistic_layers[-1](x.view(nb_examples, -1))
         x = F.softmax(x, dim=1)
-
+        
         return x
 
 
