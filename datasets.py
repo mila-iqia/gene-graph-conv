@@ -8,12 +8,11 @@ import pandas as pd
 import collections
 from torchvision import transforms, utils
 
-class GraphGeneDataset(Dataset):
-    """General Dataset to load different graph gene dataset."""
 
-    def __init__(self, graph_dir, graph_file,
-                 transform=None,
-                 transform_adj_func=None, use_random_adj=False, nb_class=None, sub_class=None, percentile=50, add_self=False):
+class GraphDataset(Dataset):
+    def __init__(self, name,
+                 transform=None, use_random_adj=False, percentile=100):
+
         """
         Args:
             graph_file (string): Path to the h5df file.
@@ -23,31 +22,14 @@ class GraphGeneDataset(Dataset):
                 Will be applied once at the beginning
         """
 
-        graph_file = os.path.join(graph_dir, graph_file)
+        self.name = name
+        self.transform = transform
+        self.use_random_adj = use_random_adj
+        self.percentile = percentile
 
-        self.file = h5py.File(graph_file, 'r')
-        self.data = np.array(self.file['expression_data'])
-        self.nb_nodes = self.data.shape[1]
-        self.labels = self.file['labels_data']
-        self.adj = np.array(self.file['graph_data']).astype('float32')
-        self.sample_names = self.file['sample_names']
-        self.node_names = np.array(self.file['gene_names'])
-        self. use_random_adj = use_random_adj
-        self.label_name = self.labels.attrs
-
-        self.nb_class = nb_class if nb_class is not None else len(self.labels[0])
-        self.reduce_number_of_classes = nb_class is not None
-
-        # Take a number of subclasses
-        if sub_class is not None:
-            self.data = self.data[sum([(self.labels[:, i] == 1.) for i in sub_class]) >= 1]
-            self.labels = self.labels[sum([(self.labels[:, i] == 1.) for i in sub_class]) >= 1, :]
-            self.labels = self.labels[:, sub_class]
-
-            # Update the labels, since we only take a subset.
-            self.label_name = {str(i): self.label_name[str(k)] for i, k in enumerate(sub_class)}
-            self.label_name.update({self.label_name[str(k)]: str(k) for k in self.label_name.keys()})
-            self.nb_class = len(sub_class)
+        # Load the data
+        self.load_data()
+        assert self.adj is not None
 
         # If we want a random adjancy matrix:
         if use_random_adj:
@@ -58,7 +40,6 @@ class GraphGeneDataset(Dataset):
 
         # if we want to sub-sample the edges, based on the edges value
         if percentile < 100:
-
             # small trick to ignore the 0.
             nan_adj = np.ma.masked_where(self.adj == 0., self.adj)
             nan_adj = np.ma.filled(nan_adj, np.nan)
@@ -66,30 +47,78 @@ class GraphGeneDataset(Dataset):
             threshold = np.nanpercentile(nan_adj, 100 - percentile)
             print "We will remove all the adges that has a value smaller than {}".format(threshold)
 
-            to_keep = self.adj >= threshold # throw away all the edges that are bigger than what we have.
+            to_keep = self.adj >= threshold  # throw away all the edges that are bigger than what we have.
             self.adj = self.adj * to_keep
 
-        self.adj = self.adj > 0. # Don't care about the weights
-
-        # Add self references in the graph
-        if add_self:
-            print "Adding self-references"
-            np.fill_diagonal(self.adj, 1.)
-
-        self.nb_edges = (self.adj.sum() - self.nb_nodes) / 2 + self.nb_nodes if add_self else self.adj.sum() / 2
-
+        self.adj = (self.adj > 0.).astype(float)  # Don't care about the weights, for now.
         self.transform = transform
-        self.transform_adj = None
-
-        if transform_adj_func is not None:
-            self.transform_adj = transform_adj_func(self.adj)
 
         # Center
-        self.data = self.data - self.data.mean(axis=0)
+        self.data = self.data - self.data.mean(axis=0) # Ugly, to redo.
 
+    def load_data(self):
+        raise NotImplementedError()
+
+    def labels_name(self, l):
+        raise NotImplementedError()
+
+    def __getitem__(self, idx):
+        raise NotImplementedError()
 
     def __len__(self):
         return self.data.shape[0]
+
+    def get_adj(self):
+        return self.adj
+
+class GraphGeneDataset(GraphDataset):
+    """General Dataset to load different graph gene dataset."""
+
+    def __init__(self, graph_dir=None, graph_file=None, nb_class=None, sub_class=None, **kwargs):
+        """
+        Args:
+            graph_file (string): Path to the h5df file.
+            transform (callable, optional): Optional transform to be applied
+                on a sample.
+            transform_adj (callable, optional): Optional transform to be applied on the adjency matrix.
+                Will be applied once at the beginning
+        """
+
+        self.nb_class = nb_class
+        self.sub_class = sub_class
+        self.graph_dir = graph_dir
+        self.graph_file = graph_file
+
+        super(GraphGeneDataset, self).__init__(**kwargs)
+
+        self.label_name = self.labels.attrs
+
+    def load_data(self):
+
+
+        graph_file = os.path.join(self.graph_dir, self.graph_file)
+
+        self.file = h5py.File(graph_file, 'r')
+        self.data = np.array(self.file['expression_data'])
+        self.nb_nodes = self.data.shape[1]
+        self.labels = self.file['labels_data']
+        self.adj = np.array(self.file['graph_data']).astype('float32')
+        self.sample_names = self.file['sample_names']
+        self.node_names = np.array(self.file['gene_names'])
+
+        self.nb_class = self.nb_class if self.nb_class is not None else len(self.labels[0])
+        self.reduce_number_of_classes = self.nb_class is not None
+
+        # Take a number of subclasses
+        if self.sub_class is not None:
+            self.data = self.data[sum([(self.labels[:, i] == 1.) for i in self.sub_class]) >= 1]
+            self.labels = self.labels[sum([(self.labels[:, i] == 1.) for i in self.sub_class]) >= 1, :]
+            self.labels = self.labels[:, self.sub_class]
+
+            # Update the labels, since we only take a subset.
+            self.label_name = {str(i): self.label_name[str(k)] for i, k in enumerate(self.sub_class)}
+            self.label_name.update({self.label_name[str(k)]: str(k) for k in self.label_name.keys()})
+            self.nb_class = len(self.sub_class)
 
     def __getitem__(self, idx):
 
@@ -119,13 +148,6 @@ class GraphGeneDataset(Dataset):
 
         return sample
 
-    def get_adj(self):
-
-        if self.transform_adj is None:
-            return self.adj
-        else:
-            return self.transform_adj
-
     def labels_name(self, l):
         return self.label_name[str(l)]
 
@@ -135,7 +157,7 @@ class TCGATissue(GraphGeneDataset):
     """TCGA Dataset. We predict tissue."""
 
     def __init__(self, graph_dir='/data/lisa/data/genomics/TCGA/', graph_file='TCGA_tissue_ppi.hdf5', **kwargs):
-        super(TCGATissue, self).__init__(graph_dir=graph_dir, graph_file=graph_file, **kwargs)
+        super(TCGATissue, self).__init__(graph_dir=graph_dir, graph_file=graph_file, name='TCGATissue', **kwargs)
         
 class TCGAForLabel(GraphGeneDataset):
 
@@ -147,7 +169,7 @@ class TCGAForLabel(GraphGeneDataset):
                  clinical_file = "PANCAN_clinicalMatrix.gz",
                  clinical_label = "gender",
                  **kwargs):
-        super(TCGAForLabel, self).__init__(graph_dir=graph_dir, graph_file=graph_file, **kwargs)
+        super(TCGAForLabel, self).__init__(graph_dir=graph_dir, graph_file=graph_file, name='TCGAForLabel', **kwargs)
                 
         dataset = self
         
@@ -197,26 +219,34 @@ class BRCACoexpr(GraphGeneDataset):
             sub_class = [0, 7]
 
         super(BRCACoexpr, self).__init__(graph_dir=graph_dir, graph_file=graph_file,
-                                         nb_class=nb_class, sub_class=sub_class,
+                                         nb_class=nb_class, sub_class=sub_class, name='BRCACoexpr',
                                          **kwargs)
 
 
-class RandomGraphDataset(Dataset):
+class RandomGraphDataset(GraphDataset):
 
     """
     A random dataset with a random graph for debugging porpucess
     """
 
-    def __init__(self, nb_nodes=1000, nb_edges=2000, nb_examples=1000,
-                 transform=None, transform_adj_func=None, scale_free=True, seed=1993):
+    def __init__(self, nb_nodes=1000, nb_edges=2000, nb_examples=1000, seed=1993, **kwargs):
 
-        np.random.seed(seed)
         self.nb_nodes = nb_nodes
+        self.nb_edges = nb_edges
         self.nb_examples = nb_examples
+        self.seed = seed
+
+        super(RandomGraphDataset, self).__init__(name='RandomGraphDataset', **kwargs)
+
+    def load_data(self):
+
+        np.random.seed(self.seed)
+        nb_nodes = self.nb_nodes
+        nb_examples = self.nb_examples
 
         # Creating the graph
         # Degree matrix
-        self.adj = random_adjacency_matrix(nb_nodes, nb_edges, scale_free)
+        self.adj = random_adjacency_matrix(nb_nodes, self.nb_edges, self.use_random_adj)
         self.nb_edges = (self.adj.sum() - nb_nodes) / 2
         self.nb_class = 2
         self.node_names = list(range(nb_nodes))
@@ -229,16 +259,6 @@ class RandomGraphDataset(Dataset):
         self.labels = np.zeros((nb_examples))
         self.labels = (np.sum(self.data, axis=1) > 0.)[:, 0].astype(np.long)  # try to predict if the sum. is > than 0.
 
-        # Transform and stuff
-        self.transform = transform
-        self.transform_adj = None
-
-        if transform_adj_func is not None:
-            self.transform_adj = transform_adj_func(self.adj)
-
-    def __len__(self):
-        return self.data.shape[0]
-
     def __getitem__(self, idx):
 
         sample = self.data[idx]
@@ -249,97 +269,96 @@ class RandomGraphDataset(Dataset):
 
         return sample
 
-    def get_adj(self, transform=True):
-
-        if self.transform_adj is None:
-            return self.adj
-        else:
-            return self.transform_adj
-
     def labels_name(self, l):
-
         labels = {0: 'neg', 'neg':0, 'pos':1, 1:'pos'}
-
-        return labels[l]
-    
-class RandomGraphDatasetHard(Dataset):
-    """
-    A random dataset with a random graph for debugging
-    """
-    def __init__(self, nb_nodes=10, nb_edges=5, nb_examples=1000,
-                 transform=None, transform_adj_func=None, scale_free=True, seed=1993):
-        
-        np.random.seed(seed)
-        self.nb_nodes = nb_nodes
-        self.nb_examples = nb_examples
-
-        # Creating the graph
-        # Degree matrix
-        self.adj = random_adjacency_matrix(nb_nodes, nb_edges, scale_free)
-        
-        ## ensure we have relationships between nodes for labels 
-        
-        print self.adj
-        
-        
-        self.nb_edges = (self.adj.sum() - nb_nodes) / 2
-        self.nb_class = 2
-
-        # Generating the data
-        self.data = np.random.randn(nb_examples, nb_nodes, 1)
-        
-        # It's technically a binary classification problem, but to make it more general I treat it as a classification problem
-        self.labels = np.zeros((nb_examples, 2))
-        self.labels[:, 0] = self.gt_fn(self.data).reshape(-1)
-        self.labels[:, 1] = 1 - self.labels[:, 0]
-
-        # Transform and stuff
-        self.transform = transform
-        self.transform_adj = None
-
-        if transform_adj_func is not None:
-            self.transform_adj = transform_adj_func(self.adj)
-
-            
-    def gt_fn(self,x):
-        return (np.max(x[:,[0,1]], axis=1) > ((x[:,2]) + x[:,3]/2.0))*1.0
-           
-    def __len__(self):
-        return self.data.shape[0]
-
-    def __getitem__(self, idx):
-
-        sample = self.data[idx]
-        sample = {'sample': sample, 'labels': self.labels[idx]}
-
-        if self.transform:
-            sample = self.transform(sample)
-
-        return sample
-
-    def get_adj(self, transform=True):
-
-        if self.transform_adj is None:
-            return self.adj
-        else:
-            return self.transform_adj
-
-    def labels_name(self, l):
-
-        labels = {0: 'neg', 'neg':0, 'pos':1, 1:'pos'}
-
         return labels[l]
 
-class PercolateDataset(Dataset):
+
+# class RandomGraphDatasetHard(Dataset):
+#     """
+#     A random dataset with a random graph for debugging
+#     """
+#     def __init__(self, nb_nodes=10, nb_edges=5, nb_examples=1000,
+#                  transform=None, transform_adj_func=None, scale_free=True, seed=1993):
+#
+#         np.random.seed(seed)
+#         self.nb_nodes = nb_nodes
+#         self.nb_examples = nb_examples
+#
+#         # Creating the graph
+#         # Degree matrix
+#         self.adj = random_adjacency_matrix(nb_nodes, nb_edges, scale_free)
+#
+#         ## ensure we have relationships between nodes for labels
+#
+#         print self.adj
+#
+#
+#         self.nb_edges = (self.adj.sum() - nb_nodes) / 2
+#         self.nb_class = 2
+#
+#         # Generating the data
+#         self.data = np.random.randn(nb_examples, nb_nodes, 1)
+#
+#         # It's technically a binary classification problem, but to make it more general I treat it as a classification problem
+#         self.labels = np.zeros((nb_examples, 2))
+#         self.labels[:, 0] = self.gt_fn(self.data).reshape(-1)
+#         self.labels[:, 1] = 1 - self.labels[:, 0]
+#
+#         # Transform and stuff
+#         self.transform = transform
+#         self.transform_adj = None
+#
+#         if transform_adj_func is not None:
+#             assert False # Francis was lazy, to refactorize.
+#             self.transform_adj = transform_adj_func(self.adj)
+#
+#
+#     def gt_fn(self,x):
+#         return (np.max(x[:,[0,1]], axis=1) > ((x[:,2]) + x[:,3]/2.0))*1.0
+#
+#     def __len__(self):
+#         return self.data.shape[0]
+#
+#     def __getitem__(self, idx):
+#
+#         sample = self.data[idx]
+#         sample = {'sample': sample, 'labels': self.labels[idx]}
+#
+#         if self.transform:
+#             sample = self.transform(sample)
+#
+#         return sample
+#
+#     def get_adj(self, transform=True):
+#
+#         if self.transform_adj is None:
+#             return self.adj
+#         else:
+#             return self.transform_adj
+#
+#     def labels_name(self, l):
+#
+#         labels = {0: 'neg', 'neg':0, 'pos':1, 1:'pos'}
+#
+#         return labels[l]
+
+class PercolateDataset(GraphDataset):
 
     """
     A random dataset where the goal if to find if we can percolate from one side of the graph to the other.
     """
 
-    def __init__(self, graph_dir='Dataset/SyntheticData/', graph_file='test.hdf5', transform=None, transform_adj_func=None,
-                 add_self=False, use_random_adj=False):
+    def __init__(self, graph_dir='Dataset/SyntheticData/', graph_file='test.hdf5', **kwargs):
 
-        graph_file = os.path.join(graph_dir, graph_file)
+        self.graph_dir = graph_dir
+        self.graph_file = graph_file
+
+        super(PercolateDataset, self).__init__(name='PercolateDataset', **kwargs)
+
+
+    def load_data(self):
+        graph_file = os.path.join(self.graph_dir, self.graph_file)
 
         self.file = h5py.File(graph_file, 'r')
         self.data = np.array(self.file['expression_data'])
@@ -349,32 +368,8 @@ class PercolateDataset(Dataset):
         self.sample_names = np.array(range(self.data.shape[0]))
         self.node_names = np.array(range(self.data.shape[1]))
 
-        self.data = self.data - self.data.mean(axis=0)
+        self.nb_class = 2
 
-        # Transform and stuff
-        self.transform = transform
-        self.transform_adj = None
-
-        if transform_adj_func is not None:
-            self.transform_adj = transform_adj_func(self.adj)
-
-        # If we want a random adjancy matrix:
-        if use_random_adj:
-            print "Overwriting the adjacency matrix to have a random (scale-free) one..."
-            dim = range(self.adj.shape[0])
-            np.random.shuffle(dim)
-            self.adj = self.adj[dim][:, dim]
-
-        # Add self references in the graph
-        if add_self:
-            print "Adding self-references"
-            np.fill_diagonal(self.adj, 1.)
-
-        self.nb_edges = (self.adj.sum() - self.nb_nodes)/2 + self.nb_nodes if add_self else self.adj.sum()/2
-
-
-    def __len__(self):
-        return self.data.shape[0]
 
     def __getitem__(self, idx):
 
@@ -386,22 +381,10 @@ class PercolateDataset(Dataset):
         if self.transform:
             sample = self.transform(sample)
 
-        #import ipdb;
-        #ipdb.set_trace()
-
         return sample
 
-    def get_adj(self, transform=True):
-
-        if self.transform_adj is None:
-            return self.adj
-        else:
-            return self.transform_adj
-
     def labels_name(self, l):
-
         labels = {0: 'neg', 'neg':0, 'pos':1, 1:'pos'}
-
         return labels[l]
 
 def split_dataset(dataset, batch_size=100, random=False, train_ratio=0.8, seed=1993, nb_samples=None, nb_per_class=None):
@@ -494,58 +477,6 @@ def random_adjacency_matrix(nb_nodes, approx_nb_edges, scale_free=True):
     A[edges[:, 1], edges[:, 0]] = 1.
     return A
 
-class ApprNormalizeLaplacian(object):
-    """
-    Approximate a normalized Laplacian based on https://arxiv.org/pdf/1609.02907.pdf
-
-    Args:
-        processed_path (string): Where to save the processed normalized adjency matrix.
-        overwrite (bool): If we want to overwrite the saved processed data.
-
-    """
-
-    def __init__(self, processed_path=None, overwrite=False):
-        self.processed_path = processed_path
-        self.overwrite = overwrite
-
-    def __call__(self, adj):
-
-        if type(adj) != list:
-            adj = [adj]
-        retn = []
-
-        for i, a in enumerate(adj):
-
-            a = np.array(a)
-            processed_path = None
-            if self.processed_path:
-                processed_path = self.processed_path.split('.')
-                processed_path = processed_path[:-1] + ['_{}'.format(i)] + processed_path[-1]
-
-            if processed_path and os.path.exists(processed_path) and not self.overwrite:
-                print "returning a saved transformation."
-                return np.load(self.processed_path)
-
-            print "Doing the approximation..."
-            # Fill the diagonal
-            np.fill_diagonal(a, 1.)
-
-            D = a.sum(axis=1)
-            D_inv = np.diag(1. / np.sqrt(D))
-            norm_transform = D_inv.dot(a).dot(D_inv)
-
-            print "Done!"
-
-            # saving the processed approximation
-            if self.processed_path:
-                print "Saving the approximation in {}".format(self.processed_path)
-                np.save(self.processed_path, norm_transform)
-                print "Done!"
-
-            retn.append(norm_transform)
-        return retn
-
-
 class PruneGraph(object):
 
     def __init__(self, deep=None, step=1, nb=None, please_ignore=True):
@@ -611,7 +542,7 @@ class PruneGraph(object):
 
         return [adj.copy()] + adjs
 
-
+# TODO: Factorize all the graph manipulation?
 def get_dataset(opt):
 
     """
@@ -621,42 +552,28 @@ def get_dataset(opt):
     """
 
     dataset_name = opt.dataset
-    not_norm_adj = opt.not_norm_adj
     nb_examples = opt.nb_examples
     scale_free = opt.scale_free
     nb_class = opt.nb_class
     model = opt.model
     num_layer = opt.num_layer
     seed = opt.seed
-    add_self = opt.add_self
     percentile = opt.percentile
 
     if dataset_name == 'random':
 
         print "Getting a random graph"
-        transform_adj_func = None if not_norm_adj else ApprNormalizeLaplacian()
         nb_samples = 10000 if nb_examples is None else nb_examples
 
-        transform = transforms.Compose([PruneGraph(nb=num_layer, please_ignore=not opt.prune_graph), transform_adj_func])
-
-        # TODO: add parametrisation of the fake dataset, or would it polute everything?
         dataset = RandomGraphDataset(nb_nodes=100, nb_edges=100, nb_examples=nb_samples,
-                                          transform_adj_func=transform, scale_free=scale_free, seed=seed)
+                                     use_random_adj=scale_free, seed=seed)
         nb_class = 2 # Right now we only have 2 class
 
     elif dataset_name == 'tcga-tissue':
 
         print "Getting TCGA tissue type"
-        compute_path = None if scale_free else '/data/milatmp1/dutilfra/transcriptome/graph/tcga_tissue_ApprNormalizeLaplacian.npy'
-        transform_adj_func = None if not_norm_adj or num_layer == 0 or model != 'cgn' else ApprNormalizeLaplacian(compute_path)
-        
-        if not transform_adj_func == None:
-            transform_adj_func = transforms.Compose(
-                [PruneGraph(nb=num_layer, please_ignore=not opt.prune_graph), transform_adj_func])
-
         # To have a feel of TCGA, take a look at 'view_graph_TCGA.ipynb'
-        dataset = TCGATissue(transform_adj_func=transform_adj_func, # To delete
-            nb_class=nb_class, use_random_adj=scale_free, add_self=add_self, percentile=percentile)
+        dataset = TCGATissue(nb_class=nb_class, use_random_adj=scale_free, percentile=percentile)
 
         if nb_class is None: # means we keep all the class (29 I think)
             nb_class = len(dict(dataset.labels.attrs))/2
@@ -664,29 +581,15 @@ def get_dataset(opt):
     elif dataset_name == 'tcga-brca':
 
         print "Getting TCGA BRCA type"
-        compute_path = None if scale_free else '/data/milatmp1/dutilfra/transcriptome/graph/tcga_brca_ApprNormalizeLaplacian.npy'
-        transform_adj_func = None if not_norm_adj or num_layer == 0 or model != 'cgn' else ApprNormalizeLaplacian(compute_path)
-        
-        if not transform_adj_func == None:
-            transform_adj_func = transforms.Compose(
-                [PruneGraph(nb=num_layer, please_ignore=not opt.prune_graph), transform_adj_func])
-
         # To have a feel of TCGA, take a look at 'view_graph_TCGA.ipynb'
-        dataset = BRCACoexpr(transform_adj_func=transform_adj_func, # To delete
-            nb_class=nb_class, use_random_adj=scale_free, add_self=add_self, percentile=percentile)
+        dataset = BRCACoexpr(nb_class=nb_class, use_random_adj=scale_free, percentile=percentile)
 
         if nb_class is None: # means we keep all the class (29 I think)
             nb_class = len(dict(dataset.labels.attrs))/2
 
     elif dataset_name == 'percolate':
-
-        print "Getting the percolate dataset"
-        transform_adj_func = None if not_norm_adj else ApprNormalizeLaplacian()
-        transform = transforms.Compose([PruneGraph(nb=num_layer, please_ignore=not opt.prune_graph), transform_adj_func])
-
-        dataset = PercolateDataset(transform_adj_func=transform, use_random_adj=scale_free, add_self=add_self)
+        dataset = PercolateDataset(use_random_adj=scale_free)
         nb_class = 2
-
 
     else:
         raise ValueError

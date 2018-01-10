@@ -137,7 +137,7 @@ def build_parser():
     
     parser.add_argument('--scale-free', action='store_true', help='If we want a scale-free random adjacency matrix for the dataset.')
     parser.add_argument('--cuda', action='store_true', help='If we want to run on gpu.')
-    parser.add_argument('--not-norm-adj', action='store_true', help="If we don't want to normalize the adjancy matrix.")
+    parser.add_argument('--norm-adj', action='store_true', help="If we want to normalize the adjancy matrix.")
     parser.add_argument('--make-it-work-for-Joseph', action='store_true', help="Don't store anything in tensorboard, otherwise a segfault can happen.")
     parser.add_argument('--name', type=str, default=None, help="If we want to add a random str to the folder.")
 
@@ -216,8 +216,6 @@ def main(argv=None):
     # creating the dataset
     print "Getting the dataset..."
     dataset, nb_class = datasets.get_dataset(opt)
-    print "Nb of edges =", dataset.nb_edges
-
 
     # dataset loader
     train_set, valid_set, test_set = datasets.split_dataset(dataset, batch_size=batch_size, seed=seed,
@@ -230,7 +228,7 @@ def main(argv=None):
     print my_model
 
     # Train the cgn
-    criterion = torch.nn.CrossEntropyLoss(size_average=True)#torch.nn.MultiLabelSoftMarginLoss(size_average=True)
+    criterion = torch.nn.CrossEntropyLoss(size_average=True)
     optimizer = torch.optim.SGD(my_model.parameters(), lr=learning_rate, momentum=momentum, weight_decay=weight_decay)
 
     if on_cuda:
@@ -332,5 +330,4 @@ def main(argv=None):
         print "Done!"
 
 if __name__ == '__main__':
-
     main()

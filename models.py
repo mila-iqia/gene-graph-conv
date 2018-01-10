@@ -3,15 +3,9 @@ import numpy as np
 from torch.autograd import Variable
 import torch.nn.functional as F
 from torch import nn
-
-def agregate_nodes(x, opt='mean'):
-
-    if opt == 'mean':
-        return x.mean(dim=2)
-    elif opt == 'max':
-        return x.max(dim=2)[0]
-
-    return x
+import graphLayer
+from torchvision import transforms, utils
+import os
 
 class EmbeddingLayer(nn.Module):
 
@@ -59,57 +53,16 @@ class AttentionLayer(nn.Module):
 
         return attn_applied
 
-class CGNLayer(nn.Module):
-
-    def __init__(self, nb_nodes, adj, on_cuda=True):
-        super(CGNLayer, self).__init__()
-
-        self.my_layers = []
-        self.on_cuda = on_cuda
-        self.nb_nodes = nb_nodes
-
-        self.adj = adj # The normalization transformation (need to be precomputed)
-        self.edges = torch.LongTensor(np.array(np.where(self.adj))) # The list of edges
-        flat_adj = self.adj.flatten()[np.where(self.adj.flatten())] # get the value
-        flat_adj = torch.FloatTensor(flat_adj)
-
-        # Constructing a sparse matrix
-        print "Constructing the sparse matrix..."
-        #print self.edges
-        #print flat_adj
-
-        self.sparse_D_norm = torch.sparse.FloatTensor(self.edges, flat_adj, torch.Size([nb_nodes ,nb_nodes]))#.to_dense()
-        self.register_buffer('sparse_D_norm', self.sparse_D_norm)
-
-    def _adj_mul(self, x, D):
-
-        nb_examples, nb_channels, nb_nodes = x.size()
-        x = x.view(-1, nb_nodes)
-
-        # Needs this hack to work: https://discuss.pytorch.org/t/does-pytorch-support-autograd-on-sparse-matrix/6156/7
-        x = D.mm(x.t()).t()
-        x = x.contiguous().view(nb_examples, nb_channels, nb_nodes)
-        return x
-
-    def forward(self, x):
-
-        D_norm = Variable(self.sparse_D_norm, requires_grad=False)
-
-        if self.on_cuda:
-            D_norm = D_norm.cuda()
-
-        x = self._adj_mul(x, D_norm) # local average
-
-        return x
-
 
 # Create a module for the CGN:
 class CGN(nn.Module):
 
     def __init__(self, nb_nodes, input_dim, channels, adj, out_dim,
-                 on_cuda=True, add_residual=False, attention_layer=0, add_emb=None
-                 ):
+                 on_cuda=True, add_residual=False, attention_layer=0, add_emb=None, transform_adj=None):
         super(CGN, self).__init__()
+
+        if transform_adj is None:
+            transform_adj = []
 
         self.my_layers = []
         self.out_dim = out_dim
@@ -119,11 +72,6 @@ class CGN(nn.Module):
         self.nb_channels = channels
         self.attention_layer = attention_layer
         self.add_emb = add_emb
-
-        if type(adj) != list:
-            adj = [adj] * len(channels)
-
-        self.adj = adj # the list of adjacency matrix
 
         if add_emb:
             print "Adding node embeddings."
@@ -142,8 +90,13 @@ class CGN(nn.Module):
 
         # The convolutional layer
         convs = []
-        for i in range(len(adj)):
-            convs.append(CGNLayer(nb_nodes, adj[i], on_cuda))
+
+        for i in range(len(channels)):
+            # transformation to apply at each layer.
+            transform_tmp = transforms.Compose([foo(please_ignore=i == 0, unique_id=i) for foo in transform_adj])
+            convs.append(graphLayer.CGNLayer(nb_nodes, adj, on_cuda, transform_tmp))
+            adj = convs[-1].adj
+
         self.my_convs = nn.ModuleList(convs)
 
         # The logistic layer
@@ -194,7 +147,7 @@ class CGN(nn.Module):
             x = conv(x) # conv
             x = F.relu(layer(x))  # or relu, sigmoid...
 
-        # agregate the node
+        # agregate the attention on the last layer.
         if self.attention_layer > 0:
             x = torch.stack([att(x) for att in self.att], dim=-1)
 
@@ -241,11 +194,13 @@ class MLP(nn.Module):
 
         return x
 
+# TODO: have a LCGLayer class to simplify stuff.
 class LCG(nn.Module):
     def __init__(self,input_dim, A, channels=16, out_dim=2, on_cuda=False, num_layers = 1, arg_max = -1):
         super(LCG, self).__init__()
 
-        A = A[0] # just use first graph
+        print "Bip bop I'm Francis and I'm lazy, I need to use all the adjs."
+        A = A[0] # just use first graph # TODO: add all of them.
         
         self.my_layers = []
         self.out_dim = out_dim
@@ -326,47 +281,14 @@ class LCG(nn.Module):
 
         return x
 
-def get_model(opt, dataset, nb_class):
 
-    """
-    Return a model based on the options.
-    :param opt:
-    :param dataset:
-    :param nb_class:
-    :return:
-    """
-
-    model = opt.model
-    num_channel = opt.num_channel
-    num_layer = opt.num_layer
-    on_cuda = opt.cuda
-    skip_connections = opt.skip_connections
-
-    if model == 'cgn':
-        # To have a feel of the model, please take a look at cgn.ipynb
-        my_model = CGN(dataset.nb_nodes, 1, [num_channel] * num_layer, dataset.get_adj(), nb_class,
-                       on_cuda=on_cuda, add_residual=skip_connections, attention_layer=opt.attention_layer, add_emb=opt.use_emb)
-
-    elif model == 'mlp':
-        my_model = MLP(dataset.nb_nodes, [num_channel] * num_layer, nb_class, on_cuda=on_cuda) # TODO: add a bunch of the options
-
-    elif model == 'lcg':
-        my_model = LCG(dataset.nb_nodes, dataset.get_adj(), out_dim=nb_class,
-                              on_cuda=on_cuda, channels=num_channel, num_layers=num_layer)# TODO: add a bunch of the options
-        
-    elif model == 'sgc':
-        my_model = SGC(dataset.nb_nodes, dataset.get_adj(), out_dim=nb_class,
-                              on_cuda=on_cuda, channels=num_channel, num_layers=num_layer)
-    else:
-        raise ValueError
-
-    return my_model
 
 #spectral graph conv
 class SGC(nn.Module):
     def __init__(self,input_dim, A, channels=1, out_dim=2, on_cuda=False, num_layers = 1, arg_max = -200):
         super(SGC, self).__init__()
 
+        print "Bip bop I'm Francis and I'm lazy, I need to use all the adjs."
         A = A[0] # just use first graph
         
         self.my_layers = []
@@ -428,7 +350,6 @@ class SGC(nn.Module):
         return x
 
 
-import os
 def get_eigenvectors_filename(name,L):
     cachepath="./cache/"
     matrix_hash=str(hash(L.cpu().numpy().tostring()))
@@ -445,7 +366,44 @@ def save_eigenvectors(name,L,g,V):
     filename = get_eigenvectors_filename(name,L)
     print "saving", filename
     return np.savez(open(filename,'w+'),g=g.cpu().numpy(),V=V.cpu().numpy())
-    
-    
-    
+
+
+def get_model(opt, dataset, nb_class):
+    """
+    Return a model based on the options.
+    :param opt:
+    :param dataset:
+    :param nb_class:
+    :return:
+    """
+
+    model = opt.model
+    num_channel = opt.num_channel
+    num_layer = opt.num_layer
+    on_cuda = opt.cuda
+    skip_connections = opt.skip_connections
+
+    transform = graphLayer.get_transform(opt)
+
+    if model == 'cgn':
+        # To have a feel of the model, please take a look at cgn.ipynb
+        my_model = CGN(dataset.nb_nodes, 1, [num_channel] * num_layer, dataset.get_adj(), nb_class,
+                       on_cuda=on_cuda, add_residual=skip_connections, attention_layer=opt.attention_layer,
+                       add_emb=opt.use_emb,  transform_adj=transform)
+
+    elif model == 'mlp':
+        my_model = MLP(dataset.nb_nodes, [num_channel] * num_layer, nb_class,
+                       on_cuda=on_cuda)  # TODO: add a bunch of the options
+
+    elif model == 'lcg':
+        my_model = LCG(dataset.nb_nodes, dataset.get_adj(), out_dim=nb_class,
+                       on_cuda=on_cuda, channels=num_channel, num_layers=num_layer)  # TODO: add a bunch of the options
+
+    elif model == 'sgc':
+        my_model = SGC(dataset.nb_nodes, dataset.get_adj(), out_dim=nb_class,
+                       on_cuda=on_cuda, channels=num_channel, num_layers=num_layer)
+    else:
+        raise ValueError
+
+    return my_model
     
