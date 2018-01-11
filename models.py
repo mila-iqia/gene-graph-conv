@@ -194,93 +194,63 @@ class MLP(nn.Module):
 
         return x
 
-# TODO: have a LCGLayer class to simplify stuff.
+# Create a module for the CGN:
 class LCG(nn.Module):
-    def __init__(self,input_dim, A, channels=16, out_dim=2, on_cuda=False, num_layers = 1, arg_max = -1):
+
+    def __init__(self, nb_nodes, input_dim, channels, adj, out_dim,
+                 on_cuda=True, add_emb=None, transform_adj=None):
         super(LCG, self).__init__()
 
-        print "Bip bop I'm Francis and I'm lazy, I need to use all the adjs."
-        A = A[0] # just use first graph # TODO: add all of them.
-        
+        if transform_adj is None:
+            transform_adj = []
+
         self.my_layers = []
         self.out_dim = out_dim
         self.on_cuda = on_cuda
-        self.nb_nodes = A.shape[0]
-        self.num_layers = num_layers
+        self.nb_nodes = nb_nodes
+        self.nb_channels = channels
+        self.add_emb = add_emb
 
-        self.nb_channels = [channels] # we only support 1 layer for now.
+        if add_emb:
+            print "Adding node embeddings."
+            self.emb = EmbeddingLayer(nb_nodes, add_emb)
+            input_dim = self.emb.emb_size
 
-        print "Constructing the network..."   
-        self.max_edges = sorted((A > 0.).sum(0))[arg_max]
+        # The graph convolutional layers
+        convs = []
+        dims = [input_dim] + channels
+        for i, [c_in, c_out] in enumerate(zip(dims[:-1], dims[1:])):
+            # transformation to apply at each layer.
+            transform_tmp = transforms.Compose([foo(please_ignore=i == 0, unique_id=i) for foo in transform_adj])
+            convs.append(graphLayer.LCGLayer(adj, c_in, c_out, on_cuda, transform_adj=transform_tmp))
+            adj = convs[-1].adj
 
-        print "Each node will have {} edges.".format(self.max_edges)
+        self.my_convs = nn.ModuleList(convs)
 
+        # The logistic layer
+        logistic_layer = []
+        logistic_in_dim = [nb_nodes * channels[-1]]
 
-        # Get the list of all the edges. All the first index is 0, we fix that later
-        edges_np = [np.asarray(np.where(A[i:i+1] > 0.)).T for i in range(len(A))]
+        for d in logistic_in_dim:
+            layer = nn.Linear(d, out_dim)
+            logistic_layer.append(layer)
 
-
-        # pad the edges, so they all nodes have the same number of edges. help to automate everything.
-        edges_np = [np.concatenate([x, [[0, self.nb_nodes]] * (self.max_edges - len(x))]) if len(x) < self.max_edges
-                    else x[:self.max_edges] if len(x) > self.max_edges # Some Nodes have to many connection!
-                    else x
-                    for i, x in enumerate(edges_np)]
-
-        # fix the index that was all 0.
-        for i in range(len(edges_np)):
-            edges_np[i][:, 0] = i
-
-
-        edges_np = np.array(edges_np).reshape(-1, 2)
-        edges_np = edges_np[:, 1:2]
-
-        self.edges = torch.LongTensor(edges_np)
-        self.super_edges = torch.cat([self.edges] * channels)
-
-        # we add a weight the fake node (that we introduced in the padding)
-        my_weights = [nn.Parameter(torch.rand(self.edges.shape[0], channels), requires_grad=True) for _ in range(num_layers)]
-        self.my_weights = nn.ParameterList(my_weights)
-
-        last_layer = nn.Linear(input_dim * channels, out_dim)
-        self.my_logistic_layers = nn.ModuleList([last_layer])
-
-        #self.register_buffer('edges', self.edges)
-
+        self.my_logistic_layers = nn.ModuleList(logistic_layer)
         print "Done!"
-
-    def GraphConv(self, x, edges, batch_size, weights):
-        
-        edges = edges.contiguous().view(-1)
-        useless_node = Variable(torch.zeros(x.size(0), 1, x.size(2)))
-
-        if self.on_cuda:
-            edges = edges.cuda()
-            weights = weights.cuda()
-            useless_node = useless_node.cuda()
-
-        x = torch.cat([x, useless_node], 1) # add a random filler node
-        tocompute = torch.index_select(x, 1, Variable(edges)).view(batch_size, -1, weights.size(-1))
-
-        conv = tocompute * weights
-        conv = conv.view(-1, self.nb_nodes, self.max_edges, weights.size(-1)).sum(2)
-        return F.relu(conv)
 
     def forward(self, x):
 
         nb_examples, nb_nodes, nb_channels = x.size()
-        edges = Variable(self.super_edges, requires_grad=False)
+        if self.add_emb:
+            x = self.emb(x)
 
-        if self.on_cuda:
-            edges = edges.cuda()
-
-        for i in range(self.num_layers):
-            x = self.GraphConv(x, edges.data, nb_examples, self.my_weights[i])
+        for layer in self.my_convs:
+            x = layer(x)
+            x = F.relu(x)
 
         x = self.my_logistic_layers[-1](x.view(nb_examples, -1))
-        #x = F.softmax(x)
 
         return x
-
 
 
 #spectral graph conv
@@ -396,8 +366,9 @@ def get_model(opt, dataset, nb_class):
                        on_cuda=on_cuda)  # TODO: add a bunch of the options
 
     elif model == 'lcg':
-        my_model = LCG(dataset.nb_nodes, dataset.get_adj(), out_dim=nb_class,
-                       on_cuda=on_cuda, channels=num_channel, num_layers=num_layer)  # TODO: add a bunch of the options
+
+        my_model = LCG(dataset.nb_nodes, 1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=nb_class,
+                       on_cuda=on_cuda, add_emb=opt.use_emb)  # TODO: add a bunch of the options
 
     elif model == 'sgc':
         my_model = SGC(dataset.nb_nodes, dataset.get_adj(), out_dim=nb_class,

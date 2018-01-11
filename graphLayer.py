@@ -192,6 +192,95 @@ class CGNLayer(nn.Module):
 
         return x
 
+
+# TODO: have a LCGLayer class to simplify stuff.
+class LCGLayer(nn.Module):
+    def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, arg_max=-1, transform_adj=None, agregate_adj=None):
+        super(LCGLayer, self).__init__()
+
+        self.on_cuda = on_cuda
+        self.nb_nodes = adj.shape[0]
+        self.in_dim = in_dim
+        self.nb_channels = channels  # we only support 1 layer for now.
+        self.transform_adj = transform_adj
+        self.agregate_adj = agregate_adj
+
+        # We can technically do that online, but it's a bit messy and slow, if we need to
+        # doa sparse matrix all the time.
+        if self.transform_adj:
+            print "Transforming the adj matrix"
+            adj = transform_adj(adj)
+
+
+        self.adj = adj
+
+        print "Constructing the network..."
+        self.max_edges = sorted((adj > 0.).sum(0))[arg_max]
+
+        print "Each node will have {} edges.".format(self.max_edges)
+
+        # Get the list of all the edges. All the first index is 0, we fix that later
+        edges_np = [np.asarray(np.where(adj[i:i + 1] > 0.)).T for i in range(len(adj))]
+
+        # pad the edges, so they all nodes have the same number of edges. help to automate everything.
+        edges_np = [np.concatenate([x, [[0, self.nb_nodes]] * (self.max_edges - len(x))]) if len(x) < self.max_edges
+                    else x[:self.max_edges] if len(x) > self.max_edges  # Some Nodes have too many connection!
+        else x
+                    for i, x in enumerate(edges_np)]
+
+        # fix the index that was all 0.
+        for i in range(len(edges_np)):
+            edges_np[i][:, 0] = i
+
+        edges_np = np.array(edges_np).reshape(-1, 2)
+        edges_np = edges_np[:, 1:2]
+
+        self.edges = torch.LongTensor(edges_np)
+        self.super_edges = torch.cat([self.edges] * channels)
+
+        # We have one set of parameters per input dim. might be slow, but for now we will do with that.
+        self.my_weights = [nn.Parameter(torch.rand(self.edges.shape[0], channels), requires_grad=True) for _ in range(in_dim)]
+        self.my_weights = nn.ParameterList(self.my_weights)
+
+        print "Done!"
+
+    def GraphConv(self, x, edges, batch_size, weights):
+
+        edges = edges.contiguous().view(-1)
+        useless_node = Variable(torch.zeros(x.size(0), 1, x.size(2)))
+
+        if self.on_cuda:
+            edges = edges.cuda()
+            weights = weights.cuda()
+            useless_node = useless_node.cuda()
+
+        x = torch.cat([x, useless_node], 1)  # add a random filler node
+        tocompute = torch.index_select(x, 1, Variable(edges)).view(batch_size, -1, weights.size(-1))
+
+        conv = tocompute * weights
+        conv = conv.view(-1, self.nb_nodes, self.max_edges, weights.size(-1)).sum(2)
+        return conv
+
+    def forward(self, x):
+
+        nb_examples, nb_nodes, nb_channels = x.size()
+        edges = Variable(self.super_edges, requires_grad=False)
+
+        if self.on_cuda:
+            edges = edges.cuda()
+
+        #import ipdb; ipdb.set_trace()
+
+        # DO all the input channel and sum them.
+        x = sum([self.GraphConv(x[:, :, i].unsqueeze(-1), edges.data, nb_examples, self.my_weights[i]) for i in range(self.in_dim)])
+
+        # We can do max pooling and stuff, if we want.
+        if self.agregate_adj:
+            x = self.agregate_adj(x, self.adj)
+
+        return x
+
+
 def get_transform(opt):
 
     """
