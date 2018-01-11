@@ -4,6 +4,47 @@ from torch import nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 import os
+from torchvision import transforms
+
+class AgregateGraph(object):
+
+    """
+    Given x values, a adjacency graph, and a list of value to keep, return the coresponding x.
+    """
+
+    def __init__(self, adj, to_keep, please_ignore=False, type='max',  **kwargs):
+
+        self.type = type
+        self.please_ignore = please_ignore
+        self.adj = adj
+        self.to_keep = to_keep
+
+        print "We are keeping {} elements.".format(to_keep.sum())
+
+    def __call__(self, x):
+
+        x_shape = x.size()
+        if self.please_ignore:
+            return x
+
+        adj = Variable(self.adj, requires_grad=False)
+        to_keep = Variable(torch.FloatTensor(self.to_keep.astype(float)), requires_grad=False)
+
+        # For now let's only do the MaxPooling agregate one.
+        if self.type == 'max':
+            max_value = (x.view(-1, x.size(1), 1) * adj).max(dim=-1)[0]
+        elif self.type == 'mean':
+            max_value = (x.view(-1, x.size(1), 1) * adj).mean(dim=-1)[0]
+        elif self.type == 'strip':
+            max_value = x.view(-1, x.size(1), 1)
+        else:
+            raise ValueError()
+
+
+        retn = max_value * to_keep # Zero out The one that we don't care about.
+        return retn.view(x_shape)
+
+
 
 class SelfConnection(object):
 
@@ -128,23 +169,15 @@ class PoolGraph(object):
         new_adj = (frozen_adj > 0).astype(float)
         return new_adj
 
-class IdentityAgregate(object):
-
-    def __init__(self):
-        pass
-
-    def __call__(self, x, adj):
-        return x
-
 # TODO: Should have the linerar conv here.
 class CGNLayer(nn.Module):
 
-    def __init__(self, nb_nodes, adj, on_cuda=True, transform_adj=None, agregate_adj=None):
+    def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, transform_adj=None, agregate_adj=None):
         super(CGNLayer, self).__init__()
 
         self.my_layers = []
         self.on_cuda = on_cuda
-        self.nb_nodes = nb_nodes
+        self.nb_nodes = adj.shape[0]
         self.transform_adj = transform_adj # How to transform the adj matrix.
         self.agregate_adj = agregate_adj
 
@@ -156,15 +189,21 @@ class CGNLayer(nn.Module):
 
 
         self.adj = adj
-        print adj.sum()
+        self.to_keep = adj.sum(axis=0) > 0.
+
         self.edges = torch.LongTensor(np.array(np.where(self.adj))) # The list of edges
         flat_adj = self.adj.flatten()[np.where(self.adj.flatten())] # get the value
         flat_adj = torch.FloatTensor(flat_adj)
 
         # Constructing a sparse matrix
         print "Constructing the sparse matrix..."
-        self.sparse_adj = torch.sparse.FloatTensor(self.edges, flat_adj, torch.Size([nb_nodes ,nb_nodes]))#.to_dense()
+        self.sparse_adj = torch.sparse.FloatTensor(self.edges, flat_adj, torch.Size([self.nb_nodes ,self.nb_nodes]))#.to_dense()
         self.register_buffer('sparse_adj', self.sparse_adj)
+        self.linear = nn.Conv1d(in_dim, channels, 1, bias=True)
+
+        if self.agregate_adj:
+            self.agregate_adj = transforms.Compose([tr(adj=self.sparse_adj.to_dense(), to_keep=self.to_keep) for tr in agregate_adj])
+
 
     def _adj_mul(self, x, D):
 
@@ -183,11 +222,19 @@ class CGNLayer(nn.Module):
         if self.on_cuda:
             adj = adj.cuda()
 
+        x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
+
         x = self._adj_mul(x, adj) # local average
 
         # We can do max pooling and stuff, if we want.
+
         if self.agregate_adj:
-            x = self.agregate_adj(x, adj)
+            x = x.permute(0, 2, 1).contiguous()  # from ex, ch, node -> ex, node, ch
+            x = self.agregate_adj(x)
+            x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
+
+        x = self.linear(x) # conv
+        x = x.permute(0, 2, 1).contiguous()  # from ex, ch, node -> ex, node, ch
 
         return x
 
@@ -211,6 +258,7 @@ class LCGLayer(nn.Module):
 
 
         self.adj = adj
+        self.to_keep = adj.sum(axis=0) > 0.
 
         print "Constructing the network..."
         self.max_edges = sorted((adj > 0.).sum(0))[arg_max]
@@ -239,6 +287,9 @@ class LCGLayer(nn.Module):
         # We have one set of parameters per input dim. might be slow, but for now we will do with that.
         self.my_weights = [nn.Parameter(torch.rand(self.edges.shape[0], channels), requires_grad=True) for _ in range(in_dim)]
         self.my_weights = nn.ParameterList(self.my_weights)
+
+        if self.agregate_adj:
+            self.agregate_adj = transforms.Compose([tr(adj=torch.FloatTensor(self.adj), to_keep=self.to_keep) for tr in agregate_adj])
 
         print "Done!"
 
@@ -274,7 +325,7 @@ class LCGLayer(nn.Module):
 
         # We can do max pooling and stuff, if we want.
         if self.agregate_adj:
-            x = self.agregate_adj(x, self.adj)
+            x = self.agregate_adj(x)
 
         return x
 
@@ -293,6 +344,7 @@ class SGCLayer(nn.Module):
 
 
         self.adj = adj
+        self.to_keep = adj.sum(axis=0) > 0.
 
         self.my_layers = []
         self.on_cuda = on_cuda
@@ -319,6 +371,9 @@ class SGCLayer(nn.Module):
         self.F = nn.Parameter(torch.rand(self.nb_nodes, self.nb_nodes), requires_grad=True)
         #self.my_bias = nn.Parameter(torch.zeros(self.nb_nodes, channels), requires_grad=True) # To add.
 
+        if self.agregate_adj:
+            self.agregate_adj = transforms.Compose([tr(adj=torch.FloatTensor(self.adj), to_keep=self.to_keep) for tr in agregate_adj])
+
         print "Done!"
 
     def forward(self, x):
@@ -330,10 +385,9 @@ class SGCLayer(nn.Module):
 
         # We can do max pooling and stuff, if we want.
         if self.agregate_adj:
-            x = self.agregate_adj(x, self.adj)
+            x = self.agregate_adj(x)
 
         return x
-
 
 def get_transform(opt):
 
@@ -343,20 +397,22 @@ def get_transform(opt):
     :return: The list of transform.
     """
 
+    const_transform = []
     transform = []
 
     # TODO add some kind of different pruning, like max, average, etc... that will be determine here.
     # Right now the intax is a bit intense, but in the future it will be more parametrizable.
     if opt.prune_graph: # graph pruning, etc.
         print "Pruning the graph..."
-        transform += [lambda **kargs: PoolGraph(**kargs)]
+        const_transform += [lambda **kargs: PoolGraph(**kargs)]
+        transform += [lambda **kargs: AgregateGraph(**kargs)]
 
     if opt.add_self:
         print "Adding self connection to the graph..."
-    transform += [lambda **kargs: SelfConnection(opt.add_self, **kargs)] # Add a self connection.
+        const_transform += [lambda **kargs: SelfConnection(opt.add_self, **kargs)] # Add a self connection.
 
     if opt.norm_adj:
         print "Normalizing the graph..."
-        transform += [lambda **kargs: ApprNormalizeLaplacian(**kargs)] # Normalize the graph
+        const_transform += [lambda **kargs: ApprNormalizeLaplacian(**kargs)] # Normalize the graph
 
-    return transform
+    return const_transform, transform

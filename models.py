@@ -53,16 +53,11 @@ class AttentionLayer(nn.Module):
 
         return attn_applied
 
-
-# Create a module for the CGN:
-#TODO: refactor LCG, CGN and CGN, they are pretty much all the same, should make a super class GraphNetwork.
-# Then we would only need the add the bells and wishle at only one place.
-
-class CGN(nn.Module):
+class GraphNetwork(nn.Module):
 
     def __init__(self, nb_nodes, input_dim, channels, adj, out_dim,
-                 on_cuda=True, add_residual=False, attention_layer=0, add_emb=None, transform_adj=None):
-        super(CGN, self).__init__()
+                 on_cuda=True, add_emb=None, transform_adj=None, agregate_adj=None, graphLayerType=graphLayer.CGNLayer):
+        super(GraphNetwork, self).__init__()
 
         if transform_adj is None:
             transform_adj = []
@@ -70,53 +65,31 @@ class CGN(nn.Module):
         self.my_layers = []
         self.out_dim = out_dim
         self.on_cuda = on_cuda
-        self.add_residual = add_residual
         self.nb_nodes = nb_nodes
         self.nb_channels = channels
-        self.attention_layer = attention_layer
         self.add_emb = add_emb
+        self.graphLayerType = graphLayerType
+        self.agregate_adj = agregate_adj
 
         if add_emb:
             print "Adding node embeddings."
             self.emb = EmbeddingLayer(nb_nodes, add_emb)
             input_dim = self.emb.emb_size
 
-        dims = [input_dim] + channels
-
-        print "Constructing the network..."
-        # The normal layer
-        layers = []
-        for c_in, c_out in zip(dims[:-1], dims[1:]):
-            layer = nn.Conv1d(c_in, c_out, 1, bias=True)
-            layers.append(layer)
-        self.my_layers = nn.ModuleList(layers)
-
-        # The convolutional layer
+        # The graph convolutional layers
         convs = []
-
-        for i in range(len(channels)):
+        dims = [input_dim] + channels
+        for i, [c_in, c_out] in enumerate(zip(dims[:-1], dims[1:])):
             # transformation to apply at each layer.
             transform_tmp = transforms.Compose([foo(please_ignore=i == 0, unique_id=i) for foo in transform_adj])
-            convs.append(graphLayer.CGNLayer(nb_nodes, adj, on_cuda, transform_tmp))
+            convs.append(graphLayerType(adj, c_in, c_out, on_cuda, transform_adj=transform_tmp, agregate_adj=agregate_adj))
             adj = convs[-1].adj
 
         self.my_convs = nn.ModuleList(convs)
 
         # The logistic layer
         logistic_layer = []
-        if not channels: # Only have one layer
-            logistic_in_dim = [nb_nodes * input_dim]
-        elif not add_residual: # Adding a final logistic regression.
-            if attention_layer > 0:
-                logistic_in_dim = [channels[-1] * attention_layer]  # Changed
-            else:
-                logistic_in_dim = [nb_nodes * channels[-1]] # Changed here
-        else:
-            print "Adding skip connections..."
-            if attention_layer > 0:
-                logistic_in_dim = [d * nb_nodes for d in dims]
-            else:
-                logistic_in_dim = [d * attention_layer for d in dims]
+        logistic_in_dim = [nb_nodes * channels[-1]]
 
         for d in logistic_in_dim:
             layer = nn.Linear(d, out_dim)
@@ -125,41 +98,38 @@ class CGN(nn.Module):
         self.my_logistic_layers = nn.ModuleList(logistic_layer)
         print "Done!"
 
-        if attention_layer > 0:
-            print "Adding {} attentions layer.".format(attention_layer)
-            self.att = nn.ModuleList([AttentionLayer(channels[-1])] * attention_layer)
+        # TODO: add all the funky bells and stuff that the old CGN has.
 
     def forward(self, x):
 
-        out = None
         nb_examples, nb_nodes, nb_channels = x.size()
         if self.add_emb:
             x = self.emb(x)
 
-        x = x.permute(0, 2, 1).contiguous()# from ex, node, ch, -> ex, ch, node
+        for layer in self.my_convs:
+            x = layer(x)
+            x = F.relu(x)
 
-        # Do graph convolution for all
-        for num, [conv, layer] in enumerate(zip(self.my_convs, self.my_layers)):
+        x = self.my_logistic_layers[-1](x.view(nb_examples, -1))
 
-            if self.add_residual: # skip connection
-                if out is None:
-                    out = self.my_logistic_layers[num](x.view(nb_examples, -1))
-                else:
-                    out += self.my_logistic_layers[num](x.view(nb_examples, -1))
+        return x
 
-            x = conv(x) # conv
-            x = F.relu(layer(x))  # or relu, sigmoid...
+# Create a module for the CGN:
+class CGN(GraphNetwork):
 
-        # agregate the attention on the last layer.
-        if self.attention_layer > 0:
-            x = torch.stack([att(x) for att in self.att], dim=-1)
+    def __init__(self, **kwargs):
+        super(CGN, self).__init__(graphLayerType=graphLayer.CGNLayer, **kwargs)
 
-        if out is None:
-            out = self.my_logistic_layers[-1](x.view(nb_examples, -1))
-        else:
-            out += self.my_logistic_layers[-1](x.view(nb_examples, -1))
+# Create a module for the SGC:
+class SGC(GraphNetwork):
 
-        return out
+    def __init__(self, **kwargs):
+        super(SGC, self).__init__(graphLayerType=graphLayer.SGCLayer, **kwargs)
+
+# Create a module for the LCG:
+class LCG(GraphNetwork):
+    def __init__(self, **kwargs):
+        super(LCG, self).__init__(graphLayerType=graphLayer.LCGLayer, **kwargs)
 
 # Create a module for MLP
 class MLP(nn.Module):
@@ -197,122 +167,6 @@ class MLP(nn.Module):
 
         return x
 
-# Create a module for the CGN:
-class SGC(nn.Module):
-
-    def __init__(self, nb_nodes, input_dim, channels, adj, out_dim,
-                 on_cuda=True, add_emb=None, transform_adj=None):
-        super(SGC, self).__init__()
-
-        if transform_adj is None:
-            transform_adj = []
-
-        self.my_layers = []
-        self.out_dim = out_dim
-        self.on_cuda = on_cuda
-        self.nb_nodes = nb_nodes
-        self.nb_channels = channels
-        self.add_emb = add_emb
-
-        if add_emb:
-            print "Adding node embeddings."
-            self.emb = EmbeddingLayer(nb_nodes, add_emb)
-            input_dim = self.emb.emb_size
-
-        # The graph convolutional layers
-        convs = []
-        dims = [input_dim] + channels
-        for i, [c_in, c_out] in enumerate(zip(dims[:-1], dims[1:])):
-            # transformation to apply at each layer.
-            transform_tmp = transforms.Compose([foo(please_ignore=i == 0, unique_id=i) for foo in transform_adj])
-            convs.append(graphLayer.SGCLayer(adj, c_in, c_out, on_cuda, transform_adj=transform_tmp))
-            adj = convs[-1].adj
-
-        self.my_convs = nn.ModuleList(convs)
-
-        # The logistic layer
-        logistic_layer = []
-        logistic_in_dim = [nb_nodes * channels[-1]]
-
-        for d in logistic_in_dim:
-            layer = nn.Linear(d, out_dim)
-            logistic_layer.append(layer)
-
-        self.my_logistic_layers = nn.ModuleList(logistic_layer)
-        print "Done!"
-
-    def forward(self, x):
-
-        nb_examples, nb_nodes, nb_channels = x.size()
-        if self.add_emb:
-            x = self.emb(x)
-
-        for layer in self.my_convs:
-            x = layer(x)
-            x = F.relu(x)
-
-        x = self.my_logistic_layers[-1](x.view(nb_examples, -1))
-
-        return x
-
-# Create a module for the CGN:
-class LCG(nn.Module):
-
-    def __init__(self, nb_nodes, input_dim, channels, adj, out_dim,
-                 on_cuda=True, add_emb=None, transform_adj=None):
-        super(LCG, self).__init__()
-
-        if transform_adj is None:
-            transform_adj = []
-
-        self.my_layers = []
-        self.out_dim = out_dim
-        self.on_cuda = on_cuda
-        self.nb_nodes = nb_nodes
-        self.nb_channels = channels
-        self.add_emb = add_emb
-
-        if add_emb:
-            print "Adding node embeddings."
-            self.emb = EmbeddingLayer(nb_nodes, add_emb)
-            input_dim = self.emb.emb_size
-
-        # The graph convolutional layers
-        convs = []
-        dims = [input_dim] + channels
-        for i, [c_in, c_out] in enumerate(zip(dims[:-1], dims[1:])):
-            # transformation to apply at each layer.
-            transform_tmp = transforms.Compose([foo(please_ignore=i == 0, unique_id=i) for foo in transform_adj])
-            convs.append(graphLayer.LCGLayer(adj, c_in, c_out, on_cuda, transform_adj=transform_tmp))
-            adj = convs[-1].adj
-
-        self.my_convs = nn.ModuleList(convs)
-
-        # The logistic layer
-        logistic_layer = []
-        logistic_in_dim = [nb_nodes * channels[-1]]
-
-        for d in logistic_in_dim:
-            layer = nn.Linear(d, out_dim)
-            logistic_layer.append(layer)
-
-        self.my_logistic_layers = nn.ModuleList(logistic_layer)
-        print "Done!"
-
-    def forward(self, x):
-
-        nb_examples, nb_nodes, nb_channels = x.size()
-        if self.add_emb:
-            x = self.emb(x)
-
-        for layer in self.my_convs:
-            x = layer(x)
-            x = F.relu(x)
-
-        x = self.my_logistic_layers[-1](x.view(nb_examples, -1))
-
-        return x
-
 
 def get_model(opt, dataset, nb_class):
     """
@@ -329,13 +183,16 @@ def get_model(opt, dataset, nb_class):
     on_cuda = opt.cuda
     skip_connections = opt.skip_connections
 
-    transform = graphLayer.get_transform(opt)
+    const_transform, agregate_adj = graphLayer.get_transform(opt)
 
     if model == 'cgn':
         # To have a feel of the model, please take a look at cgn.ipynb
-        my_model = CGN(dataset.nb_nodes, 1, [num_channel] * num_layer, dataset.get_adj(), nb_class,
-                       on_cuda=on_cuda, add_residual=skip_connections, attention_layer=opt.attention_layer,
-                       add_emb=opt.use_emb,  transform_adj=transform)
+        # my_model = CGN(dataset.nb_nodes, 1, [num_channel] * num_layer, dataset.get_adj(), nb_class,
+        #                on_cuda=on_cuda, add_residual=skip_connections, attention_layer=opt.attention_layer,
+        #                add_emb=opt.use_emb,  transform_adj=const_transform, agregate_adj=agregate_adj)
+
+        my_model = CGN(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=nb_class,
+                       on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=const_transform, agregate_adj=agregate_adj)  # TODO: add a bunch of the options
 
     elif model == 'mlp':
         my_model = MLP(dataset.nb_nodes, [num_channel] * num_layer, nb_class,
@@ -343,17 +200,129 @@ def get_model(opt, dataset, nb_class):
 
     elif model == 'lcg':
 
-        my_model = LCG(dataset.nb_nodes, 1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=nb_class,
-                       on_cuda=on_cuda, add_emb=opt.use_emb)  # TODO: add a bunch of the options
+        my_model = LCG(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=nb_class,
+                       on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=const_transform, agregate_adj=agregate_adj)  # TODO: add a bunch of the options
 
     elif model == 'sgc':
-
-        my_model = SGC(dataset.nb_nodes, 1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=nb_class,
-                       on_cuda=on_cuda, add_emb=opt.use_emb)  # TODO: add a bunch of the options
+        my_model = SGC(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=nb_class,
+                       on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=const_transform, agregate_adj=agregate_adj)  # TODO: add a bunch of the options
     else:
         raise ValueError
 
     return my_model
+
+# # Create a module for the CGN:
+# #TODO: refactor LCG, CGN and CGN, they are pretty much all the same, should make a super class GraphNetwork.
+# # Then we would only need the add the bells and wishle at only one place.
+#
+# class CGN(nn.Module):
+#
+#     def __init__(self, nb_nodes, input_dim, channels, adj, out_dim,
+#                  on_cuda=True, add_residual=False, attention_layer=0, add_emb=None, transform_adj=None, agregate_adj=None):
+#         super(CGN, self).__init__()
+#
+#         if transform_adj is None:
+#             transform_adj = []
+#
+#         if agregate_adj is None:
+#             agregate_adj = []
+#
+#         self.my_layers = []
+#         self.out_dim = out_dim
+#         self.on_cuda = on_cuda
+#         self.add_residual = add_residual
+#         self.nb_nodes = nb_nodes
+#         self.nb_channels = channels
+#         self.attention_layer = attention_layer
+#         self.add_emb = add_emb
+#         self.agregate_adj = agregate_adj
+#
+#         if add_emb:
+#             print "Adding node embeddings."
+#             self.emb = EmbeddingLayer(nb_nodes, add_emb)
+#             input_dim = self.emb.emb_size
+#
+#         dims = [input_dim] + channels
+#
+#         print "Constructing the network..."
+#         # The normal layer
+#         layers = []
+#         for c_in, c_out in zip(dims[:-1], dims[1:]):
+#             layer = nn.Conv1d(c_in, c_out, 1, bias=True)
+#             layers.append(layer)
+#         self.my_layers = nn.ModuleList(layers)
+#
+#         # The convolutional layer
+#         convs = []
+#
+#         for i in range(len(channels)):
+#             # transformation to apply at each layer.
+#             transform_tmp = transforms.Compose([foo(please_ignore=i == 0, unique_id=i) for foo in transform_adj])
+#             convs.append(graphLayer.CGNLayer(nb_nodes, adj, on_cuda, transform_adj=transform_tmp, agregate_adj=agregate_adj))
+#             adj = convs[-1].adj
+#
+#         self.my_convs = nn.ModuleList(convs)
+#
+#         # The logistic layer
+#         logistic_layer = []
+#         if not channels: # Only have one layer
+#             logistic_in_dim = [nb_nodes * input_dim]
+#         elif not add_residual: # Adding a final logistic regression.
+#             if attention_layer > 0:
+#                 logistic_in_dim = [channels[-1] * attention_layer]  # Changed
+#             else:
+#                 logistic_in_dim = [nb_nodes * channels[-1]] # Changed here
+#         else:
+#             print "Adding skip connections..."
+#             if attention_layer > 0:
+#                 logistic_in_dim = [d * nb_nodes for d in dims]
+#             else:
+#                 logistic_in_dim = [d * attention_layer for d in dims]
+#
+#         for d in logistic_in_dim:
+#             layer = nn.Linear(d, out_dim)
+#             logistic_layer.append(layer)
+#
+#         self.my_logistic_layers = nn.ModuleList(logistic_layer)
+#         print "Done!"
+#
+#         if attention_layer > 0:
+#             print "Adding {} attentions layer.".format(attention_layer)
+#             self.att = nn.ModuleList([AttentionLayer(channels[-1])] * attention_layer)
+#
+#     def forward(self, x):
+#
+#         out = None
+#         nb_examples, nb_nodes, nb_channels = x.size()
+#         if self.add_emb:
+#             x = self.emb(x)
+#
+#         x = x.permute(0, 2, 1).contiguous()# from ex, node, ch, -> ex, ch, node
+#
+#         # Do graph convolution for all
+#         for num, [conv, layer] in enumerate(zip(self.my_convs, self.my_layers)):
+#
+#             if self.add_residual: # skip connection
+#                 if out is None:
+#                     out = self.my_logistic_layers[num](x.view(nb_examples, -1))
+#                 else:
+#                     out += self.my_logistic_layers[num](x.view(nb_examples, -1))
+#
+#             x = conv(x) # conv
+#             x = F.relu(layer(x))  # or relu, sigmoid...
+#
+#         # agregate the attention on the last layer.
+#         if self.attention_layer > 0:
+#             x = torch.stack([att(x) for att in self.att], dim=-1)
+#
+#         if out is None:
+#             out = self.my_logistic_layers[-1](x.view(nb_examples, -1))
+#         else:
+#             out += self.my_logistic_layers[-1](x.view(nb_examples, -1))
+#
+#         return out
+
+
 
 #
 # #spectral graph conv
