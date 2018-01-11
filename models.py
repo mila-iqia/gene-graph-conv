@@ -55,6 +55,9 @@ class AttentionLayer(nn.Module):
 
 
 # Create a module for the CGN:
+#TODO: refactor LCG, CGN and CGN, they are pretty much all the same, should make a super class GraphNetwork.
+# Then we would only need the add the bells and wishle at only one place.
+
 class CGN(nn.Module):
 
     def __init__(self, nb_nodes, input_dim, channels, adj, out_dim,
@@ -195,6 +198,64 @@ class MLP(nn.Module):
         return x
 
 # Create a module for the CGN:
+class SGC(nn.Module):
+
+    def __init__(self, nb_nodes, input_dim, channels, adj, out_dim,
+                 on_cuda=True, add_emb=None, transform_adj=None):
+        super(SGC, self).__init__()
+
+        if transform_adj is None:
+            transform_adj = []
+
+        self.my_layers = []
+        self.out_dim = out_dim
+        self.on_cuda = on_cuda
+        self.nb_nodes = nb_nodes
+        self.nb_channels = channels
+        self.add_emb = add_emb
+
+        if add_emb:
+            print "Adding node embeddings."
+            self.emb = EmbeddingLayer(nb_nodes, add_emb)
+            input_dim = self.emb.emb_size
+
+        # The graph convolutional layers
+        convs = []
+        dims = [input_dim] + channels
+        for i, [c_in, c_out] in enumerate(zip(dims[:-1], dims[1:])):
+            # transformation to apply at each layer.
+            transform_tmp = transforms.Compose([foo(please_ignore=i == 0, unique_id=i) for foo in transform_adj])
+            convs.append(graphLayer.SGCLayer(adj, c_in, c_out, on_cuda, transform_adj=transform_tmp))
+            adj = convs[-1].adj
+
+        self.my_convs = nn.ModuleList(convs)
+
+        # The logistic layer
+        logistic_layer = []
+        logistic_in_dim = [nb_nodes * channels[-1]]
+
+        for d in logistic_in_dim:
+            layer = nn.Linear(d, out_dim)
+            logistic_layer.append(layer)
+
+        self.my_logistic_layers = nn.ModuleList(logistic_layer)
+        print "Done!"
+
+    def forward(self, x):
+
+        nb_examples, nb_nodes, nb_channels = x.size()
+        if self.add_emb:
+            x = self.emb(x)
+
+        for layer in self.my_convs:
+            x = layer(x)
+            x = F.relu(x)
+
+        x = self.my_logistic_layers[-1](x.view(nb_examples, -1))
+
+        return x
+
+# Create a module for the CGN:
 class LCG(nn.Module):
 
     def __init__(self, nb_nodes, input_dim, channels, adj, out_dim,
@@ -253,91 +314,6 @@ class LCG(nn.Module):
         return x
 
 
-#spectral graph conv
-class SGC(nn.Module):
-    def __init__(self,input_dim, A, channels=1, out_dim=2, on_cuda=False, num_layers = 1, arg_max = -200):
-        super(SGC, self).__init__()
-
-        print "Bip bop I'm Francis and I'm lazy, I need to use all the adjs."
-        A = A[0] # just use first graph
-        
-        self.my_layers = []
-        self.out_dim = out_dim
-        self.on_cuda = on_cuda
-        self.nb_nodes = input_dim
-        self.num_layers = num_layers
-
-        self.channels = 1#channels
-        #dims = [input_dim] + channels
-
-        def if_cuda(x):
-            return x.cuda() if self.on_cuda else x
-
-        print "Constructing the eigenvectors..."   
-        
-        D = np.diag(A.sum(axis=1))
-        self.L = D-A
-        self.L = torch.FloatTensor(self.L)
-        self.L = if_cuda(self.L)
-        
-        eg = load_eigenvectors("",self.L)
-        if eg != None:
-            self.g, self.V = if_cuda(eg[0]),if_cuda(eg[1])
-        else:
-            self.g, self.V = torch.eig(self.L, eigenvectors=True)
-            save_eigenvectors("",self.L, self.g, self.V)
-        
-        self.V = if_cuda(self.V.cpu().half())
-        self.g = if_cuda(self.g.cpu().half())
-        
-        print "self.nb_nodes", self.nb_nodes
-        self.F = nn.Parameter(if_cuda(torch.rand(self.nb_nodes, self.nb_nodes).half()), requires_grad=True)
-        self.my_bias = nn.Parameter(if_cuda(torch.zeros(self.nb_nodes, channels)), requires_grad=True)
-
-        
-        last_layer = nn.Linear(self.nb_nodes * self.channels, out_dim).half()
-        self.my_logistic_layers = nn.ModuleList([last_layer])
-
-        print "Done!"
-
-    def forward(self, x):
-
-        nb_examples, nb_nodes, nb_channels = x.size()
-
-        def if_cuda(x):
-            return x.cuda().half() if self.on_cuda else x.half()
-        
-        x = if_cuda(x.cpu())
-        Vx = torch.matmul(torch.transpose(Variable(self.V), 0,1),x)
-        FVx = torch.matmul(self.F, Vx)
-        VFVx = torch.matmul(Variable(self.V),FVx)
-        x = VFVx
-        
-        
-        x = self.my_logistic_layers[-1](x.view(nb_examples, -1))
-        x = F.softmax(x, dim=1)
-        
-        return x
-
-
-def get_eigenvectors_filename(name,L):
-    cachepath="./cache/"
-    matrix_hash=str(hash(L.cpu().numpy().tostring()))
-    return cachepath + matrix_hash + ".npz"
-
-def load_eigenvectors(name,L):
-    filename = get_eigenvectors_filename(name,L)
-    if os.path.isfile(filename):
-        print "loading", filename
-        eg = np.load(open(filename))
-        return (torch.FloatTensor(eg["g"]),torch.FloatTensor(eg["V"]))
-    
-def save_eigenvectors(name,L,g,V):
-    filename = get_eigenvectors_filename(name,L)
-    print "saving", filename
-    return np.savez(open(filename,'w+'),g=g.cpu().numpy(),V=V.cpu().numpy())
-
-
 def get_model(opt, dataset, nb_class):
     """
     Return a model based on the options.
@@ -371,10 +347,95 @@ def get_model(opt, dataset, nb_class):
                        on_cuda=on_cuda, add_emb=opt.use_emb)  # TODO: add a bunch of the options
 
     elif model == 'sgc':
-        my_model = SGC(dataset.nb_nodes, dataset.get_adj(), out_dim=nb_class,
-                       on_cuda=on_cuda, channels=num_channel, num_layers=num_layer)
+
+        my_model = SGC(dataset.nb_nodes, 1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=nb_class,
+                       on_cuda=on_cuda, add_emb=opt.use_emb)  # TODO: add a bunch of the options
     else:
         raise ValueError
 
     return my_model
-    
+
+#
+# #spectral graph conv
+# class SGC(nn.Module):
+#     def __init__(self,input_dim, A, channels=1, out_dim=2, on_cuda=False, num_layers = 1, arg_max = -200):
+#         super(SGC, self).__init__()
+#
+#         print "Bip bop I'm Francis and I'm lazy, I need to use all the adjs."
+#         A = A[0] # just use first graph
+#
+#         self.my_layers = []
+#         self.out_dim = out_dim
+#         self.on_cuda = on_cuda
+#         self.nb_nodes = input_dim
+#         self.num_layers = num_layers
+#
+#         self.channels = 1#channels
+#         #dims = [input_dim] + channels
+#
+#         def if_cuda(x):
+#             return x.cuda() if self.on_cuda else x
+#
+#         print "Constructing the eigenvectors..."
+#
+#         D = np.diag(A.sum(axis=1))
+#         self.L = D-A
+#         self.L = torch.FloatTensor(self.L)
+#         self.L = if_cuda(self.L)
+#
+#         eg = load_eigenvectors("",self.L)
+#         if eg != None:
+#             self.g, self.V = if_cuda(eg[0]),if_cuda(eg[1])
+#         else:
+#             self.g, self.V = torch.eig(self.L, eigenvectors=True)
+#             save_eigenvectors("",self.L, self.g, self.V)
+#
+#         self.V = if_cuda(self.V.cpu().half())
+#         self.g = if_cuda(self.g.cpu().half())
+#
+#         print "self.nb_nodes", self.nb_nodes
+#         self.F = nn.Parameter(if_cuda(torch.rand(self.nb_nodes, self.nb_nodes).half()), requires_grad=True)
+#         self.my_bias = nn.Parameter(if_cuda(torch.zeros(self.nb_nodes, channels)), requires_grad=True)
+#
+#
+#         last_layer = nn.Linear(self.nb_nodes * self.channels, out_dim).half()
+#         self.my_logistic_layers = nn.ModuleList([last_layer])
+#
+#         print "Done!"
+#
+#     def forward(self, x):
+#
+#         nb_examples, nb_nodes, nb_channels = x.size()
+#
+#         def if_cuda(x):
+#             return x.cuda().half() if self.on_cuda else x.half()
+#
+#         x = if_cuda(x.cpu())
+#         Vx = torch.matmul(torch.transpose(Variable(self.V), 0,1),x)
+#         FVx = torch.matmul(self.F, Vx)
+#         VFVx = torch.matmul(Variable(self.V),FVx)
+#         x = VFVx
+#
+#
+#         x = self.my_logistic_layers[-1](x.view(nb_examples, -1))
+#         x = F.softmax(x, dim=1)
+#
+#         return x
+#
+#
+# def get_eigenvectors_filename(name,L):
+#     cachepath="./cache/"
+#     matrix_hash=str(hash(L.cpu().numpy().tostring()))
+#     return cachepath + matrix_hash + ".npz"
+#
+# def load_eigenvectors(name,L):
+#     filename = get_eigenvectors_filename(name,L)
+#     if os.path.isfile(filename):
+#         print "loading", filename
+#         eg = np.load(open(filename))
+#         return (torch.FloatTensor(eg["g"]),torch.FloatTensor(eg["V"]))
+#
+# def save_eigenvectors(name,L,g,V):
+#     filename = get_eigenvectors_filename(name,L)
+#     print "saving", filename
+#     return np.savez(open(filename,'w+'),g=g.cpu().numpy(),V=V.cpu().numpy())

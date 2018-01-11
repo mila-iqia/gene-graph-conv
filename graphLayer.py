@@ -136,8 +136,7 @@ class IdentityAgregate(object):
     def __call__(self, x, adj):
         return x
 
-# TODO: Have the pooling here.
-# Add the transform thing here?
+# TODO: Should have the linerar conv here.
 class CGNLayer(nn.Module):
 
     def __init__(self, nb_nodes, adj, on_cuda=True, transform_adj=None, agregate_adj=None):
@@ -193,7 +192,6 @@ class CGNLayer(nn.Module):
         return x
 
 
-# TODO: have a LCGLayer class to simplify stuff.
 class LCGLayer(nn.Module):
     def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, arg_max=-1, transform_adj=None, agregate_adj=None):
         super(LCGLayer, self).__init__()
@@ -273,6 +271,62 @@ class LCGLayer(nn.Module):
 
         # DO all the input channel and sum them.
         x = sum([self.GraphConv(x[:, :, i].unsqueeze(-1), edges.data, nb_examples, self.my_weights[i]) for i in range(self.in_dim)])
+
+        # We can do max pooling and stuff, if we want.
+        if self.agregate_adj:
+            x = self.agregate_adj(x, self.adj)
+
+        return x
+
+
+# spectral graph conv
+class SGCLayer(nn.Module):
+    def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, transform_adj=None, agregate_adj=None):
+        super(SGCLayer, self).__init__()
+
+        # We can technically do that online, but it's a bit messy and slow, if we need to
+        # doa sparse matrix all the time.
+        self.transform_adj = transform_adj
+        if self.transform_adj:
+            print "Transforming the adj matrix"
+            adj = transform_adj(adj)
+
+
+        self.adj = adj
+
+        self.my_layers = []
+        self.on_cuda = on_cuda
+        self.nb_nodes = adj.shape[0]
+        self.agregate_adj = agregate_adj
+
+        self.channels = 1  # channels
+        assert channels == 1 # Other number of channels not suported.
+
+        # dims = [input_dim] + channels
+
+        print "Constructing the eigenvectors..."
+
+        D = np.diag(adj.sum(axis=1))
+        self.L = D - adj
+        self.L = torch.FloatTensor(self.L)
+
+        self.g, self.V = torch.eig(self.L, eigenvectors=True)
+
+        #self.V = self.V.half()
+        #self.g = self.g.half()
+
+        print "self.nb_nodes", self.nb_nodes
+        self.F = nn.Parameter(torch.rand(self.nb_nodes, self.nb_nodes), requires_grad=True)
+        #self.my_bias = nn.Parameter(torch.zeros(self.nb_nodes, channels), requires_grad=True) # To add.
+
+        print "Done!"
+
+    def forward(self, x):
+
+        Vx = torch.matmul(torch.transpose(Variable(self.V), 0, 1), x)
+        FVx = torch.matmul(self.F, Vx)
+        VFVx = torch.matmul(Variable(self.V), FVx)
+        x = VFVx
 
         # We can do max pooling and stuff, if we want.
         if self.agregate_adj:
