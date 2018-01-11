@@ -134,7 +134,6 @@ def build_parser():
     parser.add_argument('--dataset', choices=['random', 'tcga-tissue', 'tcga-brca', "tcga-label", 'percolate'], default='random', help='Which dataset to use.')
     parser.add_argument('--clinical-file', type=str, default='PANCAN_clinicalMatrix.gz', help='File to read labels from')
     parser.add_argument('--clinical-label', type=str, default='gender', help='Label to join with data')
-    
     parser.add_argument('--scale-free', action='store_true', help='If we want a scale-free random adjacency matrix for the dataset.')
     parser.add_argument('--cuda', action='store_true', help='If we want to run on gpu.')
     parser.add_argument('--norm-adj', action='store_true', help="If we want to normalize the adjancy matrix.")
@@ -290,7 +289,7 @@ def main(argv=None):
         # Add some metric for tensorboard
         # Loss
         if writer is not None:
-            writer.scalar_summary('loss', loss[0].data.cpu().numpy(), t)
+            writer.scalar_summary('loss', loss.data[0], t)
 
         # time
         time_this_epoch = time.time() - start_timer
