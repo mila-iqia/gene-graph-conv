@@ -169,17 +169,17 @@ class PoolGraph(object):
         new_adj = (frozen_adj > 0).astype(float)
         return new_adj
 
-# TODO: Should have the linerar conv here.
-class CGNLayer(nn.Module):
-
+class GraphLayer(nn.Module):
     def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, transform_adj=None, agregate_adj=None):
-        super(CGNLayer, self).__init__()
+        super(GraphLayer, self).__init__()
 
         self.my_layers = []
         self.on_cuda = on_cuda
         self.nb_nodes = adj.shape[0]
-        self.transform_adj = transform_adj # How to transform the adj matrix.
+        self.transform_adj = transform_adj  # How to transform the adj matrix.
         self.agregate_adj = agregate_adj
+        self.in_dim = in_dim
+        self.channels = channels
 
         # We can technically do that online, but it's a bit messy and slow, if we need to
         # doa sparse matrix all the time.
@@ -187,10 +187,48 @@ class CGNLayer(nn.Module):
             print "Transforming the adj matrix"
             adj = transform_adj(adj)
 
-
         self.adj = adj
         self.to_keep = adj.sum(axis=0) > 0.
 
+        if self.agregate_adj:
+            self.agregate_adj = transforms.Compose(
+                [tr(adj=torch.FloatTensor(self.adj), to_keep=self.to_keep) for tr in agregate_adj])
+
+        self.init_params()
+
+    def init_params(self):
+        raise NotImplementedError()
+
+
+    def forward(self, x):
+
+        adj = Variable(self.sparse_adj, requires_grad=False)
+
+        if self.on_cuda:
+            adj = adj.cuda()
+
+        x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
+
+        x = self._adj_mul(x, adj)  # local average
+
+        # We can do max pooling and stuff, if we want.
+
+        if self.agregate_adj:
+            x = x.permute(0, 2, 1).contiguous()  # from ex, ch, node -> ex, node, ch
+            x = self.agregate_adj(x)
+            x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
+
+        x = self.linear(x)  # conv
+        x = x.permute(0, 2, 1).contiguous()  # from ex, ch, node -> ex, node, ch
+
+        return x
+
+class CGNLayer(GraphLayer):
+
+    def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, transform_adj=None, agregate_adj=None):
+        super(CGNLayer, self).__init__(adj, in_dim, channels, on_cuda, transform_adj, agregate_adj)
+
+    def init_params(self):
         self.edges = torch.LongTensor(np.array(np.where(self.adj))) # The list of edges
         flat_adj = self.adj.flatten()[np.where(self.adj.flatten())] # get the value
         flat_adj = torch.FloatTensor(flat_adj)
@@ -199,11 +237,7 @@ class CGNLayer(nn.Module):
         print "Constructing the sparse matrix..."
         self.sparse_adj = torch.sparse.FloatTensor(self.edges, flat_adj, torch.Size([self.nb_nodes ,self.nb_nodes]))#.to_dense()
         self.register_buffer('sparse_adj', self.sparse_adj)
-        self.linear = nn.Conv1d(in_dim, channels, 1, bias=True)
-
-        if self.agregate_adj:
-            self.agregate_adj = transforms.Compose([tr(adj=self.sparse_adj.to_dense(), to_keep=self.to_keep) for tr in agregate_adj])
-
+        self.linear = nn.Conv1d(self.in_dim, self.channels, 1, bias=True)
 
     def _adj_mul(self, x, D):
 
@@ -239,34 +273,19 @@ class CGNLayer(nn.Module):
         return x
 
 
-class LCGLayer(nn.Module):
-    def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, arg_max=-1, transform_adj=None, agregate_adj=None):
-        super(LCGLayer, self).__init__()
-
-        self.on_cuda = on_cuda
-        self.nb_nodes = adj.shape[0]
-        self.in_dim = in_dim
-        self.nb_channels = channels  # we only support 1 layer for now.
-        self.transform_adj = transform_adj
-        self.agregate_adj = agregate_adj
-
-        # We can technically do that online, but it's a bit messy and slow, if we need to
-        # doa sparse matrix all the time.
-        if self.transform_adj:
-            print "Transforming the adj matrix"
-            adj = transform_adj(adj)
+class LCGLayer(GraphLayer):
+    def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, transform_adj=None, agregate_adj=None):
+        super(LCGLayer, self).__init__(adj, in_dim, channels, on_cuda, transform_adj, agregate_adj)
 
 
-        self.adj = adj
-        self.to_keep = adj.sum(axis=0) > 0.
-
+    def init_params(self):
         print "Constructing the network..."
-        self.max_edges = sorted((adj > 0.).sum(0))[arg_max]
+        self.max_edges = sorted((self.adj > 0.).sum(0))[-1]
 
         print "Each node will have {} edges.".format(self.max_edges)
 
         # Get the list of all the edges. All the first index is 0, we fix that later
-        edges_np = [np.asarray(np.where(adj[i:i + 1] > 0.)).T for i in range(len(adj))]
+        edges_np = [np.asarray(np.where(self.adj[i:i + 1] > 0.)).T for i in range(len(self.adj))]
 
         # pad the edges, so they all nodes have the same number of edges. help to automate everything.
         edges_np = [np.concatenate([x, [[0, self.nb_nodes]] * (self.max_edges - len(x))]) if len(x) < self.max_edges
@@ -282,16 +301,12 @@ class LCGLayer(nn.Module):
         edges_np = edges_np[:, 1:2]
 
         self.edges = torch.LongTensor(edges_np)
-        self.super_edges = torch.cat([self.edges] * channels)
+        self.super_edges = torch.cat([self.edges] * self.channels)
 
         # We have one set of parameters per input dim. might be slow, but for now we will do with that.
-        self.my_weights = [nn.Parameter(torch.rand(self.edges.shape[0], channels), requires_grad=True) for _ in range(in_dim)]
+        self.my_weights = [nn.Parameter(torch.rand(self.edges.shape[0], self.channels), requires_grad=True) for _ in
+                           range(self.in_dim)]
         self.my_weights = nn.ParameterList(self.my_weights)
-
-        if self.agregate_adj:
-            self.agregate_adj = transforms.Compose([tr(adj=torch.FloatTensor(self.adj), to_keep=self.to_keep) for tr in agregate_adj])
-
-        print "Done!"
 
     def GraphConv(self, x, edges, batch_size, weights):
 
@@ -331,50 +346,28 @@ class LCGLayer(nn.Module):
 
 
 # spectral graph conv
-class SGCLayer(nn.Module):
+class SGCLayer(GraphLayer):
     def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, transform_adj=None, agregate_adj=None):
-        super(SGCLayer, self).__init__()
+        super(SGCLayer, self).__init__(adj, in_dim, channels, on_cuda, transform_adj, agregate_adj)
 
-        # We can technically do that online, but it's a bit messy and slow, if we need to
-        # doa sparse matrix all the time.
-        self.transform_adj = transform_adj
-        if self.transform_adj:
-            print "Transforming the adj matrix"
-            adj = transform_adj(adj)
-
-
-        self.adj = adj
-        self.to_keep = adj.sum(axis=0) > 0.
-
-        self.my_layers = []
-        self.on_cuda = on_cuda
-        self.nb_nodes = adj.shape[0]
-        self.agregate_adj = agregate_adj
-
-        self.channels = 1  # channels
-        assert channels == 1 # Other number of channels not suported.
+    def init_params(self):
+        assert self.channels == 1  # Other number of channels not suported.
 
         # dims = [input_dim] + channels
 
         print "Constructing the eigenvectors..."
 
-        D = np.diag(adj.sum(axis=1))
-        self.L = D - adj
+        D = np.diag(self.adj.sum(axis=1))
+        self.L = D - self.adj
         self.L = torch.FloatTensor(self.L)
 
         self.g, self.V = torch.eig(self.L, eigenvectors=True)
 
-        #self.V = self.V.half()
-        #self.g = self.g.half()
+        # self.V = self.V.half()
+        # self.g = self.g.half()
 
         print "self.nb_nodes", self.nb_nodes
         self.F = nn.Parameter(torch.rand(self.nb_nodes, self.nb_nodes), requires_grad=True)
-        #self.my_bias = nn.Parameter(torch.zeros(self.nb_nodes, channels), requires_grad=True) # To add.
-
-        if self.agregate_adj:
-            self.agregate_adj = transforms.Compose([tr(adj=torch.FloatTensor(self.adj), to_keep=self.to_keep) for tr in agregate_adj])
-
-        print "Done!"
 
     def forward(self, x):
 
