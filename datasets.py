@@ -349,7 +349,7 @@ class PercolateDataset(GraphDataset):
     A random dataset where the goal if to find if we can percolate from one side of the graph to the other.
     """
 
-    def __init__(self, graph_dir='Dataset/SyntheticData/', graph_file='test.hdf5', **kwargs):
+    def __init__(self, graph_dir='./Dataset/SyntheticData/', graph_file='test.hdf5', **kwargs):
 
         self.graph_dir = graph_dir
         self.graph_file = graph_file
@@ -448,7 +448,7 @@ def split_dataset(dataset, batch_size=100, random=False, train_ratio=0.8, seed=1
     test_set = DataLoader(dataset, batch_size=batch_size, sampler=SubsetRandomSampler(idx_test))
     valid_set = DataLoader(dataset, batch_size=batch_size, sampler=SubsetRandomSampler(idx_valid))
 
-    print "Our sets are of length: train={}, valid={}, test={}".format(len(idx_train), len(idx_valid), len(idx_test))
+    print "Our sets are of length: train={}, valid={}, tests={}".format(len(idx_train), len(idx_valid), len(idx_test))
     return train_set, valid_set, test_set
 
 
@@ -461,7 +461,7 @@ def random_adjacency_matrix(nb_nodes, approx_nb_edges, scale_free=True):
     if scale_free:
         # Read: https://en.wikipedia.org/wiki/Scale-free_network
 
-        # There is a bunch of bells and swittle, but after a few handwavy test, the defaults parameters seems okay.
+        # There is a bunch of bells and swittle, but after a few handwavy tests, the defaults parameters seems okay.
         edges = np.array(networkx.scale_free_graph(nb_nodes).edges())
 
     else:

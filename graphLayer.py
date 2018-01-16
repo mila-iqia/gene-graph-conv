@@ -23,26 +23,28 @@ class AgregateGraph(object):
 
     def __call__(self, x):
 
-        x_shape = x.size()
+        # x if of the shape (ex, node, channel)
         if self.please_ignore:
             return x
 
         adj = Variable(self.adj, requires_grad=False)
         to_keep = Variable(torch.FloatTensor(self.to_keep.astype(float)), requires_grad=False)
 
+        x = x.permute(0, 2, 1).contiguous() # put in ex, channel, node
+        x_shape = x.size()
+
         # For now let's only do the MaxPooling agregate one.
         if self.type == 'max':
-            max_value = (x.view(-1, x.size(1), 1) * adj).max(dim=-1)[0]
+            max_value = (x.view(-1, x.size(-1), 1) * adj).max(dim=1)[0]
         elif self.type == 'mean':
-            max_value = (x.view(-1, x.size(1), 1) * adj).mean(dim=-1)[0]
+            max_value = (x.view(-1, x.size(-1), 1) * adj).mean(dim=1)[0]
         elif self.type == 'strip':
-            max_value = x.view(-1, x.size(1), 1)
+            max_value = x.view(-1, x.size(-1), 1)
         else:
             raise ValueError()
 
-
         retn = max_value * to_keep # Zero out The one that we don't care about.
-        return retn.view(x_shape)
+        return retn.view(x_shape).permute(0, 2, 1).contiguous() # put back in ex, node, channel
 
 
 
@@ -169,8 +171,51 @@ class PoolGraph(object):
         new_adj = (frozen_adj > 0).astype(float)
         return new_adj
 
+class AugmentGraphConnectivity(object):
+
+    def __init__(self, kernel_size=1, please_ignore=False, **kwargs):
+
+        self.kernel_size = kernel_size
+        self.please_ignore = please_ignore
+
+    def __call__(self, adj):
+
+        """
+        Augment the connectivity of the nodes in the graph.
+        :param adj: The adj matrix
+        :param stride: The stride of the pooling. Akin to CNN.
+        :param kernel_size: The size of the neibourhood. Same thing as in CNN.
+        :param please_ignore: We are not doing pruning, this option is to make things more consistant.
+        :return:
+        """
+
+        kernel_size = self.kernel_size
+        please_ignore = self.please_ignore
+
+        # We don't do pruning.
+        if please_ignore:
+            return adj
+        else:
+            print "Pruning the graph."
+
+        # TODO: do it by order of degree, so that we have some garantee
+        degrees = adj.sum(axis=0)
+        degrees = np.argsort(degrees)[::-1]
+
+        current_adj = adj
+        removed_node = []
+
+        # We link all the neighbour of the neighbour (times kernel_size) to our node.
+        for i in range(kernel_size):
+            current_adj = current_adj.dot(current_adj.T)
+
+        frozen_adj = current_adj.copy()
+
+        new_adj = (frozen_adj > 0).astype(float)
+        return new_adj
+
 class GraphLayer(nn.Module):
-    def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, transform_adj=None, agregate_adj=None):
+    def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, id_layer=None, transform_adj=None, agregate_adj=None):
         super(GraphLayer, self).__init__()
 
         self.my_layers = []
@@ -180,19 +225,27 @@ class GraphLayer(nn.Module):
         self.agregate_adj = agregate_adj
         self.in_dim = in_dim
         self.channels = channels
+        self.id_layer = id_layer
 
         # We can technically do that online, but it's a bit messy and slow, if we need to
         # doa sparse matrix all the time.
+        self.adj = adj.copy()
+
         if self.transform_adj:
             print "Transforming the adj matrix"
             adj = transform_adj(adj)
+        self.post_adj = adj
 
-        self.adj = adj
-        self.to_keep = adj.sum(axis=0) > 0.
+        self.to_keep = np.ones((self.nb_nodes,))
+        #if self.id_layer > 0:
+        self.to_keep = np.arange(0, self.nb_nodes) % (2**(self.id_layer+1))
+        self.to_keep = (self.to_keep == 0).astype(float)
+        #tmp = np.argsort(adj.sum(axis=0))
+        #self.to_keep = self.to_keep[tmp]
 
         if self.agregate_adj:
             self.agregate_adj = transforms.Compose(
-                [tr(adj=torch.FloatTensor(self.adj), to_keep=self.to_keep) for tr in agregate_adj])
+                [tr(adj=torch.FloatTensor(self.post_adj), to_keep=self.to_keep) for tr in agregate_adj])
 
         self.init_params()
 
@@ -201,32 +254,12 @@ class GraphLayer(nn.Module):
 
 
     def forward(self, x):
-
-        adj = Variable(self.sparse_adj, requires_grad=False)
-
-        if self.on_cuda:
-            adj = adj.cuda()
-
-        x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
-
-        x = self._adj_mul(x, adj)  # local average
-
-        # We can do max pooling and stuff, if we want.
-
-        if self.agregate_adj:
-            x = x.permute(0, 2, 1).contiguous()  # from ex, ch, node -> ex, node, ch
-            x = self.agregate_adj(x)
-            x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
-
-        x = self.linear(x)  # conv
-        x = x.permute(0, 2, 1).contiguous()  # from ex, ch, node -> ex, node, ch
-
-        return x
+        raise NotImplementedError()
 
 class CGNLayer(GraphLayer):
 
-    def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, transform_adj=None, agregate_adj=None):
-        super(CGNLayer, self).__init__(adj, in_dim, channels, on_cuda, transform_adj, agregate_adj)
+    def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, id_layer=None, transform_adj=None, agregate_adj=None):
+        super(CGNLayer, self).__init__(adj, in_dim, channels, on_cuda, id_layer, transform_adj, agregate_adj)
 
     def init_params(self):
         self.edges = torch.LongTensor(np.array(np.where(self.adj))) # The list of edges
@@ -274,8 +307,8 @@ class CGNLayer(GraphLayer):
 
 
 class LCGLayer(GraphLayer):
-    def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, transform_adj=None, agregate_adj=None):
-        super(LCGLayer, self).__init__(adj, in_dim, channels, on_cuda, transform_adj, agregate_adj)
+    def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, id_layer=None, transform_adj=None, agregate_adj=None):
+        super(LCGLayer, self).__init__(adj, in_dim, channels, on_cuda, id_layer, transform_adj, agregate_adj)
 
 
     def init_params(self):
@@ -347,8 +380,8 @@ class LCGLayer(GraphLayer):
 
 # spectral graph conv
 class SGCLayer(GraphLayer):
-    def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, transform_adj=None, agregate_adj=None):
-        super(SGCLayer, self).__init__(adj, in_dim, channels, on_cuda, transform_adj, agregate_adj)
+    def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, id_layer=None, transform_adj=None, agregate_adj=None):
+        super(SGCLayer, self).__init__(adj, in_dim, channels, on_cuda, id_layer, transform_adj, agregate_adj)
 
     def init_params(self):
         assert self.channels == 1  # Other number of channels not suported.
@@ -397,7 +430,7 @@ def get_transform(opt):
     # Right now the intax is a bit intense, but in the future it will be more parametrizable.
     if opt.prune_graph: # graph pruning, etc.
         print "Pruning the graph..."
-        const_transform += [lambda **kargs: PoolGraph(**kargs)]
+        const_transform += [lambda **kargs: AugmentGraphConnectivity(**kargs)]
         transform += [lambda **kargs: AgregateGraph(**kargs)]
 
     if opt.add_self:

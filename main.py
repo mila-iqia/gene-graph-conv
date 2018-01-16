@@ -300,7 +300,7 @@ def main(argv=None):
 
         # compute the metrics for all the sets, for all the classes. right now it's precision/recall/f1-score, for train and valid.
         acc = {}
-        for my_set, set_name in zip([train_set, valid_set, test_set], ['train', 'valid']):#, 'test']):
+        for my_set, set_name in zip([train_set, valid_set, test_set], ['train', 'valid']):#, 'tests']):
             acc[set_name] = accuracy(my_set, my_model, on_cuda=on_cuda)
 
             if writer is not None:
