@@ -44,7 +44,8 @@ class AgregateGraph(object):
             raise ValueError()
 
         retn = max_value * to_keep # Zero out The one that we don't care about.
-        return retn.view(x_shape).permute(0, 2, 1).contiguous() # put back in ex, node, channel
+        retn = retn.view(x_shape).permute(0, 2, 1).contiguous() # put back in ex, node, channel
+        return retn
 
 
 
@@ -229,12 +230,11 @@ class GraphLayer(nn.Module):
 
         # We can technically do that online, but it's a bit messy and slow, if we need to
         # doa sparse matrix all the time.
-        self.adj = adj.copy()
 
         if self.transform_adj:
             print "Transforming the adj matrix"
             adj = transform_adj(adj)
-        self.post_adj = adj
+        self.adj = adj
 
         self.to_keep = np.ones((self.nb_nodes,))
         #if self.id_layer > 0:
@@ -245,7 +245,7 @@ class GraphLayer(nn.Module):
 
         if self.agregate_adj:
             self.agregate_adj = transforms.Compose(
-                [tr(adj=torch.FloatTensor(self.post_adj), to_keep=self.to_keep) for tr in agregate_adj])
+                [tr(adj=torch.FloatTensor(self.adj), to_keep=self.to_keep) for tr in agregate_adj])
 
         self.init_params()
 
