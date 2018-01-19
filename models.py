@@ -81,9 +81,9 @@ class GraphNetwork(nn.Module):
         dims = [input_dim] + channels
         for i, [c_in, c_out] in enumerate(zip(dims[:-1], dims[1:])):
             # transformation to apply at each layer.
-            transform_tmp = transforms.Compose([foo(please_ignore=False, unique_id=i) for foo in transform_adj])
+            transform_tmp = transforms.Compose([foo(please_ignore=i == 0, unique_id=i) for foo in transform_adj])
             convs.append(graphLayerType(adj, c_in, c_out, on_cuda, i, transform_adj=transform_tmp, agregate_adj=agregate_adj))
-            adj = convs[-1].post_adj
+            adj = convs[-1].adj
 
         self.my_convs = nn.ModuleList(convs)
 

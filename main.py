@@ -7,7 +7,7 @@ import time
 from torch.autograd import Variable
 import os
 import pickle
-import feature_selection
+import monitoring
 
 def accuracy(data, model, no_class = None, on_cuda=False):
     acc = 0.
@@ -228,7 +228,8 @@ def main(argv=None):
 
     # Train the cgn
     criterion = torch.nn.CrossEntropyLoss(size_average=True)
-    optimizer = torch.optim.SGD(my_model.parameters(), lr=learning_rate, momentum=momentum, weight_decay=weight_decay)
+    #optimizer = torch.optim.SGD(my_model.parameters(), lr=learning_rate, momentum=momentum, weight_decay=weight_decay)
+    optimizer = torch.optim.Adam(my_model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
     if on_cuda:
         print "Putting the model on gpu..."
@@ -323,10 +324,7 @@ def main(argv=None):
     print "Done!"
 
     if not opt.make_it_work_for_Joseph:
-        print "Extracting the important features..."
-        features = feature_selection.feature_selection(my_model, dataset, opt)
-        pickle.dump(features, open(os.path.join(exp_dir, 'features.pkl'), 'wb'))
-        print "Done!"
+        monitoring.monitor_everything(my_model, dataset, opt, exp_dir)
 
 if __name__ == '__main__':
     main()
