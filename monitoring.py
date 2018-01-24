@@ -3,6 +3,7 @@ import numpy as np
 import models
 import pickle
 import os
+from torch.autograd import Variable
 
 def feature_selection(model, dataset, opt, top=100):
 
@@ -31,7 +32,7 @@ def feature_selection(model, dataset, opt, top=100):
                 #import ipdb; ipdb.set_trace()
                 this_layer_feature = torch.abs(weight[no_class].view(nb_channel, model.nb_nodes)).sum(0) # It's a logistic regression, so lets do that.
 
-                _, top_k = torch.topk(this_layer_feature, top)
+                _, top_k = torch.topk(this_layer_feature, min(top, model.nb_nodes))
                 top_k_names = dataset.node_names[top_k.cpu().numpy()]
 
                 top_features[i][dataset.labels_name(no_class)] = (top_k_names, top_k.cpu().numpy())
@@ -62,6 +63,37 @@ def get_graph(model):
 
     return retn
 
+def get_representation(model, dataset, opt):
+
+    """
+    Get the graph of a model.
+    :param model:
+    :return:
+    """
+
+    retn = []
+
+    if not issubclass(model.__class__, models.GraphNetwork):
+        print "The model is not a graph convolution."
+        return retn
+
+    # Get one representation.
+    for no_b, mini in enumerate(dataset):
+
+        inputs, targets = mini['sample'], mini['labels']
+        inputs = Variable(inputs, requires_grad=False).float()
+
+        if opt.cuda:
+            inputs = inputs.cuda()
+
+        # Forward pass: Compute predicted y by passing x to the model
+        y_pred = model(inputs).float()
+        retn = model.get_representation()
+        retn['example'] = {'input': inputs.cpu().data.numpy(), 'output': targets.cpu().numpy()}
+        break
+
+    return retn
+
 def monitor_everything(model, dataset, opt, exp_dir):
     print "Extracting the important features..."
     features = feature_selection(model, dataset, opt)
@@ -71,11 +103,16 @@ def monitor_everything(model, dataset, opt, exp_dir):
     graphs = get_graph(model)
     pickle.dump(graphs, open(os.path.join(exp_dir, 'graphs.pkl'), 'wb'))
 
+    print "Save a representation..."
+    rep = get_representation(model, dataset, opt)
+    pickle.dump(rep, open(os.path.join(exp_dir, 'representation.pkl'), 'wb'))
+
 def load_everything(exp_dir):
 
     print "Loading the data..."
     features = pickle.load(open(os.path.join(exp_dir, 'features.pkl')))
     graphs = pickle.load(open(os.path.join(exp_dir, 'graphs.pkl')))
+    reps = pickle.load(open(os.path.join(exp_dir, 'representation.pkl')))
     print "Done!"
 
-    return features, graphs
+    return features, graphs, reps

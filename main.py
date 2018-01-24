@@ -154,6 +154,7 @@ def build_parser():
     parser.add_argument('--attention-layer', default=0, type=int, help="The number of attention layer to add to the last layer. Only implemented for CGN.")
     parser.add_argument('--prune-graph', action='store_true', help="If we want to prune the graph.")
     parser.add_argument('--use-emb', default=None, type=int, help="If we want to add node embeddings.")
+    parser.add_argument('--use-gate', default=0., type=float, help="The lambda for the gate pooling/striding. is ignore if = 0.")
 
     return parser
 
@@ -194,7 +195,9 @@ def main(argv=None):
     del param['epoch']
     del param['batch_size']
     del param['clinical_file']
+    del param['attention_layer']
     del param['clinical_label']
+    del param['nb_per_class']
     v_to_delete = []
     for v in param:
         if param[v] is None:
@@ -276,7 +279,7 @@ def main(argv=None):
             y_pred = my_model(inputs).float()
 
             # Compute and print loss
-            loss = criterion(y_pred, targets)
+            loss = criterion(y_pred, targets) + my_model.regularization()
 
             if epoch == 1:
                 print "Done minibatch {}".format(no_b)
@@ -324,7 +327,7 @@ def main(argv=None):
     print "Done!"
 
     if not opt.make_it_work_for_Joseph:
-        monitoring.monitor_everything(my_model, dataset, opt, exp_dir)
+        monitoring.monitor_everything(my_model, valid_set, opt, exp_dir)
 
 if __name__ == '__main__':
     main()
