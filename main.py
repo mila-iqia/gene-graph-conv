@@ -233,6 +233,7 @@ def main(argv=None):
 
     # Train the cgn
     criterion = torch.nn.CrossEntropyLoss(size_average=True)
+    l1loss = torch.nn.L1Loss()
     #optimizer = torch.optim.SGD(my_model.parameters(), lr=learning_rate, momentum=momentum, weight_decay=weight_decay)
     optimizer = torch.optim.Adam(my_model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
@@ -280,10 +281,18 @@ def main(argv=None):
             # Forward pass: Compute predicted y by passing x to the model
             y_pred = my_model(inputs).float()
 
+            # The l1 loss
+            # l1_crit = torch.nn.L1Loss(size_average=False)
+            # reg_loss = 0
+            # for param in my_model.parameters():
+            #     reg_loss += l1_crit(param, torch.FloatTensor(0.))
+            # other_loss = l1_loss * reg_loss
+
             # Compute and print loss
             cross_loss = criterion(y_pred, targets)
             other_loss = sum([r * l for r, l in zip(my_model.regularization(), opt.lambdas)])
             total_loss = cross_loss + other_loss
+
 
             # Zero gradients, perform a backward pass, and update the weights.
             optimizer.zero_grad()
@@ -294,7 +303,7 @@ def main(argv=None):
         # Loss
         if writer is not None:
             writer.scalar_summary('cross_loss', cross_loss.data[0], t)
-            writer.scalar_summary('other_loss', other_loss.data[0], t)
+            # writer.scalar_summary('other_loss', other_loss.data[0], t)
             writer.scalar_summary('total_loss', total_loss.data[0], t)
 
         # time
@@ -320,8 +329,10 @@ def main(argv=None):
                         writer.scalar_summary('{}/{}/{}'.format(m, set_name, cl), v, t) # metric/set/class
 
         # small summary.
-        print "epoch {}, cross loss: {:.03f}, other loss: {:.03f}, total loss: {:.03f}, precision train: {:0.2f} precision valid: {:0.2f}, time: {:.02f} sec".format(t,
-                                                                                                         cross_loss.data[0], other_loss.data[0], total_loss.data[0],
+        print "epoch {}, cross loss: {:.03f}, total loss: {:.03f}, precision train: {:0.2f} precision valid: {:0.2f}, time: {:.02f} sec".format(t,
+                                                                                                         cross_loss.data[0],
+                                                                                                                                                                     #other_loss.data[0],
+                                                                                                                                                                     total_loss.data[0],
                                                                                                          acc['train'],
                                                                                                          acc['valid'],
                                                                                                          time_this_epoch)

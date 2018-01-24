@@ -238,13 +238,14 @@ class GraphNetwork(nn.Module):
 
     def regularization(self):
 
-        reg = 0.
-
-        if self.use_gate > 0.:
-            for g in self.gates:
-                reg += ((g.output.view(-1) -.5)**2).sum() # got from register_forward_hook
-
-        return  0 #- reg * self.use_gate
+        return []
+        # reg = 0.
+        #
+        # if self.use_gate > 0.:
+        #     for g in self.gates:
+        #         reg += ((g.output.view(-1) -.5)**2).sum() # got from register_forward_hook
+        #
+        # return  [torch.FloatTensor(0.)] #- reg * self.use_gate
 
 
     def get_representation(self):
@@ -326,7 +327,7 @@ class MLP(nn.Module):
         return x
 
     def regularization(self):
-        return 0.
+        return []
 
 
 def get_model(opt, dataset, nb_class):
