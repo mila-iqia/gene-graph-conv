@@ -107,7 +107,7 @@ class GraphGeneDataset(GraphDataset):
         self.node_names = np.array(self.file['gene_names'])
 
         self.nb_class = self.nb_class if self.nb_class is not None else len(self.labels[0])
-        self.reduce_number_of_classes = self.nb_class is not None
+        self.reduce_number_of_classes = False
 
         # Take a number of subclasses
         if self.sub_class is not None:
@@ -158,29 +158,29 @@ class TCGATissue(GraphGeneDataset):
 
     def __init__(self, graph_dir='/data/lisa/data/genomics/TCGA/', graph_file='TCGA_tissue_ppi.hdf5', **kwargs):
         super(TCGATissue, self).__init__(graph_dir=graph_dir, graph_file=graph_file, name='TCGATissue', **kwargs)
-        
+
 class TCGAForLabel(GraphGeneDataset):
 
     """TCGA Dataset."""
 
-    def __init__(self, 
-                 graph_dir='/data/lisa/data/genomics/TCGA/', 
-                 graph_file='TCGA_tissue_ppi.hdf5', 
+    def __init__(self,
+                 graph_dir='/data/lisa/data/genomics/TCGA/',
+                 graph_file='TCGA_tissue_ppi.hdf5',
                  clinical_file = "PANCAN_clinicalMatrix.gz",
                  clinical_label = "gender",
                  **kwargs):
         super(TCGAForLabel, self).__init__(graph_dir=graph_dir, graph_file=graph_file, name='TCGAForLabel', **kwargs)
-                
+
         dataset = self
-        
+
         clinical_raw = pd.read_csv(graph_dir + clinical_file, compression='gzip', header=0, sep='\t', quotechar='"')
         clinical_raw = clinical_raw.set_index("sampleID");
-        
-        
+
+
         print "Possible labels to select from ", clinical_file, " are ", list(clinical_raw.columns)
         print "Selected label is ", clinical_label
-        
-        
+
+
         clinical = clinical_raw[[clinical_label]]
         clinical = clinical.dropna()
 
@@ -193,16 +193,16 @@ class TCGAForLabel(GraphGeneDataset):
         data_joined = data_joined.dropna()
         clinical_joined = clinical.loc[data_joined.index]
 
-        
+
         print "clinical_raw", clinical_raw.shape, ", clinical", clinical.shape, ", clinical_joined", clinical_joined.shape
         print "data_raw", data_raw.shape, "data_joined", data_joined.shape
         print "Counter for " + clinical_label + ": "
         print collections.Counter(clinical_joined[clinical_label].as_matrix())
-        
+
         self.labels = pd.get_dummies(clinical_joined).as_matrix().astype(np.float)
         self.data = data_joined.as_matrix()
-        
-        
+
+
 
 class BRCACoexpr(GraphGeneDataset):
 
@@ -452,6 +452,12 @@ def split_dataset(dataset, batch_size=100, random=False, train_ratio=0.8, seed=1
     return train_set, valid_set, test_set
 
 
+class GBMDataset(GraphGeneDataset):
+    " Glioblastoma Multiforme dataset with coexpression graph"
+    def __init__(self, graph_dir="/data/lisa/data/genomics/TCGA/", graph_file="gbm.hdf5", clinical_file="pathway_commons_adj.csv.gz", **kwargs):
+        super(GBMDataset, self).__init__(graph_dir=graph_dir, graph_file=graph_file, name='GBMDataset', **kwargs)
+        dataset = self
+
 
 def random_adjacency_matrix(nb_nodes, approx_nb_edges, scale_free=True):
 
@@ -590,6 +596,11 @@ def get_dataset(opt):
     elif dataset_name == 'percolate':
         dataset = PercolateDataset(use_random_adj=scale_free)
         nb_class = 2
+
+    elif dataset_name == 'tcga-gbm':
+        print "Getting TCGA GBM Dataset"
+        nb_class = 2
+        dataset = GBMDataset(nb_class=nb_class)
 
     else:
         raise ValueError
