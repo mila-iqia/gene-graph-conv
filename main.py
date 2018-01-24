@@ -143,7 +143,7 @@ def build_parser():
     # Model specific options
     parser.add_argument('--num-channel', default=32, type=int, help='Number of channel in the model.')
     parser.add_argument('--skip-connections', action='store_true', help='If we want to add skip connection from every layer to the last.')
-    parser.add_argument('--model', default='cgn', choices=['cgn', 'mlp', 'lcg', 'sgc'], help='Number of channel in the CGN.')
+    parser.add_argument('--model', default='cgn', choices=['cgn', 'mlp', 'lcg', 'sgc', 'slr'], help='Number of channel in the CGN.')
     parser.add_argument('--num-layer', default=1, type=int, help='Number of convolution layer in the CGN.')
     parser.add_argument('--nb-class', default=None, type=int, help="Number of class for the dataset (won't work with random graph).")
     parser.add_argument('--nb-examples', default=None, type=int, help="Number of samples to train on.")
@@ -155,6 +155,7 @@ def build_parser():
     parser.add_argument('--prune-graph', action='store_true', help="If we want to prune the graph.")
     parser.add_argument('--use-emb', default=None, type=int, help="If we want to add node embeddings.")
     parser.add_argument('--use-gate', default=0., type=float, help="The lambda for the gate pooling/striding. is ignore if = 0.")
+    parser.add_argument('--lambdas', default=[], type=float, nargs='*', help="A list of lambda for the specified models.")
 
     return parser
 
@@ -198,6 +199,7 @@ def main(argv=None):
     del param['attention_layer']
     del param['clinical_label']
     del param['nb_per_class']
+    del param['lambdas']
     v_to_delete = []
     for v in param:
         if param[v] is None:
@@ -279,21 +281,21 @@ def main(argv=None):
             y_pred = my_model(inputs).float()
 
             # Compute and print loss
-            loss = criterion(y_pred, targets) + my_model.regularization()
-
-            if epoch == 1:
-                print "Done minibatch {}".format(no_b)
-                print(t, loss.data[0])
+            cross_loss = criterion(y_pred, targets)
+            other_loss = sum([r * l for r, l in zip(my_model.regularization(), opt.lambdas)])
+            total_loss = cross_loss + other_loss
 
             # Zero gradients, perform a backward pass, and update the weights.
             optimizer.zero_grad()
-            loss.backward()
+            total_loss.backward()
             optimizer.step()
 
         # Add some metric for tensorboard
         # Loss
         if writer is not None:
-            writer.scalar_summary('loss', loss.data[0], t)
+            writer.scalar_summary('cross_loss', cross_loss.data[0], t)
+            writer.scalar_summary('other_loss', other_loss.data[0], t)
+            writer.scalar_summary('total_loss', total_loss.data[0], t)
 
         # time
         time_this_epoch = time.time() - start_timer
@@ -318,8 +320,8 @@ def main(argv=None):
                         writer.scalar_summary('{}/{}/{}'.format(m, set_name, cl), v, t) # metric/set/class
 
         # small summary.
-        print "epoch {}, loss: {:.03f}, precision train: {:0.2f} precision valid: {:0.2f}, time: {:.02f} sec".format(t,
-                                                                                                         loss.data[0],
+        print "epoch {}, cross loss: {:.03f}, other loss: {:.03f}, total loss: {:.03f}, precision train: {:0.2f} precision valid: {:0.2f}, time: {:.02f} sec".format(t,
+                                                                                                         cross_loss.data[0], other_loss.data[0], total_loss.data[0],
                                                                                                          acc['train'],
                                                                                                          acc['valid'],
                                                                                                          time_this_epoch)

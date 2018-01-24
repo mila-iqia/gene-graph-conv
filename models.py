@@ -99,6 +99,51 @@ def save_computations(self, input, output):
     setattr(self, "input", input)
     setattr(self, "output", output)
 
+class SparseLogisticRegression(nn.Module):
+
+    def __init__(self, nb_nodes, input_dim, adj, out_dim,
+                 on_cuda=True):
+
+        super(SparseLogisticRegression, self).__init__()
+
+        self.nb_nodes = nb_nodes
+        self.input_dim = input_dim
+
+        np.fill_diagonal(adj, 0.)
+        D = adj.sum(0)
+        laplacian = np.eye(D.shape[0]) - np.diag((D**-0.5)).dot(adj).dot(np.diag((D**-0.5)))
+
+        self.laplacian = torch.FloatTensor(laplacian)
+        self.out_dim = out_dim
+        self.on_cuda = on_cuda
+
+        # The logistic layer.
+        logistic_in_dim = nb_nodes * input_dim
+        logistic_layer = nn.Linear(logistic_in_dim, out_dim)
+        logistic_layer.register_forward_hook(save_computations)  # For monitoring
+
+        self.my_logistic_layers = nn.ModuleList([logistic_layer])  # A lsit to be consistant with the other layer.
+
+
+    def forward(self, x):
+
+        nb_examples, nb_nodes, nb_channels = x.size()
+        x = x.view(nb_examples, -1)
+        x = self.my_logistic_layers[-1](x)
+
+        return x
+
+    def regularization(self):
+
+        laplacian = Variable(self.laplacian, requires_grad=False)
+
+
+        weight = self.my_logistic_layers[-1].weight
+        reg = torch.abs(weight).mm(laplacian) * torch.abs(weight)
+        return [reg.sum()]
+
+
+
 class GraphNetwork(nn.Module):
 
     def __init__(self, nb_nodes, input_dim, channels, adj, out_dim,
@@ -321,6 +366,12 @@ def get_model(opt, dataset, nb_class):
     elif model == 'sgc':
         my_model = SGC(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=nb_class,
                        on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=const_transform, agregate_adj=agregate_adj, use_gate=opt.use_gate)  # TODO: add a bunch of the options
+
+    elif model == 'slr':
+        #nb_nodes, input_dim, adj, out_dim, on_cuda=True):
+        my_model = SparseLogisticRegression(nb_nodes=dataset.nb_nodes, input_dim=1, adj=dataset.get_adj(), out_dim=nb_class,
+                       on_cuda=on_cuda)  # TODO: add a bunch of the options
+
     else:
         raise ValueError
 
