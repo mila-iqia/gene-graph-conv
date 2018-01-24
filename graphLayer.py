@@ -5,6 +5,7 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import os
 from torchvision import transforms
+import networkx
 
 class AgregateGraph(object):
 
@@ -47,6 +48,25 @@ class AgregateGraph(object):
         retn = retn.view(x_shape).permute(0, 2, 1).contiguous() # put back in ex, node, channel
         return retn
 
+def selectNodes(opt, skip_size, adj):
+
+
+    if opt == 'node_order':
+        to_keep = np.arange(0, adj.shape[0]) % skip_size
+
+    if opt == 'color':
+        G = networkx.Graph(adj)
+        colors = networkx.greedy_color(G, 'DSATUR') # largest first
+        # For now we delete the nodes that as color 0
+        to_keep = np.array([0 if colors[i] <= skip_size else 1 for i in range(adj.shape[0])])
+
+    if opt == 'random':
+        pass
+
+
+    to_keep = (to_keep == 0).astype(float)
+    return to_keep
+
 
 
 class SelfConnection(object):
@@ -78,6 +98,8 @@ class ApprNormalizeLaplacian(object):
 
     """
 
+
+    # TODO: add unittests
     def __init__(self, processed_dir='/data/milatmp1/dutilfra/transcriptome/graph/',
                  processed_path=None, unique_id=None, overwrite=False, **kwargs):
 
@@ -119,59 +141,6 @@ class ApprNormalizeLaplacian(object):
         return norm_transform
 
 
-# TODO right now it's kind of a... average/sum graph? a better restructuration need to be done.
-class PoolGraph(object):
-
-    def __init__(self, stride=1, kernel_size=1, please_ignore=True, **kwargs):
-
-        self.stride = stride
-        self.kernel_size = kernel_size
-        self.please_ignore = please_ignore
-
-    def __call__(self, adj):
-
-        """
-        Iterativaly pool a graph. Should be semilar to what usually happen in a image CNN.
-        :param adj: The adj matrix
-        :param stride: The stride of the pooling. Akin to CNN.
-        :param kernel_size: The size of the neibourhood. Same thing as in CNN.
-        :param please_ignore: We are not doing pruning, this option is to make things more consistant.
-        :return:
-        """
-
-        stride = self.stride
-        kernel_size = self.kernel_size
-        please_ignore = self.please_ignore
-
-        # We don't do pruning.
-        if please_ignore:
-            return adj
-        else:
-            print "Pruning the graph."
-
-        # TODO: do it by order of degree, so that we have some garantee
-        degrees = adj.sum(axis=0)
-        degrees = np.argsort(degrees)[::-1]
-
-        current_adj = adj
-        removed_node = []
-
-        # We link all the neighbour of the neighbour (times kernel_size) to our node.
-        for i in range(kernel_size):
-            current_adj = current_adj.dot(current_adj.T)
-
-        frozen_adj = current_adj.copy()
-
-        # Delete all the unlucky nodes.
-        for i, no_node in enumerate(degrees):
-
-            if i % (stride + 1) or no_node in removed_node:
-                frozen_adj[no_node] = 0
-                removed_node.append(no_node)
-
-        new_adj = (frozen_adj > 0).astype(float)
-        return new_adj
-
 class AugmentGraphConnectivity(object):
 
     def __init__(self, kernel_size=1, please_ignore=False, **kwargs):
@@ -204,8 +173,6 @@ class AugmentGraphConnectivity(object):
         degrees = np.argsort(degrees)[::-1]
 
         current_adj = adj
-        removed_node = []
-
         # We link all the neighbour of the neighbour (times kernel_size) to our node.
         for i in range(kernel_size):
             current_adj = current_adj.dot(current_adj.T)
@@ -213,6 +180,7 @@ class AugmentGraphConnectivity(object):
         frozen_adj = current_adj.copy()
 
         new_adj = (frozen_adj > 0).astype(float)
+
         return new_adj
 
 class GraphLayer(nn.Module):
@@ -237,11 +205,13 @@ class GraphLayer(nn.Module):
         self.adj = adj
 
         self.to_keep = np.ones((self.nb_nodes,))
-        #if self.id_layer > 0:
-        self.to_keep = np.arange(0, self.nb_nodes) % (2**(self.id_layer+1))
-        self.to_keep = (self.to_keep == 0).astype(float)
-        #tmp = np.argsort(adj.sum(axis=0))
-        #self.to_keep = self.to_keep[tmp]
+
+        if self.agregate_adj:
+            #self.to_keep = np.arange(0, self.nb_nodes) % (2**(self.id_layer+1)) # TODO, have a more fancy striding protocole.
+            #self.to_keep = (self.to_keep == 0).astype(float)
+
+            self.to_keep = selectNodes('color', id_layer+1, adj)
+
 
         if self.agregate_adj:
             self.agregate_adj = transforms.Compose(
@@ -337,7 +307,7 @@ class LCGLayer(GraphLayer):
         self.super_edges = torch.cat([self.edges] * self.channels)
 
         # We have one set of parameters per input dim. might be slow, but for now we will do with that.
-        self.my_weights = [nn.Parameter(torch.rand(self.edges.shape[0], self.channels), requires_grad=True) for _ in
+        self.my_weights = [nn.Parameter(torch.rand(self.edges.shape[0], self.channels), requires_grad=True) for _ in # TODO: to glorot
                            range(self.in_dim)]
         self.my_weights = nn.ParameterList(self.my_weights)
 
