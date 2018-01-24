@@ -110,7 +110,7 @@ class SparseLogisticRegression(nn.Module):
         self.input_dim = input_dim
 
         np.fill_diagonal(adj, 0.)
-        D = adj.sum(0)
+        D = adj.sum(0) + 1e-5
         laplacian = np.eye(D.shape[0]) - np.diag((D**-0.5)).dot(adj).dot(np.diag((D**-0.5)))
 
         self.laplacian = torch.FloatTensor(laplacian)
@@ -136,6 +136,7 @@ class SparseLogisticRegression(nn.Module):
     def regularization(self):
 
         laplacian = Variable(self.laplacian, requires_grad=False)
+
 
 
         weight = self.my_logistic_layers[-1].weight
