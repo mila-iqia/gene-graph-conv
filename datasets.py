@@ -437,7 +437,7 @@ def split_dataset(dataset, batch_size=100, random=False, train_ratio=0.8, seed=1
 class GBMDataset(GraphGeneDataset):
     " Glioblastoma Multiforme dataset with coexpression graph"
     def __init__(self, graph_dir="/data/lisa/data/genomics/TCGA/", graph_file="gbm.hdf5", clinical_file="pathway_commons_adj.csv.gz", nb_class=2, **kwargs):
-        super(GBMDataset, self).__init__(graph_dir=graph_dir, graph_file=graph_file, name='GBMDataset', **kwargs)
+        super(GBMDataset, self).__init__(graph_dir=graph_dir, graph_file=graph_file, nb_class=nb_class, name='GBMDataset', **kwargs)
         dataset = self
 
 
@@ -577,12 +577,10 @@ def get_dataset(opt):
 
     elif dataset_name == 'percolate':
         dataset = PercolateDataset(use_random_adj=scale_free)
-        nb_class = 2
 
     elif dataset_name == 'tcga-gbm':
         print "Getting TCGA GBM Dataset"
-        nb_class = 2
-        dataset = GBMDataset(nb_class=nb_class)
+        dataset = GBMDataset()
 
     else:
         raise ValueError
