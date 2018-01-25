@@ -33,49 +33,48 @@ def accuracy(data, model, no_class = None, on_cuda=False):
     return acc
 
 def recall(preds, gts, cl):
-
-    # How many revelant item are selected?
-
-    ids_from_that_class = gts == cl # ids_to_keep total number in class
-
-    tmp = ((gts == preds) * ids_from_that_class).sum()
-    total = sum(ids_from_that_class)
+    """How many revelant item are selected?"""
+    tmp = ((gts == preds) * (gts == cl)).sum()
+    total = sum(gts == cl)
     return tmp / float(total)
 
 def precision(preds, gts, cl):
-
-    # How many selected item are revelant?
-
-    ids_from_that_class = gts == cl  # total number predicted for that class
-
-    tmp = ((gts == preds) * ids_from_that_class).sum()
+    """How many selected item are revelant?"""
+    tmp = ((gts == preds) * (gts == cl)).sum()
     total = sum(cl == preds)
     return tmp / float(total)
 
 def f1_score(preds, gts, cl):
-
     re = recall(preds, gts, cl)
     pre = precision(preds, gts, cl)
-
     return 2 * re * pre / (re + pre)
 
-def auc(preds, gts, cl):
-    import pdb; pdb.set_trace()
+def auc(preds, targets, cl):
+    #import pdb; pdb.set_trace()
+    pass
+
+def I(pred, target):
+    #import pdb; pdb.set_trace()
+    pass
 
 def compute_metrics_per_class(data, model, nb_class, idx_to_str, on_cuda=False,
                      metrics_foo={'recall': recall,
                                   'precision': precision,
-                                  'f1_score': f1_score}):
+                                  'f1_score': f1_score,
+                                  'auc': auc}):
 
     metrics = {k: {} for k in metrics_foo.keys()}
 
     # Get the predictions
+    all_preds, all_targets = [], []
     for mini in data:
         preds, targets = format_mini(mini, model, on_cuda)
+        all_preds = np.concatenate([all_preds, preds])
+        all_targets = np.concatenate([all_targets, targets])
 
     # Get the class specific
     for cl in range(nb_class):
         for i, m in metrics_foo.iteritems():
-            metrics[i][idx_to_str(cl)] = m(preds, targets, cl)
+            metrics[i][idx_to_str(cl)] = m(all_preds, all_targets, cl)
 
     return metrics
