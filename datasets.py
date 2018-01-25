@@ -105,9 +105,7 @@ class GraphGeneDataset(GraphDataset):
         self.adj = np.array(self.file['graph_data']).astype('float32')
         self.sample_names = self.file['sample_names']
         self.node_names = np.array(self.file['gene_names'])
-
         self.nb_class = self.nb_class if self.nb_class is not None else len(self.labels[0])
-        self.reduce_number_of_classes = False
 
         # Take a number of subclasses
         if self.sub_class is not None:
@@ -125,22 +123,6 @@ class GraphGeneDataset(GraphDataset):
         sample = self.data[idx]
         sample = np.expand_dims(sample, axis=-1)
         label = self.labels[idx]
-
-        if self.reduce_number_of_classes:
-            # We have 29 classes right now. To make testing a bit easier, we can reduce the number of classes.
-            label = np.array(label)
-
-            if len(label.shape) == 2:
-                label = np.delete(label, np.s_[self.nb_class::], 1)
-                label[:, self.nb_class-1] = 1 - label.sum(axis=1)
-                #label = self.labels[idx].max(axis=-1)
-                #print label
-            else:
-                label = np.delete(label, np.s_[self.nb_class::], 0)
-                label[self.nb_class-1] = 1 - label.sum(axis=0)
-                #print label
-        label = self.labels[idx].argmax(axis=-1)
-
         sample = {'sample': sample, 'labels': label}
 
         if self.transform:
