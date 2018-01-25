@@ -222,13 +222,13 @@ def main(argv=None):
                         writer.scalar_summary('{}/{}/{}'.format(m, set_name, cl), v, t) # metric/set/class
 
         # small summary.
-        print "epoch {}, cross loss: {:.03f}, total loss: {:.03f}, precision train: {:0.2f} precision valid: {:0.2f}, time: {:.02f} sec".format(t,
-                                                                                                         cross_loss.data[0],
-                                                                                                         #other_loss.data[0],
-                                                                                                         total_loss.data[0],
-                                                                                                         acc['train'],
-                                                                                                         acc['valid'],
-                                                                                                         time_this_epoch)
+        print "epoch {}, cross loss: {:.03f}, total loss: {:.03f}, precision train: {:0.2f} precision valid: {:0.2f}, time: {:.02f} sec".format(
+            t,
+            cross_loss.data[0],
+            total_loss.data[0],
+            acc['train'],
+            acc['valid'],
+            time_this_epoch)
 
     print "Done!"
 
