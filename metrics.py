@@ -1,6 +1,6 @@
 import numpy as np
 from torch.autograd import Variable
-
+from sklearn import metrics
 
 def format_mini(mini, model, on_cuda):
     inputs = Variable(mini['sample'], requires_grad=False).float()
@@ -32,6 +32,18 @@ def accuracy(data, model, no_class = None, on_cuda=False):
     acc = acc / float(total)
     return acc
 
+
+def auc(data, model, no_class = None, on_cuda=False):
+    all_preds, all_targets = [], []
+
+    for mini in data:
+        preds, targets = format_mini(mini, model, on_cuda)
+        all_preds = np.concatenate([all_preds, preds])
+        all_targets = np.concatenate([all_targets, targets])
+
+    return metrics.roc_auc_score(all_targets, all_preds)
+
+
 def recall(preds, gts, cl):
     """How many revelant item are selected?"""
     tmp = ((gts == preds) * (gts == cl)).sum()
@@ -49,19 +61,10 @@ def f1_score(preds, gts, cl):
     pre = precision(preds, gts, cl)
     return 2 * re * pre / (re + pre)
 
-def auc(preds, targets, cl):
-    #import pdb; pdb.set_trace()
-    pass
-
-def I(pred, target):
-    #import pdb; pdb.set_trace()
-    pass
-
 def compute_metrics_per_class(data, model, nb_class, idx_to_str, on_cuda=False,
                      metrics_foo={'recall': recall,
                                   'precision': precision,
-                                  'f1_score': f1_score,
-                                  'auc': auc}):
+                                  'f1_score': f1_score}):
 
     metrics = {k: {} for k in metrics_foo.keys()}
 

@@ -8,7 +8,7 @@ from torch.autograd import Variable
 import os
 import pickle
 import monitoring
-from metrics import accuracy, recall, f1_score, precision, compute_metrics_per_class
+from metrics import accuracy, recall, f1_score, precision, compute_metrics_per_class, auc
 
 
 def build_parser():
@@ -207,8 +207,10 @@ def main(argv=None):
 
         # compute the metrics for all the sets, for all the classes. right now it's precision/recall/f1-score, for train and valid.
         acc = {}
+        auc_dict = {}
         for my_set, set_name in zip([train_set, valid_set, test_set], ['train', 'valid']):#, 'tests']):
             acc[set_name] = accuracy(my_set, my_model, on_cuda=on_cuda)
+            auc_dict[set_name] = auc(my_set, my_model, on_cuda=on_cuda)
 
             if writer is not None:
                 writer.scalar_summary('accuracy_{}'.format(set_name), acc[set_name], t)
@@ -222,13 +224,14 @@ def main(argv=None):
                         writer.scalar_summary('{}/{}/{}'.format(m, set_name, cl), v, t) # metric/set/class
 
         # small summary.
-        print "epoch {}, cross_loss: {:.03f}, total_loss: {:.03f}, precision_train: {:0.2f} precision_valid: {:0.2f}, AUC(bin_only): {:0.3f} time: {:.02f} sec".format(
+        print "epoch {}, cross_loss: {:.03f}, total_loss: {:.03f}, precision_train: {:0.3f} precision_valid: {:0.3f}, auc_train: {:0.3f}, auc_valid: {:0.3f}, time: {:.02f} sec".format(
             t,
             cross_loss.data[0],
             total_loss.data[0],
             acc['train'],
             acc['valid'],
-            acc.get('auc', 0),
+            auc_dict['train'],
+            auc_dict['valid'],
             time_this_epoch)
 
     print "Done!"
