@@ -10,7 +10,7 @@ from torch.autograd import Variable
 import os
 import pickle
 import monitoring
-from metrics import accuracy, recall, f1_score, precision, compute_metrics_per_class, auc, record_metrics_for_epoch
+from metrics import accuracy, recall, f1_score, precision, compute_metrics_per_class, auc, record_metrics_for_epoch, summarize
 
 
 def build_parser():
@@ -32,7 +32,7 @@ def build_parser():
     parser.add_argument('--scale-free', action='store_true', help='If we want a scale-free random adjacency matrix for the dataset.')
     parser.add_argument('--cuda', action='store_true', help='If we want to run on gpu.')
     parser.add_argument('--norm-adj', action='store_true', help="If we want to normalize the adjancy matrix.")
-    parser.add_argument('--log', choices=['tensorboard', 'console', 'silent'], default='console', help="Don't store anything in tensorboard, otherwise a segfault can happen.")
+    parser.add_argument('--log', choices=['tensorboard', 'console', 'silent'], default='tensorboard', help="Don't store anything in tensorboard, otherwise a segfault can happen.")
     parser.add_argument('--name', type=str, default=None, help="If we want to add a random str to the folder.")
 
     # Model specific options
@@ -150,6 +150,9 @@ def main(argv=None):
 
     writer, exp_dir = monitoring.setup_tensorboard_log(tensorboard_dir, exp_name, opt)
 
+    max_valid_acc = 0
+    best_summary = {}
+
     # The training.
     for t in range(epoch):
 
@@ -204,14 +207,16 @@ def main(argv=None):
         ]
         summary = "epoch {}, cross_loss: {:.03f}, total_loss: {:.03f}, precision_train: {:0.3f}, precision_valid: {:0.3f}, time: {:.02f} sec".format(*summary)
         logging.info(summary)
+        if max_valid_acc < acc['valid']:
+            max_valid_acc = acc['valid']
+            best_summary = summarize(t, cross_loss.data[0], total_loss.data[0], acc)
 
     logging.info("Done!")
 
     if opt.log == "console":
         monitoring.monitor_everything(my_model, valid_set, opt, exp_dir)
         logging.info("Nothing will be log, everything will only be shown on screen.")
-
-    return summary
+    return best_summary
 
 if __name__ == '__main__':
     main()

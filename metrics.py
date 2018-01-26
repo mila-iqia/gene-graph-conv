@@ -96,7 +96,7 @@ def record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch,
     # compute the metrics for all the sets, for all the classes. right now it's precision/recall/f1-score, for train and valid.
     acc = {}
     auc_dict = {}
-    for my_set, set_name in zip([train_set, valid_set, test_set], ['train', 'valid']):#, 'tests']):
+    for my_set, set_name in zip([train_set, valid_set, test_set], ['train', 'valid', 'tests']):
         acc[set_name] = accuracy(my_set, my_model, on_cuda=on_cuda)
         #auc_dict[set_name] = auc(my_set, my_model, on_cuda=on_cuda)
 
@@ -111,3 +111,12 @@ def record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch,
                for cl, v in value.iteritems():
                     writer.scalar_summary('{}/{}/{}'.format(m, set_name, cl), v, t) # metric/set/class
     return acc
+
+def summarize(epoch, cross_loss, total_loss, accuracy):
+    summary = {
+        "epoch": epoch,
+        "cross_loss": cross_loss,
+        "total_loss": total_loss,
+        "accuracy": accuracy,
+    }
+    return summary

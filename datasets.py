@@ -549,10 +549,10 @@ def get_dataset(opt):
     num_layer = opt.num_layer
     seed = opt.seed
     percentile = opt.percentile
-    logger = logging.getLogger()
+
     if dataset_name == 'random':
 
-        logger.info("Getting a random graph")
+        logging.info("Getting a random graph")
         nb_samples = 10000 if nb_examples is None else nb_examples
 
         dataset = RandomGraphDataset(nb_nodes=100, nb_edges=100, nb_examples=nb_samples,
@@ -560,7 +560,7 @@ def get_dataset(opt):
 
     elif dataset_name == 'tcga-tissue':
 
-        logger.info("Getting TCGA tissue type")
+        logging.info("Getting TCGA tissue type")
         # To have a feel of TCGA, take a look at 'view_graph_TCGA.ipynb'
         dataset = TCGATissue(nb_class=nb_class, use_random_adj=scale_free, percentile=percentile)
 
@@ -569,7 +569,7 @@ def get_dataset(opt):
 
     elif dataset_name == 'tcga-brca':
 
-        logger.info("Getting TCGA BRCA type")
+        logging.info("Getting TCGA BRCA type")
         # To have a feel of TCGA, take a look at 'view_graph_TCGA.ipynb'
         dataset = BRCACoexpr(nb_class=nb_class, use_random_adj=scale_free, percentile=percentile)
 
@@ -580,7 +580,7 @@ def get_dataset(opt):
         dataset = PercolateDataset(use_random_adj=scale_free)
 
     elif dataset_name == 'tcga-gbm':
-        logger.info("Getting TCGA GBM Dataset")
+        logging.info("Getting TCGA GBM Dataset")
         dataset = GBMDataset()
 
     else:

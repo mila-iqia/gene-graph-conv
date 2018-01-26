@@ -3,6 +3,7 @@ import argparse
 import json
 import numpy as np
 import os
+import logging
 import itertools
 
 # I chose to hardcode the parameters so we can all agree on a baseline and share a record of it.
@@ -42,12 +43,22 @@ def parse_args(argv):
     return opt
 
 def main(argv=None):
+    # Setup logger
+    hdlr = logging.FileHandler('baseline.log')
+    hdlr.setFormatter(logging.Formatter("%(message)s"))
+    logger = logging.getLogger('baseline')
+    logger.addHandler(hdlr)
+    logger.setLevel('INFO')
+
     opt = parse_args(argv)
     mode = globals()[opt.mode]
     setting = vars(opt)
     setting['epoch'] = mode['epoch']
     setting['batch_size'] = mode['batch_size']
     del setting['mode']
+    max_valid_acc = 0
+    best_summary = {}
+    best_hyper_parameters = {}
 
     for model, dataset, seed in itertools.product(mode['models'], mode['datasets'], range(0, mode['num_experiments'])):
         setting['model'] = model
@@ -71,9 +82,28 @@ def main(argv=None):
                 raise ValueError("The parameter {} is nor defined.".format(variable))
 
             setting[variable] = value
-            #launch an experiment:
-            print "Will launch the experiment with the following hyper-parameters: {}".format(setting)
-            to_log = conv_graph.main(opt)
+            summary = conv_graph.main(opt)
+            if max_valid_acc < summary['accuracy']['valid']:
+                max_valid_acc = summary['accuracy']['valid']
+                best_summary = summary
+                best_hyper_parameters = setting
+                print seed
+                print best_summary
+                print best_hyper_parameters
+
+        # if this round of experiments is finished, log and reset
+        if seed + 1 == mode['num_experiments']:
+            log_summary(best_summary, best_hyper_parameters)
+            max_valid_acc = 0
+            best_summary = {}
+            best_hyper_parameters = {}
+
+def log_summary(summary, hyper):
+    logger = logging.getLogger('baseline')
+    logger.info("model: {}, dataset: {}, train: {}, valid: {}, test: {}".format(hyper['model'], hyper['dataset'], summary['accuracy']['train'], summary['accuracy']['valid'], summary['accuracy']['tests']))
+    logger.info(summary)
+    logger.info(hyper)
+    logger.info("")
 
 def set_num_channel(model, setting):
     num_channel = setting['num_channel']
