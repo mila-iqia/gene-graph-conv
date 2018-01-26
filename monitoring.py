@@ -3,6 +3,7 @@ import numpy as np
 import models
 import pickle
 import os
+import logging
 from torch.autograd import Variable
 
 def feature_selection(model, dataset, opt, top=100):
@@ -94,16 +95,34 @@ def get_representation(model, dataset, opt):
 
     return retn
 
+def setup_tensorboard_log(tensorboard_dir, exp_name, opt):
+    writer = None
+    exp_dir = None
+    from logger import Logger
+    if not os.path.exists(tensorboard_dir):
+        os.mkdir(tensorboard_dir)
+
+    exp_dir = os.path.join(tensorboard_dir, exp_name)
+    if not os.path.exists(exp_dir):
+        os.mkdir(exp_dir)
+
+    if opt.log == 'tensorboard':
+        # dumping the options
+        pickle.dump(opt, open(os.path.join(exp_dir, 'options.pkl'), 'wb'))
+        print "We will log everything in ", exp_dir
+
+    return writer, exp_dir
+
 def monitor_everything(model, dataset, opt, exp_dir):
     print "Extracting the important features..."
     features = feature_selection(model, dataset, opt)
     pickle.dump(features, open(os.path.join(exp_dir, 'features.pkl'), 'wb'))
 
-    print "Extracring the graphs..."
+    print "Extracting the graphs..."
     graphs = get_graph(model)
     pickle.dump(graphs, open(os.path.join(exp_dir, 'graphs.pkl'), 'wb'))
 
-    print "Save a representation..."
+    print "Saving a representation..."
     rep = get_representation(model, dataset, opt)
     pickle.dump(rep, open(os.path.join(exp_dir, 'representation.pkl'), 'wb'))
 
@@ -113,6 +132,6 @@ def load_everything(exp_dir):
     features = pickle.load(open(os.path.join(exp_dir, 'features.pkl')))
     graphs = pickle.load(open(os.path.join(exp_dir, 'graphs.pkl')))
     reps = pickle.load(open(os.path.join(exp_dir, 'representation.pkl')))
-    print "Done!"
+    logging.info("Done!")
 
     return features, graphs, reps

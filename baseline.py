@@ -14,7 +14,8 @@ default = {"num_experiments": 10,
            "models": ['mlp', 'sgc', 'slr', 'cgn', 'lcg'],
            "datasets": ['random', 'percolate', 'tcga-gbm'],
            "vars_to_explore": [('lr', (1e-5, 1e-3))],
-           "epoch": 10
+           "epoch": 10,
+           "batch_size": 100
            }
 test = {"num_experiments": 1,
         "models": ['mlp', 'sgc', 'slr', 'cgn', 'lcg'],
@@ -27,7 +28,8 @@ freeplay = {"num_experiments": 10,
             "models": ['mlp', 'sgc', 'slr', 'cgn', 'lcg'],
             "datasets": ['random', 'percolate', 'tcga-gbm'],
             "vars_to_explore":[('lr', (1e-5, 1e-3))],
-            "epoch": 10}
+            "epoch": 10,
+            "batch_size": 100}
 
 
 def build_parser():
@@ -71,7 +73,7 @@ def main(argv=None):
             setting[variable] = value
             #launch an experiment:
             print "Will launch the experiment with the following hyper-parameters: {}".format(setting)
-            conv_graph.main(opt)
+            to_log = conv_graph.main(opt)
 
 def set_num_channel(model, setting):
     num_channel = setting['num_channel']

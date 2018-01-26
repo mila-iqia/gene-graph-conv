@@ -3,7 +3,6 @@ License: Copyleft
 """
 __author__ = "Michael Gygli"
 
-import tensorflow as tf
 from StringIO import StringIO
 import numpy as np
 

@@ -1,4 +1,5 @@
 import torch
+import logging
 import numpy as np
 from torch.autograd import Variable
 import torch.nn.functional as F
@@ -167,7 +168,7 @@ class GraphNetwork(nn.Module):
         self.agregate_adj = agregate_adj
 
         if add_emb:
-            print "Adding node embeddings."
+            logging.info("Adding node embeddings.")
             self.emb = EmbeddingLayer(nb_nodes, add_emb)
             self.emb.register_forward_hook(save_computations) # For monitoring
             input_dim = self.emb.emb_size
@@ -214,7 +215,7 @@ class GraphNetwork(nn.Module):
         else:
             self.gates = [None] * (len(dims) - 1)
 
-        print "Done!"
+        logging.info("Done!")
 
         # TODO: add all the funky bells and stuff that the old CGN has.
 
@@ -305,7 +306,7 @@ class MLP(nn.Module):
 
         dims = [input_dim] + channels
 
-        print "Constructing the network..."
+        logging.info("Constructing the network...")
         layers = []
         for c_in, c_out in zip(dims[:-1], dims[1:]):
             layer = nn.Linear(c_in, c_out)
@@ -317,7 +318,7 @@ class MLP(nn.Module):
         else:
             self.last_layer = nn.Linear(input_dim, out_dim)
 
-        print "Done!"
+        logging.info("Done!")
 
     def forward(self, x):
         nb_examples, nb_nodes, nb_channels = x.size()
@@ -552,7 +553,7 @@ def get_model(opt, dataset):
 #             logistic_layer.append(layer)
 #
 #         self.my_logistic_layers = nn.ModuleList(logistic_layer)
-#         print "Done!"
+#         logging.info("Done!")
 #
 #         if attention_layer > 0:
 #             print "Adding {} attentions layer.".format(attention_layer)
@@ -638,7 +639,7 @@ def get_model(opt, dataset):
 #         last_layer = nn.Linear(self.nb_nodes * self.channels, out_dim).half()
 #         self.my_logistic_layers = nn.ModuleList([last_layer])
 #
-#         print "Done!"
+#         logging.info("Done!")
 #
 #     def forward(self, x):
 #

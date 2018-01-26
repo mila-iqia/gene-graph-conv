@@ -1,4 +1,5 @@
 import torch
+import logging
 import numpy as np
 from torch import nn
 from torch.autograd import Variable
@@ -134,6 +135,7 @@ class ApprNormalizeLaplacian(object):
         self.overwrite = overwrite
         self.unique_id = unique_id
 
+
     def __call__(self, adj):
 
         #if self.please_ignore:
@@ -145,10 +147,11 @@ class ApprNormalizeLaplacian(object):
             processed_path = processed_path + '_{}.npy'.format(self.unique_id)
 
         if processed_path and os.path.exists(processed_path) and not self.overwrite:
-            print "returning a saved transformation."
+            logging.info("returning a saved transformation.")
             return np.load(self.processed_path)
 
-        print "Doing the approximation..."
+        logging.info("Doing the approximation...")
+
         # Fill the diagonal
         np.fill_diagonal(adj, 1.) # TODO: Hummm, thik it's a 0.
 
@@ -156,13 +159,13 @@ class ApprNormalizeLaplacian(object):
         D_inv = np.diag(1. / np.sqrt(D))
         norm_transform = D_inv.dot(adj).dot(D_inv)
 
-        print "Done!"
+        logging.info("Done!")
 
         # saving the processed approximation
         if self.processed_path:
-            print "Saving the approximation in {}".format(self.processed_path)
+            logging.info("Saving the approximation in {}".format(self.processed_path))
             np.save(self.processed_path, norm_transform)
-            print "Done!"
+            logging.info("Done!")
 
         return norm_transform
 
@@ -221,11 +224,12 @@ class GraphLayer(nn.Module):
         self.channels = channels
         self.id_layer = id_layer
 
+
         # We can technically do that online, but it's a bit messy and slow, if we need to
         # doa sparse matrix all the time.
 
         if self.transform_adj:
-            print "Transforming the adj matrix"
+            logging.info("Transforming the adj matrix")
             adj = transform_adj(adj)
         self.adj = adj
 
@@ -262,7 +266,7 @@ class CGNLayer(GraphLayer):
         flat_adj = torch.FloatTensor(flat_adj)
 
         # Constructing a sparse matrix
-        print "Constructing the sparse matrix..."
+        logging.info("Constructing the sparse matrix...")
         sparse_adj = torch.sparse.FloatTensor(self.edges, flat_adj, torch.Size([self.nb_nodes ,self.nb_nodes]))#.to_dense()
         self.register_buffer('sparse_adj', sparse_adj)
         self.linear = nn.Conv1d(self.in_dim, self.channels, 1, bias=True)
@@ -306,10 +310,10 @@ class LCGLayer(GraphLayer):
 
 
     def init_params(self):
-        print "Constructing the network..."
+        logging.info("Constructing the network...")
         self.max_edges = sorted((self.adj > 0.).sum(0))[-1]
 
-        print "Each node will have {} edges.".format(self.max_edges)
+        logging.info("Each node will have {} edges.".format(self.max_edges))
 
         # Get the list of all the edges. All the first index is 0, we fix that later
         edges_np = [np.asarray(np.where(self.adj[i:i + 1] > 0.)).T for i in range(len(self.adj))]
@@ -378,12 +382,12 @@ class SGCLayer(GraphLayer):
         super(SGCLayer, self).__init__(adj, in_dim, channels, on_cuda, id_layer, transform_adj, agregate_adj)
 
     def init_params(self):
-        if self.channels != 1: print "Setting Channels to 1 on SGCLayer, only number of channels supported"
+        if self.channels != 1: logging.info("Setting Channels to 1 on SGCLayer, only number of channels supported")
         self.channels = 1  # Other number of channels not suported.
 
         # dims = [input_dim] + channels
 
-        print "Constructing the eigenvectors..."
+        logging.info("Constructing the eigenvectors...")
 
         D = np.diag(self.adj.sum(axis=1))
         self.L = D - self.adj
@@ -394,7 +398,6 @@ class SGCLayer(GraphLayer):
         # self.V = self.V.half()
         # self.g = self.g.half()
 
-        print "self.nb_nodes", self.nb_nodes
         self.F = nn.Parameter(torch.rand(self.nb_nodes, self.nb_nodes), requires_grad=True)
 
     def forward(self, x):
@@ -427,16 +430,16 @@ def get_transform(opt):
     # TODO add some kind of different pruning, like max, average, etc... that will be determine here.
     # Right now the intax is a bit intense, but in the future it will be more parametrizable.
     if opt.prune_graph: # graph pruning, etc.
-        print "Pruning the graph..."
+        logging.info("Pruning the graph...")
         const_transform += [lambda **kargs: AugmentGraphConnectivity(**kargs)]
         transform += [lambda **kargs: AgregateGraph(on_cuda=opt.cuda, **kargs)]
 
     if opt.add_self:
-        print "Adding self connection to the graph..."
+        logging.info("Adding self connection to the graph...")
         const_transform += [lambda **kargs: SelfConnection(opt.add_self, **kargs)] # Add a self connection.
 
     if opt.norm_adj:
-        print "Normalizing the graph..."
+        logging.info("Normalizing the graph...")
         const_transform += [lambda **kargs: ApprNormalizeLaplacian(**kargs)] # Normalize the graph
 
     return const_transform, transform

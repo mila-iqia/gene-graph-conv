@@ -1,3 +1,4 @@
+import logging
 import os
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
@@ -33,7 +34,7 @@ class GraphDataset(Dataset):
 
         # If we want a random adjancy matrix:
         if use_random_adj:
-            print "Overwriting the adjacency matrix to have a random (scale-free) one..."
+            logging.info("Overwriting the adjacency matrix to have a random (scale-free) one...")
             dim = range(self.adj.shape[0])
             np.random.shuffle(dim)
             self.adj = self.adj[dim][:, dim]
@@ -45,7 +46,7 @@ class GraphDataset(Dataset):
             nan_adj = np.ma.filled(nan_adj, np.nan)
 
             threshold = np.nanpercentile(nan_adj, 100 - percentile)
-            print "We will remove all the adges that has a value smaller than {}".format(threshold)
+            logging.info("We will remove all the adges that has a value smaller than {}".format(threshold))
 
             to_keep = self.adj >= threshold  # throw away all the edges that are bigger than what we have.
             self.adj = self.adj * to_keep
@@ -159,8 +160,8 @@ class TCGAForLabel(GraphGeneDataset):
         clinical_raw = clinical_raw.set_index("sampleID");
 
 
-        print "Possible labels to select from ", clinical_file, " are ", list(clinical_raw.columns)
-        print "Selected label is ", clinical_label
+        logging.info("Possible labels to select from ", clinical_file, " are ", list(clinical_raw.columns))
+        logging.info("Selected label is ", clinical_label)
 
 
         clinical = clinical_raw[[clinical_label]]
@@ -176,10 +177,10 @@ class TCGAForLabel(GraphGeneDataset):
         clinical_joined = clinical.loc[data_joined.index]
 
 
-        print "clinical_raw", clinical_raw.shape, ", clinical", clinical.shape, ", clinical_joined", clinical_joined.shape
-        print "data_raw", data_raw.shape, "data_joined", data_joined.shape
-        print "Counter for " + clinical_label + ": "
-        print collections.Counter(clinical_joined[clinical_label].as_matrix())
+        logging.info("clinical_raw", clinical_raw.shape, ", clinical", clinical.shape, ", clinical_joined", clinical_joined.shape)
+        logging.info("data_raw", data_raw.shape, "data_joined", data_joined.shape)
+        logging.info("Counter for " + clinical_label + ": ")
+        logging.info(collections.Counter(clinical_joined[clinical_label].as_matrix()))
 
         self.labels = pd.get_dummies(clinical_joined).as_matrix().astype(np.float)
         self.data = data_joined.as_matrix()
@@ -371,7 +372,7 @@ class PercolateDataset(GraphDataset):
         return labels[l]
 
 def split_dataset(dataset, batch_size=100, random=False, train_ratio=0.8, seed=1993, nb_samples=None, nb_per_class=None):
-
+    logger = logging.getLogger()
     all_idx = range(len(dataset))
 
     if random:
@@ -381,7 +382,7 @@ def split_dataset(dataset, batch_size=100, random=False, train_ratio=0.8, seed=1
     if nb_samples is not None:
         all_idx = all_idx[:nb_samples]
         nb_example = len(all_idx)
-        print "Going to subsample to {} examples".format(nb_example)
+        logger.info("Going to subsample to {} examples".format(nb_example))
 
     # If we want to keep a specific number of examples per class in the training set.
     # Since the
@@ -416,7 +417,7 @@ def split_dataset(dataset, batch_size=100, random=False, train_ratio=0.8, seed=1
         idx_test = idx_rest[len(idx_rest)/2:]
 
 
-        print "Keeping {} examples in training set total.".format(len(idx_train))
+        logger.info("Keeping {} examples in training set total.".format(len(idx_train)))
     else:
 
         nb_example = len(all_idx)
@@ -431,7 +432,7 @@ def split_dataset(dataset, batch_size=100, random=False, train_ratio=0.8, seed=1
     test_set = DataLoader(dataset, batch_size=batch_size, sampler=SubsetRandomSampler(idx_test))
     valid_set = DataLoader(dataset, batch_size=batch_size, sampler=SubsetRandomSampler(idx_valid))
 
-    print "Our sets are of length: train={}, valid={}, tests={}".format(len(idx_train), len(idx_valid), len(idx_test))
+    logger.info("Our sets are of length: train={}, valid={}, tests={}".format(len(idx_train), len(idx_valid), len(idx_test)))
     return train_set, valid_set, test_set
 
 
@@ -548,10 +549,10 @@ def get_dataset(opt):
     num_layer = opt.num_layer
     seed = opt.seed
     percentile = opt.percentile
-
+    logger = logging.getLogger()
     if dataset_name == 'random':
 
-        print "Getting a random graph"
+        logger.info("Getting a random graph")
         nb_samples = 10000 if nb_examples is None else nb_examples
 
         dataset = RandomGraphDataset(nb_nodes=100, nb_edges=100, nb_examples=nb_samples,
@@ -559,7 +560,7 @@ def get_dataset(opt):
 
     elif dataset_name == 'tcga-tissue':
 
-        print "Getting TCGA tissue type"
+        logger.info("Getting TCGA tissue type")
         # To have a feel of TCGA, take a look at 'view_graph_TCGA.ipynb'
         dataset = TCGATissue(nb_class=nb_class, use_random_adj=scale_free, percentile=percentile)
 
@@ -568,7 +569,7 @@ def get_dataset(opt):
 
     elif dataset_name == 'tcga-brca':
 
-        print "Getting TCGA BRCA type"
+        logger.info("Getting TCGA BRCA type")
         # To have a feel of TCGA, take a look at 'view_graph_TCGA.ipynb'
         dataset = BRCACoexpr(nb_class=nb_class, use_random_adj=scale_free, percentile=percentile)
 
@@ -579,7 +580,7 @@ def get_dataset(opt):
         dataset = PercolateDataset(use_random_adj=scale_free)
 
     elif dataset_name == 'tcga-gbm':
-        print "Getting TCGA GBM Dataset"
+        logger.info("Getting TCGA GBM Dataset")
         dataset = GBMDataset()
 
     else:
