@@ -15,10 +15,12 @@ def f(p):
 def sq2d_lattice_graph(x_size, y_size, value_fn):
     G = nx.Graph()
     #adding nodes
+    nodeinorder=[]
     for i in xrange(x_size):
         for j in xrange(y_size):
             val = value_fn()
             G.add_node((i,j), value=val)
+            nodeinorder.append((i,j))
 
     #adding edges
     for node in G.nodes():
@@ -30,7 +32,7 @@ def sq2d_lattice_graph(x_size, y_size, value_fn):
             G.add_edge((node[0], node[1]-1), node)
         if node[1]<(y_size-1):
             G.add_edge((node[0], node[1]+1), node)
-    return G
+    return G, nodeinorder
 
 
 def if_percolates(G, x_size):
@@ -73,14 +75,15 @@ def sq2d_lattice_percolation(size_x=10, size_y=10, prob=0.5):
     def fp(): return f(prob)
 
     #Generating square lattice graph
-    G = sq2d_lattice_graph(size_x,size_y, fp)
+    G, nio = sq2d_lattice_graph(size_x,size_y, fp)
+    
     #Getting density of open nodes
     vals = dict(nx.get_node_attributes(G, 'value'))
     num_on = np.sum( list(vals.values()) )
     num_total = len(list(vals.values()))
     density = float(num_on)/float(num_total)
     #Checking percolation
-    T, perc, path = if_percolates(G, 10)
+    T, perc, path = if_percolates(G, size_x)
 
 
     #correcting density
@@ -101,7 +104,7 @@ def sq2d_lattice_percolation(size_x=10, size_y=10, prob=0.5):
                 num_on -= 1
                 density = float(num_on)/float(num_total)
 
-    return G, T, perc, density
+    return G, T, perc, density, nio
 
 def sq2d_plot_graph(G):
     positionsG = {}
@@ -131,7 +134,7 @@ if __name__=='__main__':
 
     if not args.test is None:
         if args.dataset is None:
-            G, T, perc, dens = sq2d_lattice_percolation(size_x=10, size_y=10, prob = 0.562)
+            G, T, perc, dens, nio = sq2d_lattice_percolation(size_x=10, size_y=10, prob = 0.562)
             print 'Percolation = ', perc, 'Density = ', dens
 
             plt.subplot(121)
@@ -152,7 +155,8 @@ if __name__=='__main__':
 
             plt.figure()
             labelsG = dict(nx.get_node_attributes(G, 'value'))
-            nx.draw_spectral(G, nodelist=list(labelsG.keys()), node_color=list(labelsG.values()))
+
+            nx.draw_spectral(G, with_labels=True,nodelist=list(labelsG.keys()), node_color=list(labelsG.values()))
             plt.show()
 
             print 'Label = ', fmy["labels_data"][args.test]
@@ -167,8 +171,9 @@ if __name__=='__main__':
         fmy = h5py.File(args.dataset,"w")
 
         #generate graph
-        G, T, perc, dens = sq2d_lattice_percolation( args.size_x, args.size_y, args.prob)
-        node_list = list(G.nodes())
+        G, T, perc, dens, nio = sq2d_lattice_percolation( args.size_x, args.size_y, args.prob)
+        node_list = nio#list(G.nodes())
+        
         M = len(node_list)
         mat = nx.adjacency_matrix(G, nodelist=node_list).todense()
         # mat = nx.to_numpy_matrix(nx.adjacency_matrix(G), weight=None)
@@ -185,7 +190,7 @@ if __name__=='__main__':
             if i%2 == 0: #generate positive example
                 perc = False
                 while perc == False:
-                    G, T, perc, dens = sq2d_lattice_percolation( args.size_x, args.size_y, args.prob)
+                    G, T, perc, dens, nio = sq2d_lattice_percolation( args.size_x, args.size_y, args.prob)
                 attrs = nx.get_node_attributes(G, 'value')
                 features = np.zeros((M,), dtype='float32')
                 for j,node in enumerate(node_list):
@@ -196,7 +201,7 @@ if __name__=='__main__':
             else: #generate negative example
                 perc = True
                 while perc == True:
-                    G, T, perc, dens = sq2d_lattice_percolation( args.size_x, args.size_y, args.prob)
+                    G, T, perc, dens, nio = sq2d_lattice_percolation( args.size_x, args.size_y, args.prob)
                 attrs = nx.get_node_attributes(G, 'value')
                 features = np.zeros((M,), dtype='float32')
                 for j,node in enumerate(node_list):
@@ -206,3 +211,4 @@ if __name__=='__main__':
 
         fmy.flush()
         fmy.close()
+
