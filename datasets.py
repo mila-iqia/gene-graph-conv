@@ -105,9 +105,7 @@ class GraphGeneDataset(GraphDataset):
         self.adj = np.array(self.file['graph_data']).astype('float32')
         self.sample_names = self.file['sample_names']
         self.node_names = np.array(self.file['gene_names'])
-
         self.nb_class = self.nb_class if self.nb_class is not None else len(self.labels[0])
-        self.reduce_number_of_classes = False
 
         # Take a number of subclasses
         if self.sub_class is not None:
@@ -125,22 +123,6 @@ class GraphGeneDataset(GraphDataset):
         sample = self.data[idx]
         sample = np.expand_dims(sample, axis=-1)
         label = self.labels[idx]
-
-        if self.reduce_number_of_classes:
-            # We have 29 classes right now. To make testing a bit easier, we can reduce the number of classes.
-            label = np.array(label)
-
-            if len(label.shape) == 2:
-                label = np.delete(label, np.s_[self.nb_class::], 1)
-                label[:, self.nb_class-1] = 1 - label.sum(axis=1)
-                #label = self.labels[idx].max(axis=-1)
-                #print label
-            else:
-                label = np.delete(label, np.s_[self.nb_class::], 0)
-                label[self.nb_class-1] = 1 - label.sum(axis=0)
-                #print label
-        label = self.labels[idx].argmax(axis=-1)
-
         sample = {'sample': sample, 'labels': label}
 
         if self.transform:
@@ -235,6 +217,7 @@ class RandomGraphDataset(GraphDataset):
         self.nb_edges = nb_edges
         self.nb_examples = nb_examples
         self.seed = seed
+        self.nb_class = 2
 
         super(RandomGraphDataset, self).__init__(name='RandomGraphDataset', **kwargs)
 
@@ -248,7 +231,6 @@ class RandomGraphDataset(GraphDataset):
         # Degree matrix
         self.adj = random_adjacency_matrix(nb_nodes, self.nb_edges, self.use_random_adj)
         self.nb_edges = (self.adj.sum() - nb_nodes) / 2
-        self.nb_class = 2
         self.node_names = list(range(nb_nodes))
 
         # Generating the data
@@ -353,6 +335,7 @@ class PercolateDataset(GraphDataset):
 
         self.graph_dir = graph_dir
         self.graph_file = graph_file
+        self.nb_class = 2
 
         super(PercolateDataset, self).__init__(name='PercolateDataset', **kwargs)
 
@@ -454,8 +437,8 @@ def split_dataset(dataset, batch_size=100, random=False, train_ratio=0.8, seed=1
 
 class GBMDataset(GraphGeneDataset):
     " Glioblastoma Multiforme dataset with coexpression graph"
-    def __init__(self, graph_dir="/data/lisa/data/genomics/TCGA/", graph_file="gbm.hdf5", clinical_file="pathway_commons_adj.csv.gz", **kwargs):
-        super(GBMDataset, self).__init__(graph_dir=graph_dir, graph_file=graph_file, name='GBMDataset', **kwargs)
+    def __init__(self, graph_dir="/data/lisa/data/genomics/TCGA/", graph_file="gbm.hdf5", nb_class=2, **kwargs):
+        super(GBMDataset, self).__init__(graph_dir=graph_dir, graph_file=graph_file, nb_class=nb_class, name='GBMDataset', **kwargs)
         dataset = self
 
 
@@ -573,7 +556,6 @@ def get_dataset(opt):
 
         dataset = RandomGraphDataset(nb_nodes=100, nb_edges=100, nb_examples=nb_samples,
                                      use_random_adj=scale_free, seed=seed)
-        nb_class = 2 # Right now we only have 2 class
 
     elif dataset_name == 'tcga-tissue':
 
@@ -595,14 +577,12 @@ def get_dataset(opt):
 
     elif dataset_name == 'percolate':
         dataset = PercolateDataset(use_random_adj=scale_free)
-        nb_class = 2
 
     elif dataset_name == 'tcga-gbm':
         print "Getting TCGA GBM Dataset"
-        nb_class = 2
-        dataset = GBMDataset(nb_class=nb_class)
+        dataset = GBMDataset()
 
     else:
         raise ValueError
 
-    return dataset, nb_class # TODO: factorize
+    return dataset

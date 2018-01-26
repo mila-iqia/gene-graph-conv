@@ -379,7 +379,8 @@ class CNN(nn.Module):
             # nn.MaxPool2d(2)
         )
 
-        self.fc = nn.Linear(112, out_dim)
+        out = (grid_shape[0] - len(channels)) * (grid_shape[1] - len(channels)) * dims[-1]
+        self.fc = nn.Linear(out, out_dim)
 
     def forward(self, x):
 
@@ -399,6 +400,7 @@ class CNN(nn.Module):
         #x = x.view(-1, 50)
         #import ipdb; ipdb.set_trace()
         #x =  torch.index_select(x, 1, Variable(torch.LongTensor(order.flatten()))).view(-1, 1, order.shape[0], order.shape[1])
+        #import ipdb; ipdb.set_trace()
 
 
         # Reshape
@@ -423,7 +425,7 @@ class CNN(nn.Module):
     def regularization(self):
         return []
 
-def get_model(opt, dataset, nb_class):
+def get_model(opt, dataset):
     """
     Return a model based on the options.
     :param opt:
@@ -446,31 +448,31 @@ def get_model(opt, dataset, nb_class):
         #                on_cuda=on_cuda, add_residual=skip_connections, attention_layer=opt.attention_layer,
         #                add_emb=opt.use_emb,  transform_adj=const_transform, agregate_adj=agregate_adj)
 
-        my_model = CGN(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=nb_class,
+        my_model = CGN(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=dataset.nb_class,
                        on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=const_transform, agregate_adj=agregate_adj, use_gate=opt.use_gate)  # TODO: add a bunch of the options
 
     elif model == 'mlp':
-        my_model = MLP(dataset.nb_nodes, [num_channel] * num_layer, nb_class,
+        my_model = MLP(dataset.nb_nodes, [num_channel] * num_layer, dataset.nb_class,
                        on_cuda=on_cuda)  # TODO: add a bunch of the options
 
     elif model == 'lcg':
 
-        my_model = LCG(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=nb_class,
+        my_model = LCG(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=dataset.nb_class,
                        on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=const_transform, agregate_adj=agregate_adj, use_gate=opt.use_gate)  # TODO: add a bunch of the options
 
     elif model == 'sgc':
-        my_model = SGC(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=nb_class,
+        my_model = SGC(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=dataset.nb_class,
                        on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=const_transform, agregate_adj=agregate_adj, use_gate=opt.use_gate)  # TODO: add a bunch of the options
 
     elif model == 'slr':
         #nb_nodes, input_dim, adj, out_dim, on_cuda=True):
-        my_model = SparseLogisticRegression(nb_nodes=dataset.nb_nodes, input_dim=1, adj=dataset.get_adj(), out_dim=nb_class,
+        my_model = SparseLogisticRegression(nb_nodes=dataset.nb_nodes, input_dim=1, adj=dataset.get_adj(), out_dim=dataset.nb_class,
                        on_cuda=on_cuda)  # TODO: add a bunch of the options
     elif model == 'cnn':
 
         assert opt.dataset == 'percolate'
         # TODO: to change the shape.
-        my_model = CNN(input_dim=1, channels=[num_channel] * num_layer, grid_shape=[5, 10], out_dim=nb_class, on_cuda=on_cuda)
+        my_model = CNN(input_dim=1, channels=[num_channel] * num_layer, grid_shape=[5, 10], out_dim=dataset.nb_class, on_cuda=on_cuda)
 
     else:
         raise ValueError

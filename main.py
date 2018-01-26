@@ -8,114 +8,7 @@ from torch.autograd import Variable
 import os
 import pickle
 import monitoring
-
-def accuracy(data, model, no_class = None, on_cuda=False):
-    acc = 0.
-    total = 0.
-
-    for mini in data:
-
-        inputs = Variable(mini['sample'], requires_grad=False).float()
-        targets = Variable(mini['labels'], requires_grad=False).float()
-
-        if on_cuda:
-            inputs = inputs.cuda()
-            targets = targets.cuda()
-
-        #import ipdb; ipdb.set_trace()
-
-        if len(targets.size()) > 2:
-            max_index_target = targets.max(dim=1)[1].data.cpu().long().numpy()
-        else:
-            max_index_target = targets.data.cpu().long().numpy()
-
-        max_index_pred = model(inputs).max(dim=1)[1].data.cpu().long().numpy()
-
-
-        id_to_keep = np.ones_like(max_index_target)
-        if no_class is not None:
-            id_to_keep = max_index_target == no_class
-
-        acc += ((max_index_target == max_index_pred) * id_to_keep).sum()
-        total += sum(id_to_keep)
-
-    acc = acc / float(total)
-    return acc
-
-def recall(preds, gts, cl):
-
-    # How many revelant item are selected?
-
-    ids_from_that_class = gts == cl # ids_to_keep total number in class
-
-    tmp = ((gts == preds) * ids_from_that_class).sum()
-    total = sum(ids_from_that_class)
-    return tmp / float(total)
-
-def precision(preds, gts, cl):
-
-    # How many selected item are revelant?
-
-    ids_from_that_class = gts == cl  # total number predicted for that class
-
-    tmp = ((gts == preds) * ids_from_that_class).sum()
-    total = sum(cl == preds)
-    return tmp / float(total)
-
-def f1_score(preds, gts, cl):
-
-    re = recall(preds, gts, cl)
-    pre = precision(preds, gts, cl)
-
-    return 2 * re * pre / (re + pre)
-
-# TODO: move all of that to it's own file
-def compute_metrics_per_class(data, model, nb_class, idx_to_str, on_cuda=False,
-                     metrics_foo={'recall': recall,
-                                  'precision': precision,
-                                  'f1_score': f1_score}):
-
-    metrics = {k: {} for k in metrics_foo.keys()}
-
-    all_target = None
-    all_pred = None
-
-    # Get the predictions
-    for mini in data:
-
-        inputs = Variable(mini['sample'], requires_grad=False).float()
-        targets = Variable(mini['labels'], requires_grad=False).float()
-
-        if on_cuda:
-            inputs = inputs.cuda()
-            targets = targets.cuda()
-
-
-        if len(targets.size()) > 2:
-            max_index_target = targets.max(dim=1)[1].data.cpu().long().numpy()
-        else:
-            max_index_target = targets.data.cpu().long().numpy()
-
-        max_index_pred = model(inputs).max(dim=1)[1].data.cpu().long().numpy()
-
-        if all_target is None:
-            all_target = max_index_target
-        else:
-            all_target = np.concatenate([all_target, max_index_target])
-
-        if all_pred is None:
-            all_pred = max_index_pred
-        else:
-            all_pred = np.concatenate([all_pred, max_index_pred])
-
-    # Get the class specific
-    for cl in range(nb_class):
-
-        for i, m in metrics_foo.iteritems():
-            metrics[i][idx_to_str(cl)] = m(all_pred, all_target, cl)
-
-    return metrics
-
+from metrics import accuracy, recall, f1_score, precision, compute_metrics_per_class, auc
 
 
 def build_parser():
@@ -219,15 +112,15 @@ def main(argv=None):
 
     # creating the dataset
     print "Getting the dataset..."
-    dataset, nb_class = datasets.get_dataset(opt)
+    dataset = datasets.get_dataset(opt)
 
     # dataset loader
     train_set, valid_set, test_set = datasets.split_dataset(dataset, batch_size=batch_size, seed=seed,
                                                             nb_samples=nb_examples, train_ratio=train_ratio, nb_per_class=nb_per_class)
-
+    nb_class = dataset.nb_class
     # Creating a model
     print "Getting the model..."
-    my_model = models.get_model(opt, dataset, nb_class)
+    my_model = models.get_model(opt, dataset)
     print "Our model:"
     print my_model
 
@@ -314,8 +207,10 @@ def main(argv=None):
 
         # compute the metrics for all the sets, for all the classes. right now it's precision/recall/f1-score, for train and valid.
         acc = {}
+        auc_dict = {}
         for my_set, set_name in zip([train_set, valid_set, test_set], ['train', 'valid']):#, 'tests']):
             acc[set_name] = accuracy(my_set, my_model, on_cuda=on_cuda)
+            #auc_dict[set_name] = auc(my_set, my_model, on_cuda=on_cuda)
 
             if writer is not None:
                 writer.scalar_summary('accuracy_{}'.format(set_name), acc[set_name], t)
@@ -329,13 +224,15 @@ def main(argv=None):
                         writer.scalar_summary('{}/{}/{}'.format(m, set_name, cl), v, t) # metric/set/class
 
         # small summary.
-        print "epoch {}, cross loss: {:.03f}, total loss: {:.03f}, precision train: {:0.2f} precision valid: {:0.2f}, time: {:.02f} sec".format(t,
-                                                                                                         cross_loss.data[0],
-                                                                                                                                                                     #other_loss.data[0],
-                                                                                                                                                                     total_loss.data[0],
-                                                                                                         acc['train'],
-                                                                                                         acc['valid'],
-                                                                                                         time_this_epoch)
+        print "epoch {}, cross_loss: {:.03f}, total_loss: {:.03f}, precision_train: {:0.3f} precision_valid: {:0.3f}, time: {:.02f} sec".format(
+            t,
+            cross_loss.data[0],
+            total_loss.data[0],
+            acc['train'],
+            acc['valid'],
+            #auc_dict['train'],
+            #auc_dict['valid'],
+            time_this_epoch)
 
     print "Done!"
 
