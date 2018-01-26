@@ -3,6 +3,7 @@ import argparse
 import json
 import numpy as np
 import os
+import itertools
 
 # I chose to hardcode the parameters so we can all agree on a baseline and share a record of it.
 # Use "default" mode as our shared baseline -- these settings shouldn't really be changed.
@@ -11,16 +12,20 @@ import os
 
 default = {"num_experiments": 10,
            "models": ['mlp', 'sgc', 'slr', 'cgn', 'lcg'],
+           "datasets": ['random', 'percolate', 'tcga-gbm'],
            "vars_to_explore": [('lr', (1e-5, 1e-3))],
            "epoch": 10
            }
 test = {"num_experiments": 1,
         "models": ['mlp', 'sgc', 'slr', 'cgn', 'lcg'],
+        "datasets": ['random', 'percolate', 'tcga-gbm'],
         "vars_to_explore": [('lr', (1e-5, 1e-3))],
-        "epoch": 1
+        "epoch": 1,
+        "batch_size": 10
         }
 freeplay = {"num_experiments": 10,
             "models": ['mlp', 'sgc', 'slr', 'cgn', 'lcg'],
+            "datasets": ['random', 'percolate', 'tcga-gbm'],
             "vars_to_explore":[('lr', (1e-5, 1e-3))],
             "epoch": 10}
 
@@ -39,33 +44,34 @@ def main(argv=None):
     mode = globals()[opt.mode]
     setting = vars(opt)
     setting['epoch'] = mode['epoch']
+    setting['batch_size'] = mode['batch_size']
     del setting['mode']
 
-    for model in mode['models']:
+    for model, dataset, seed in itertools.product(mode['models'], mode['datasets'], range(0, mode['num_experiments'])):
         setting['model'] = model
-        for seed in range(0, mode['num_experiments']):
-            setting['seed'] = seed
-            for variable, bound in mode['vars_to_explore']:
-                min_value, max_value = bound
-                if min_value > max_value:
-                    raise ValueError("The minimum value is bigger than the maxium value for {}, {}".format(value, bound))
-                set_num_channel(model, setting)
+        setting['dataset'] = dataset
+        setting['seed'] = seed
+        for variable, bound in mode['vars_to_explore']:
+            min_value, max_value = bound
+            if min_value > max_value:
+                raise ValueError("The minimum value is bigger than the maxium value for {}, {}".format(value, bound))
+            set_num_channel(model, setting)
 
-                # sampling the value
-                if type(min_value) == int and type(max_value) == int:
-                    value = min_value + np.random.random_sample() * (max_value - min_value)
-                    value = int(np.round(value))
-                else:
-                    value = np.exp(np.log(min_value) + (np.log(max_value) - np.log(min_value)) * np.random.random_sample())
-                    value = float(value)
+            # sampling the value
+            if type(min_value) == int and type(max_value) == int:
+                value = min_value + np.random.random_sample() * (max_value - min_value)
+                value = int(np.round(value))
+            else:
+                value = np.exp(np.log(min_value) + (np.log(max_value) - np.log(min_value)) * np.random.random_sample())
+                value = float(value)
 
-                if variable not in setting:
-                    raise ValueError("The parameter {} is nor defined.".format(variable))
+            if variable not in setting:
+                raise ValueError("The parameter {} is nor defined.".format(variable))
 
-                setting[variable] = value
-                #launch an experiment:
-                print "Will launch the experiment with the following hyper-parameters: {}".format(setting)
-                conv_graph.main(opt)
+            setting[variable] = value
+            #launch an experiment:
+            print "Will launch the experiment with the following hyper-parameters: {}".format(setting)
+            conv_graph.main(opt)
 
 def set_num_channel(model, setting):
     num_channel = setting['num_channel']
