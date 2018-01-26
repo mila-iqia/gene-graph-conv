@@ -156,7 +156,12 @@ if __name__=='__main__':
             plt.figure()
             labelsG = dict(nx.get_node_attributes(G, 'value'))
 
-            nx.draw_spectral(G, with_labels=True,nodelist=list(labelsG.keys()), node_color=list(labelsG.values()))
+            nodeinorder=[]
+            for x in xrange(args.size_x):
+                for y in xrange(args.size_y):
+                    nodeinorder.append((y,x))
+            
+            nx.draw_networkx(G, pos=nodeinorder,with_labels=True,nodelist=list(labelsG.keys()), node_color=list(labelsG.values()))
             plt.show()
 
             print 'Label = ', fmy["labels_data"][args.test]
