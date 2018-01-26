@@ -13,12 +13,13 @@ class AgregateGraph(object):
     Given x values, a adjacency graph, and a list of value to keep, return the coresponding x.
     """
 
-    def __init__(self, adj, to_keep, please_ignore=False, type='max',  **kwargs):
+    def __init__(self, adj, to_keep, please_ignore=False, type='max', on_cuda=True, **kwargs):
 
         self.type = type
         self.please_ignore = please_ignore
         self.adj = adj
         self.to_keep = to_keep
+        self.on_cuda = on_cuda
 
         print "We are keeping {} elements.".format(to_keep.sum())
 
@@ -30,6 +31,9 @@ class AgregateGraph(object):
 
         adj = Variable(self.adj, requires_grad=False)
         to_keep = Variable(torch.FloatTensor(self.to_keep.astype(float)), requires_grad=False)
+        if self.on_cuda:
+            adj = adj.cuda()
+            to_keep = to_keep.cuda()
 
         x = x.permute(0, 2, 1).contiguous() # put in ex, channel, node
         x_shape = x.size()
@@ -62,7 +66,29 @@ def selectNodes(opt, skip_size, adj):
 
     if opt == 'random':
         pass
+    if opt == 'percolate': # I'm a bit feed up, so let's do the pooling by hand.:
 
+        order = np.array([[15, 2, 39, 3, 9],
+                          [5, 17, 27, 37, 49],
+                          [38, 28, 12, 0, 44],
+                          [30, 41, 8, 19, 24],
+                          [20, 10, 40, 35, 6],
+                          [13, 22, 33, 46, 18],
+                          [4, 42, 25, 16, 47],
+                          [45, 7, 21, 32, 43],
+                          [34, 23, 14, 1, 31],
+                          [26, 36, 48, 11, 29]])
+
+        for i in range(order.shape[0]):
+            if (i % 2**(skip_size)) != 0:
+                order[i] = -1
+
+        for i in range(order.shape[1]):
+            if (i % 2**(skip_size)) != 0:
+                order[:, i] = -1
+
+
+        to_keep = np.array([0 if i in order.flatten() else 1 for i in range(len(order.flatten()))])
 
     to_keep = (to_keep == 0).astype(float)
     return to_keep
@@ -124,7 +150,7 @@ class ApprNormalizeLaplacian(object):
 
         print "Doing the approximation..."
         # Fill the diagonal
-        np.fill_diagonal(adj, 1.)
+        np.fill_diagonal(adj, 1.) # TODO: Hummm, thik it's a 0.
 
         D = adj.sum(axis=1)
         D_inv = np.diag(1. / np.sqrt(D))
@@ -206,10 +232,10 @@ class GraphLayer(nn.Module):
         self.to_keep = np.ones((self.nb_nodes,))
 
         if self.agregate_adj:
-            #self.to_keep = np.arange(0, self.nb_nodes) % (2**(self.id_layer+1)) # TODO, have a more fancy striding protocole.
-            #self.to_keep = (self.to_keep == 0).astype(float)
+            self.to_keep = np.arange(0, self.nb_nodes) % (2**(self.id_layer+1)) # TODO, have a more fancy striding protocole.
+            self.to_keep = (self.to_keep == 0).astype(float)
 
-            self.to_keep = selectNodes('color', id_layer+1, adj)
+            #self.to_keep = selectNodes('percolate', id_layer+1, adj)
 
 
         if self.agregate_adj:
@@ -237,8 +263,8 @@ class CGNLayer(GraphLayer):
 
         # Constructing a sparse matrix
         print "Constructing the sparse matrix..."
-        self.sparse_adj = torch.sparse.FloatTensor(self.edges, flat_adj, torch.Size([self.nb_nodes ,self.nb_nodes]))#.to_dense()
-        self.register_buffer('sparse_adj', self.sparse_adj)
+        sparse_adj = torch.sparse.FloatTensor(self.edges, flat_adj, torch.Size([self.nb_nodes ,self.nb_nodes]))#.to_dense()
+        self.register_buffer('sparse_adj', sparse_adj)
         self.linear = nn.Conv1d(self.in_dim, self.channels, 1, bias=True)
 
     def _adj_mul(self, x, D):
@@ -403,7 +429,7 @@ def get_transform(opt):
     if opt.prune_graph: # graph pruning, etc.
         print "Pruning the graph..."
         const_transform += [lambda **kargs: AugmentGraphConnectivity(**kargs)]
-        transform += [lambda **kargs: AgregateGraph(**kargs)]
+        transform += [lambda **kargs: AgregateGraph(on_cuda=opt.cuda, **kargs)]
 
     if opt.add_self:
         print "Adding self connection to the graph..."

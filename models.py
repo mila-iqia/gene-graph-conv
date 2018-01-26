@@ -68,7 +68,8 @@ class ElementwiseGateLayer(nn.Module):
         x = x.view(-1, nb_channels)
 
         gate_weights = torch.sigmoid(self.attn(x))
-
+        #tmp = torch.exp(self.attn(x))
+        #gate_weights = (F.relu(tmp - 0.1) + 0.1) / (1 + tmp)
 
         gate_weights = gate_weights.view(nb_examples, nb_nodes, 1)
 
@@ -136,6 +137,8 @@ class SparseLogisticRegression(nn.Module):
     def regularization(self):
 
         laplacian = Variable(self.laplacian, requires_grad=False)
+        if self.on_cuda:
+            laplacian = laplacian.cuda()
 
 
 
@@ -224,13 +227,14 @@ class GraphNetwork(nn.Module):
         for i, [layer, gate] in enumerate(zip(self.my_convs, self.gates)):
 
             if self.use_gate > 0.:
+
                 x = layer(x)
                 g = gate(x)
                 x = g * x
             else:
                 x = layer(x)
 
-            x = F.tanh(x)
+            x = F.relu(x)
 
         x = self.my_logistic_layers[-1](x.view(nb_examples, -1))
 
@@ -330,6 +334,97 @@ class MLP(nn.Module):
         return []
 
 
+class CNN(nn.Module):
+    def __init__(self, input_dim, channels, grid_shape, out_dim=None, on_cuda=True):
+        super(CNN, self).__init__()
+
+        self.input_dim = input_dim
+        self.channels = channels
+        self.out_dim = out_dim
+        self.grid_shape = grid_shape
+
+        layers = []
+        dims = [input_dim] + channels
+
+        for c_in, c_out in zip(dims[:-1], dims[1:]):
+            layer = nn.Sequential(
+                nn.Conv2d(c_in, c_out, kernel_size=2, padding=0),
+                # nn.BatchNorm2d(16), # True that maybe?
+                nn.ReLU(),
+                # nn.MaxPool2d(2)
+            )
+
+            layers.append(layer)
+
+        self.my_layers = nn.ModuleList(layers)
+
+
+        self.layer1 = nn.Sequential(
+            nn.Conv2d(input_dim, 8, kernel_size=2, padding=0),
+            #nn.BatchNorm2d(16), # True that maybe?
+            nn.ReLU(),
+            #nn.MaxPool2d(2)
+            )
+        self.layer2 = nn.Sequential(
+            nn.Conv2d(8, 8, kernel_size=2, padding=0),
+            # nn.BatchNorm2d(16), # True that maybe?
+            nn.ReLU(),
+            # nn.MaxPool2d(2)
+        )
+
+        self.layer3 = nn.Sequential(
+            nn.Conv2d(8, 8, kernel_size=2, padding=0),
+            # nn.BatchNorm2d(16), # True that maybe?
+            nn.ReLU(),
+            # nn.MaxPool2d(2)
+        )
+
+        out = (grid_shape[0] - len(channels)) * (grid_shape[1] - len(channels)) * dims[-1]
+        self.fc = nn.Linear(out, out_dim)
+
+    def forward(self, x):
+
+
+        #order = np.array([[15, 2, 39, 3, 9],
+        #                  [5, 17, 27, 37, 49],
+        #                  [38, 28, 12, 0, 44],
+        #                  [30, 41, 8, 19, 24],
+        #                  [20, 10, 40, 35, 6],
+        #                  [13, 22, 33, 46, 18],
+        #                  [4, 42, 25, 16, 47],
+        #                  [45, 7, 21, 32, 43],
+        #                  [34, 23, 14, 1, 31],
+        #                  [26, 36, 48, 11, 29]])
+
+        #import ipdb; ipdb.set_trace()
+        #x = x.view(-1, 50)
+        #import ipdb; ipdb.set_trace()
+        #x =  torch.index_select(x, 1, Variable(torch.LongTensor(order.flatten()))).view(-1, 1, order.shape[0], order.shape[1])
+        #import ipdb; ipdb.set_trace()
+
+
+        # Reshape
+        x = x.view(-1, 1, self.grid_shape[0], self.grid_shape[1])
+
+        # The conv.
+        out = x
+        for layer in self.my_layers:
+            out = layer(out)
+
+
+
+        #out = self.layer1(x)
+        #out = self.layer2(out)
+        #out = self.layer3(out)
+
+        # fully connected.
+        out = out.view(out.size(0), -1)
+        out = self.fc(out)
+        return out
+
+    def regularization(self):
+        return []
+
 def get_model(opt, dataset):
     """
     Return a model based on the options.
@@ -373,6 +468,11 @@ def get_model(opt, dataset):
         #nb_nodes, input_dim, adj, out_dim, on_cuda=True):
         my_model = SparseLogisticRegression(nb_nodes=dataset.nb_nodes, input_dim=1, adj=dataset.get_adj(), out_dim=dataset.nb_class,
                        on_cuda=on_cuda)  # TODO: add a bunch of the options
+    elif model == 'cnn':
+
+        assert opt.dataset == 'percolate'
+        # TODO: to change the shape.
+        my_model = CNN(input_dim=1, channels=[num_channel] * num_layer, grid_shape=[5, 10], out_dim=dataset.nb_class, on_cuda=on_cuda)
 
     else:
         raise ValueError
