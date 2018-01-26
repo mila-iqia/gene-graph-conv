@@ -217,6 +217,7 @@ class RandomGraphDataset(GraphDataset):
         self.nb_edges = nb_edges
         self.nb_examples = nb_examples
         self.seed = seed
+        self.nb_class = 2
 
         super(RandomGraphDataset, self).__init__(name='RandomGraphDataset', **kwargs)
 
@@ -230,7 +231,6 @@ class RandomGraphDataset(GraphDataset):
         # Degree matrix
         self.adj = random_adjacency_matrix(nb_nodes, self.nb_edges, self.use_random_adj)
         self.nb_edges = (self.adj.sum() - nb_nodes) / 2
-        self.nb_class = 2
         self.node_names = list(range(nb_nodes))
 
         # Generating the data
@@ -335,6 +335,7 @@ class PercolateDataset(GraphDataset):
 
         self.graph_dir = graph_dir
         self.graph_file = graph_file
+        self.nb_class = 2
 
         super(PercolateDataset, self).__init__(name='PercolateDataset', **kwargs)
 
@@ -436,7 +437,7 @@ def split_dataset(dataset, batch_size=100, random=False, train_ratio=0.8, seed=1
 
 class GBMDataset(GraphGeneDataset):
     " Glioblastoma Multiforme dataset with coexpression graph"
-    def __init__(self, graph_dir="/data/lisa/data/genomics/TCGA/", graph_file="gbm.hdf5", clinical_file="pathway_commons_adj.csv.gz", nb_class=2, **kwargs):
+    def __init__(self, graph_dir="/data/lisa/data/genomics/TCGA/", graph_file="gbm.hdf5", nb_class=2, **kwargs):
         super(GBMDataset, self).__init__(graph_dir=graph_dir, graph_file=graph_file, nb_class=nb_class, name='GBMDataset', **kwargs)
         dataset = self
 
@@ -555,7 +556,6 @@ def get_dataset(opt):
 
         dataset = RandomGraphDataset(nb_nodes=100, nb_edges=100, nb_examples=nb_samples,
                                      use_random_adj=scale_free, seed=seed)
-        nb_class = 2 # Right now we only have 2 class
 
     elif dataset_name == 'tcga-tissue':
 
@@ -585,4 +585,4 @@ def get_dataset(opt):
     else:
         raise ValueError
 
-    return dataset, nb_class # TODO: factorize
+    return dataset

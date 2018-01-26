@@ -112,15 +112,15 @@ def main(argv=None):
 
     # creating the dataset
     print "Getting the dataset..."
-    dataset, nb_class = datasets.get_dataset(opt)
+    dataset = datasets.get_dataset(opt)
 
     # dataset loader
     train_set, valid_set, test_set = datasets.split_dataset(dataset, batch_size=batch_size, seed=seed,
                                                             nb_samples=nb_examples, train_ratio=train_ratio, nb_per_class=nb_per_class)
-
+    nb_class = dataset.nb_class
     # Creating a model
     print "Getting the model..."
-    my_model = models.get_model(opt, dataset, nb_class)
+    my_model = models.get_model(opt, dataset)
     print "Our model:"
     print my_model
 
