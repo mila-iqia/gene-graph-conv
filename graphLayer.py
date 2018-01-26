@@ -186,7 +186,6 @@ class AugmentGraphConnectivity(object):
 class GraphLayer(nn.Module):
     def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, id_layer=None, transform_adj=None, agregate_adj=None):
         super(GraphLayer, self).__init__()
-
         self.my_layers = []
         self.on_cuda = on_cuda
         self.nb_nodes = adj.shape[0]
@@ -253,7 +252,6 @@ class CGNLayer(GraphLayer):
         return x
 
     def forward(self, x):
-
         adj = Variable(self.sparse_adj, requires_grad=False)
 
         if self.on_cuda:
@@ -354,7 +352,8 @@ class SGCLayer(GraphLayer):
         super(SGCLayer, self).__init__(adj, in_dim, channels, on_cuda, id_layer, transform_adj, agregate_adj)
 
     def init_params(self):
-        assert self.channels == 1  # Other number of channels not suported.
+        if self.channels != 1: print "Setting Channels to 1 on SGCLayer, only number of channels supported"
+        self.channels = 1  # Other number of channels not suported.
 
         # dims = [input_dim] + channels
 
@@ -373,10 +372,13 @@ class SGCLayer(GraphLayer):
         self.F = nn.Parameter(torch.rand(self.nb_nodes, self.nb_nodes), requires_grad=True)
 
     def forward(self, x):
+        V = self.V
+        if self.on_cuda:
+            V = self.V.cuda()
 
-        Vx = torch.matmul(torch.transpose(Variable(self.V), 0, 1), x)
+        Vx = torch.matmul(torch.transpose(Variable(V), 0, 1), x)
         FVx = torch.matmul(self.F, Vx)
-        VFVx = torch.matmul(Variable(self.V), FVx)
+        VFVx = torch.matmul(Variable(V), FVx)
         x = VFVx
 
         # We can do max pooling and stuff, if we want.

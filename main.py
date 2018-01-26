@@ -30,7 +30,7 @@ def build_parser():
     parser.add_argument('--scale-free', action='store_true', help='If we want a scale-free random adjacency matrix for the dataset.')
     parser.add_argument('--cuda', action='store_true', help='If we want to run on gpu.')
     parser.add_argument('--norm-adj', action='store_true', help="If we want to normalize the adjancy matrix.")
-    parser.add_argument('--make-it-work-for-Joseph', action='store_true', help="Don't store anything in tensorboard, otherwise a segfault can happen.")
+    parser.add_argument('--store-tensorboard', action='store_false', help="Don't store anything in tensorboard, otherwise a segfault can happen.")
     parser.add_argument('--name', type=str, default=None, help="If we want to add a random str to the folder.")
 
     # Model specific options
@@ -84,7 +84,7 @@ def main(argv=None):
     del param['data_dir']
     del param['tensorboard']
     del param['cuda']
-    del param['make_it_work_for_Joseph']
+    del param['store_tensorboard']
     del param['train_ratio']
     del param['epoch']
     del param['batch_size']
@@ -137,7 +137,7 @@ def main(argv=None):
     # For tensorboard
     writer = None
     exp_dir = None
-    if not opt.make_it_work_for_Joseph:
+    if not opt.store_tensorboard:
         from logger import Logger
 
         if not os.path.exists(tensorboard):
@@ -236,7 +236,7 @@ def main(argv=None):
 
     print "Done!"
 
-    if not opt.make_it_work_for_Joseph:
+    if not opt.store_tensorboard:
         monitoring.monitor_everything(my_model, valid_set, opt, exp_dir)
 
 if __name__ == '__main__':
