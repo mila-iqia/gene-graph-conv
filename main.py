@@ -55,17 +55,11 @@ def build_parser():
     return parser
 
 def parse_args(argv):
-
     if type(argv) == list or argv is None:
         opt = build_parser().parse_args(argv)
     else:
         opt = argv
-
     return opt
-
-def write(writer, data):
-    if writer is not None:
-        wri
 
 def main(argv=None):
 
@@ -150,7 +144,7 @@ def main(argv=None):
 
     writer, exp_dir = monitoring.setup_tensorboard_log(tensorboard_dir, exp_name, opt)
 
-    max_valid_acc = 0
+    max_valid = 0
     best_summary = {}
 
     # The training.
@@ -207,8 +201,8 @@ def main(argv=None):
         ]
         summary = "epoch {}, cross_loss: {:.03f}, total_loss: {:.03f}, precision_train: {:0.3f}, precision_valid: {:0.3f}, time: {:.02f} sec".format(*summary)
         logging.info(summary)
-        if max_valid_acc < acc['valid']:
-            max_valid_acc = acc['valid']
+        if max_valid < acc['valid']:
+            max_valid = acc['valid']
             best_summary = summarize(t, cross_loss.data[0], total_loss.data[0], acc)
 
     logging.info("Done!")
