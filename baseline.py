@@ -103,7 +103,6 @@ def log_summary(summaries, mode):
         max_experiment.loc['valid_set_mean'] = experiment['valid'].mean()
         max_experiment.loc['valid_set_variance'] = experiment['valid'].var()
         to_print = to_print.append(pd.DataFrame(max_experiment).T)
-    import pdb; pdb.set_trace()
     cols = ['model', 'dataset', 'hyper-parameter-name', 'hyper-parameter-value', 'train', 'valid', 'test', 'valid_set_mean', 'valid_set_variance', 'total_loss', 'cross_loss', 'seed', 'epoch']
     logger.info(to_print[cols].to_string())
 
