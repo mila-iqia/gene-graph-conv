@@ -102,7 +102,7 @@ def setup_tensorboard_log(tensorboard_dir, exp_name, opt):
     if not os.path.exists(tensorboard_dir):
         os.mkdir(tensorboard_dir)
 
-    exp_dir = os.path.join(tensorboard_dir, exp_name)
+    exp_dir = os.path.join(tensorboard_dir, exp_name[:255])
     if not os.path.exists(exp_dir):
         os.mkdir(exp_dir)
 

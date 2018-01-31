@@ -103,8 +103,7 @@ def save_computations(self, input, output):
 
 class SparseLogisticRegression(nn.Module):
 
-    def __init__(self, nb_nodes, input_dim, adj, out_dim,
-                 on_cuda=True):
+    def __init__(self, nb_nodes, input_dim, adj, out_dim, on_cuda=True):
 
         super(SparseLogisticRegression, self).__init__()
 
@@ -467,8 +466,7 @@ def get_model(opt, dataset):
 
     elif model == 'slr':
         #nb_nodes, input_dim, adj, out_dim, on_cuda=True):
-        my_model = SparseLogisticRegression(nb_nodes=dataset.nb_nodes, input_dim=1, adj=dataset.get_adj(), out_dim=dataset.nb_class,
-                       on_cuda=on_cuda)  # TODO: add a bunch of the options
+        my_model = SparseLogisticRegression(nb_nodes=dataset.nb_nodes, input_dim=1, adj=dataset.get_adj(), out_dim=dataset.nb_class, on_cuda=on_cuda)  # TODO: add a bunch of the options
     elif model == 'cnn':
 
         assert opt.dataset == 'percolate'

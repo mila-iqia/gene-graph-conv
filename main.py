@@ -111,12 +111,10 @@ def main(argv=None):
 
     logging.info(vars(opt))
 
-    # seed
-    if on_cuda:
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-    else:
-        torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.manual_seed(seed)
+
 
     # creating the dataset
     logging.info("Getting the dataset...")
