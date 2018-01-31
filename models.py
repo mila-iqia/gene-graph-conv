@@ -224,13 +224,21 @@ class GraphNetwork(nn.Module):
         if self.add_emb:
             x = self.emb(x)
 
+
+        last_g = None
         for i, [layer, gate] in enumerate(zip(self.my_convs, self.gates)):
 
             if self.use_gate > 0.:
 
                 x = layer(x)
                 g = gate(x)
-                x = g * x
+
+                if last_g is None:
+                    last_g = g
+                else:
+                    last_g = last_g * g
+
+                x = last_g * x
             else:
                 x = layer(x)
 
@@ -346,61 +354,25 @@ class CNN(nn.Module):
         layers = []
         dims = [input_dim] + channels
 
+        current_size = grid_shape[0]
+
         for c_in, c_out in zip(dims[:-1], dims[1:]):
             layer = nn.Sequential(
-                nn.Conv2d(c_in, c_out, kernel_size=2, padding=0),
+                nn.Conv2d(c_in, c_out, kernel_size=3, padding=0),
                 # nn.BatchNorm2d(16), # True that maybe?
                 nn.ReLU(),
-                # nn.MaxPool2d(2)
+                nn.MaxPool2d(2)
             )
 
             layers.append(layer)
 
+            current_size =  (current_size - 2)/2
+
         self.my_layers = nn.ModuleList(layers)
-
-
-        self.layer1 = nn.Sequential(
-            nn.Conv2d(input_dim, 8, kernel_size=2, padding=0),
-            #nn.BatchNorm2d(16), # True that maybe?
-            nn.ReLU(),
-            #nn.MaxPool2d(2)
-            )
-        self.layer2 = nn.Sequential(
-            nn.Conv2d(8, 8, kernel_size=2, padding=0),
-            # nn.BatchNorm2d(16), # True that maybe?
-            nn.ReLU(),
-            # nn.MaxPool2d(2)
-        )
-
-        self.layer3 = nn.Sequential(
-            nn.Conv2d(8, 8, kernel_size=2, padding=0),
-            # nn.BatchNorm2d(16), # True that maybe?
-            nn.ReLU(),
-            # nn.MaxPool2d(2)
-        )
-
-        out = (grid_shape[0] - len(channels)) * (grid_shape[1] - len(channels)) * dims[-1]
+        out = current_size * current_size * dims[-1]
         self.fc = nn.Linear(out, out_dim)
 
     def forward(self, x):
-
-
-        #order = np.array([[15, 2, 39, 3, 9],
-        #                  [5, 17, 27, 37, 49],
-        #                  [38, 28, 12, 0, 44],
-        #                  [30, 41, 8, 19, 24],
-        #                  [20, 10, 40, 35, 6],
-        #                  [13, 22, 33, 46, 18],
-        #                  [4, 42, 25, 16, 47],
-        #                  [45, 7, 21, 32, 43],
-        #                  [34, 23, 14, 1, 31],
-        #                  [26, 36, 48, 11, 29]])
-
-        #import ipdb; ipdb.set_trace()
-        #x = x.view(-1, 50)
-        #import ipdb; ipdb.set_trace()
-        #x =  torch.index_select(x, 1, Variable(torch.LongTensor(order.flatten()))).view(-1, 1, order.shape[0], order.shape[1])
-        #import ipdb; ipdb.set_trace()
 
 
         # Reshape
@@ -411,11 +383,8 @@ class CNN(nn.Module):
         for layer in self.my_layers:
             out = layer(out)
 
+        #import ipdb; ipdb.set_trace()
 
-
-        #out = self.layer1(x)
-        #out = self.layer2(out)
-        #out = self.layer3(out)
 
         # fully connected.
         out = out.view(out.size(0), -1)
@@ -472,7 +441,10 @@ def get_model(opt, dataset):
 
         assert opt.dataset == 'percolate'
         # TODO: to change the shape.
-        my_model = CNN(input_dim=1, channels=[num_channel] * num_layer, grid_shape=[5, 10], out_dim=dataset.nb_class, on_cuda=on_cuda)
+        grid_shape = int(np.sqrt(dataset.get_adj().shape[0])) # for now we
+        grid_shape = [grid_shape, grid_shape]
+
+        my_model = CNN(input_dim=1, channels=[num_channel] * num_layer, grid_shape=grid_shape, out_dim=dataset.nb_class, on_cuda=on_cuda)
 
     else:
         raise ValueError
