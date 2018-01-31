@@ -1,4 +1,6 @@
 import argparse
+import logging
+import tensorflow as tf
 import datasets
 import numpy as np
 import models
@@ -8,7 +10,7 @@ from torch.autograd import Variable
 import os
 import pickle
 import monitoring
-from metrics import accuracy, recall, f1_score, precision, compute_metrics_per_class, auc
+from metrics import accuracy, recall, f1_score, precision, compute_metrics_per_class, auc, record_metrics_for_epoch, summarize
 
 
 def build_parser():
@@ -18,7 +20,7 @@ def build_parser():
     parser.add_argument('--epoch', default=10, type=int, help='The number of epochs we want ot train the network.')
     parser.add_argument('--seed', default=1993, type=int, help='Seed for random initialization and stuff.')
     parser.add_argument('--batch-size', default=100, type=int, help="The batch size.")
-    parser.add_argument('--tensorboard', default='./testing123/', help='The folder where to store the experiments. Will be created if not already exists.')
+    parser.add_argument('--tensorboard-dir', default='./testing123/', help='The folder where to store the experiments. Will be created if not already exists.')
     parser.add_argument('--lr', default=1e-3, type=float, help='learning rate')
     parser.add_argument('--weight-decay', default=0., type=float, help='weight decay (L2 loss).')
     parser.add_argument('--l1-loss', default=0., type=float, help='L1 loss.')
@@ -30,7 +32,7 @@ def build_parser():
     parser.add_argument('--scale-free', action='store_true', help='If we want a scale-free random adjacency matrix for the dataset.')
     parser.add_argument('--cuda', action='store_true', help='If we want to run on gpu.')
     parser.add_argument('--norm-adj', action='store_true', help="If we want to normalize the adjancy matrix.")
-    parser.add_argument('--make-it-work-for-Joseph', action='store_true', help="Don't store anything in tensorboard, otherwise a segfault can happen.")
+    parser.add_argument('--log', choices=['tensorboard', 'console', 'silent'], default='tensorboard', help="Don't store anything in tensorboard, otherwise a segfault can happen.")
     parser.add_argument('--name', type=str, default=None, help="If we want to add a random str to the folder.")
 
     # Model specific options
@@ -53,17 +55,21 @@ def build_parser():
     return parser
 
 def parse_args(argv):
-
     if type(argv) == list or argv is None:
         opt = build_parser().parse_args(argv)
     else:
         opt = argv
-
     return opt
 
 def main(argv=None):
 
     opt = parse_args(argv)
+
+    # Enable us to silence logs
+    logging.basicConfig(format="%(message)s")
+    logger = logging.getLogger()
+    if opt.log != 'silent':
+        logger.setLevel('INFO')
 
     batch_size = opt.batch_size
     epoch = opt.epoch
@@ -72,7 +78,7 @@ def main(argv=None):
     weight_decay = opt.weight_decay
     momentum = opt.momentum
     on_cuda = opt.cuda
-    tensorboard = opt.tensorboard
+    tensorboard_dir = opt.tensorboard_dir
     nb_examples = opt.nb_examples
     nb_per_class = opt.nb_per_class
     train_ratio = opt.train_ratio
@@ -80,11 +86,12 @@ def main(argv=None):
 
     # The experiment unique id.
     param = vars(opt).copy()
+
     # Removing a bunch of useless tag
     del param['data_dir']
-    del param['tensorboard']
+    del param['tensorboard_dir']
     del param['cuda']
-    del param['make_it_work_for_Joseph']
+    del param['log']
     del param['train_ratio']
     del param['epoch']
     del param['batch_size']
@@ -101,17 +108,16 @@ def main(argv=None):
         del param[v]
 
     exp_name = '_'.join(['{}={}'.format(k, v) for k, v, in param.iteritems()])
-    print vars(opt)
 
-    # seed
-    if on_cuda:
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-    else:
-        torch.manual_seed(seed)
+    logging.info(vars(opt))
+
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.manual_seed(seed)
+
 
     # creating the dataset
-    print "Getting the dataset..."
+    logging.info("Getting the dataset...")
     dataset = datasets.get_dataset(opt)
 
     # dataset loader
@@ -119,10 +125,10 @@ def main(argv=None):
                                                             nb_samples=nb_examples, train_ratio=train_ratio, nb_per_class=nb_per_class)
     nb_class = dataset.nb_class
     # Creating a model
-    print "Getting the model..."
+    logging.info("Getting the model...")
     my_model = models.get_model(opt, dataset)
-    print "Our model:"
-    print my_model
+    logging.info("Our model:")
+    logging.info(my_model)
 
     # Train the cgn
     criterion = torch.nn.CrossEntropyLoss(size_average=True)
@@ -131,28 +137,13 @@ def main(argv=None):
     optimizer = torch.optim.Adam(my_model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
     if on_cuda:
-        print "Putting the model on gpu..."
+        logging.info("Putting the model on gpu...")
         my_model.cuda()
 
-    # For tensorboard
-    writer = None
-    exp_dir = None
-    if not opt.make_it_work_for_Joseph:
-        from logger import Logger
+    writer, exp_dir = monitoring.setup_tensorboard_log(tensorboard_dir, exp_name, opt)
 
-        if not os.path.exists(tensorboard):
-            os.mkdir(tensorboard)
-
-        exp_dir = os.path.join(tensorboard, exp_name)
-        if not os.path.exists(exp_dir):
-            os.mkdir(exp_dir)
-
-        # dumping the options
-        pickle.dump(opt, open(os.path.join(exp_dir, 'options.pkl'), 'wb'))
-        writer = Logger(exp_dir)
-        print "We will log everything in ", exp_dir
-    else:
-        print "Nothing will be log, everything will only be shown on screen."
+    max_valid = 0
+    best_summary = {}
 
     # The training.
     for t in range(epoch):
@@ -192,39 +183,11 @@ def main(argv=None):
             total_loss.backward()
             optimizer.step()
 
-        # Add some metric for tensorboard
-        # Loss
-        if writer is not None:
-            writer.scalar_summary('cross_loss', cross_loss.data[0], t)
-            # writer.scalar_summary('other_loss', other_loss.data[0], t)
-            writer.scalar_summary('total_loss', total_loss.data[0], t)
-
-        # time
         time_this_epoch = time.time() - start_timer
-
-        if writer is not None:
-            writer.scalar_summary('time', time_this_epoch, t)
-
-        # compute the metrics for all the sets, for all the classes. right now it's precision/recall/f1-score, for train and valid.
-        acc = {}
-        auc_dict = {}
-        for my_set, set_name in zip([train_set, valid_set, test_set], ['train', 'valid']):#, 'tests']):
-            acc[set_name] = accuracy(my_set, my_model, on_cuda=on_cuda)
-            #auc_dict[set_name] = auc(my_set, my_model, on_cuda=on_cuda)
-
-            if writer is not None:
-                writer.scalar_summary('accuracy_{}'.format(set_name), acc[set_name], t)
-
-            # accuracy for a different class
-            metric_per_class = compute_metrics_per_class(my_set, my_model, nb_class, lambda x: dataset.labels_name(x), on_cuda=on_cuda)
-
-            if writer is not None:
-                for m, value in metric_per_class.iteritems():
-                   for cl, v in value.iteritems():
-                        writer.scalar_summary('{}/{}/{}'.format(m, set_name, cl), v, t) # metric/set/class
+        acc = record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, nb_class, dataset, on_cuda)
 
         # small summary.
-        print "epoch {}, cross_loss: {:.03f}, total_loss: {:.03f}, precision_train: {:0.3f} precision_valid: {:0.3f}, time: {:.02f} sec".format(
+        summary= [
             t,
             cross_loss.data[0],
             total_loss.data[0],
@@ -232,12 +195,20 @@ def main(argv=None):
             acc['valid'],
             #auc_dict['train'],
             #auc_dict['valid'],
-            time_this_epoch)
+            time_this_epoch
+        ]
+        summary = "epoch {}, cross_loss: {:.03f}, total_loss: {:.03f}, precision_train: {:0.3f}, precision_valid: {:0.3f}, time: {:.02f} sec".format(*summary)
+        logging.info(summary)
+        if max_valid < acc['valid']:
+            max_valid = acc['valid']
+            best_summary = summarize(t, cross_loss.data[0], total_loss.data[0], acc)
 
-    print "Done!"
+    logging.info("Done!")
 
-    if not opt.make_it_work_for_Joseph:
+    if opt.log == "console":
         monitoring.monitor_everything(my_model, valid_set, opt, exp_dir)
+        logging.info("Nothing will be log, everything will only be shown on screen.")
+    return best_summary
 
 if __name__ == '__main__':
     main()
