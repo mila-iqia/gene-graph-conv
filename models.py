@@ -151,7 +151,7 @@ class SparseLogisticRegression(nn.Module):
 class GraphNetwork(nn.Module):
 
     def __init__(self, nb_nodes, input_dim, channels, adj, out_dim,
-                 on_cuda=True, add_emb=None, transform_adj=None, agregate_adj=None, graphLayerType=graphLayer.CGNLayer, use_gate=0.0001):
+                 on_cuda=True, add_emb=None, transform_adj=None, agregate_adj=None, graphLayerType=graphLayer.CGNLayer, striding_method=None, use_gate=0.0001):
         super(GraphNetwork, self).__init__()
 
         if transform_adj is None:
@@ -180,7 +180,7 @@ class GraphNetwork(nn.Module):
             # transformation to apply at each layer.
 
             transform_tmp = transforms.Compose([foo(please_ignore=i == 0, unique_id=i) for foo in transform_adj])
-            layer = graphLayerType(adj, c_in, c_out, on_cuda, i, transform_adj=transform_tmp, agregate_adj=agregate_adj)
+            layer = graphLayerType(adj, c_in, c_out, on_cuda, i, transform_adj=transform_tmp, agregate_adj=agregate_adj, striding_method=striding_method)
             layer.register_forward_hook(save_computations) # For monitoring
             convs.append(layer)
 
@@ -350,6 +350,7 @@ class CNN(nn.Module):
         self.channels = channels
         self.out_dim = out_dim
         self.grid_shape = grid_shape
+        kernel_size = 2
 
         layers = []
         dims = [input_dim] + channels
@@ -358,15 +359,16 @@ class CNN(nn.Module):
 
         for c_in, c_out in zip(dims[:-1], dims[1:]):
             layer = nn.Sequential(
-                nn.Conv2d(c_in, c_out, kernel_size=3, padding=0),
+                nn.Conv2d(c_in, c_out, kernel_size=kernel_size, padding=0),
                 # nn.BatchNorm2d(16), # True that maybe?
                 nn.ReLU(),
-                nn.MaxPool2d(2)
+                #nn.MaxPool2d(2)
             )
 
             layers.append(layer)
 
-            current_size =  (current_size - 2)/2
+            print current_size, (current_size - (kernel_size -1))/1
+            current_size = (current_size - (kernel_size-1))/1
 
         self.my_layers = nn.ModuleList(layers)
         out = current_size * current_size * dims[-1]
@@ -413,29 +415,25 @@ def get_model(opt, dataset):
 
     if model == 'cgn':
         # To have a feel of the model, please take a look at cgn.ipynb
-        # my_model = CGN(dataset.nb_nodes, 1, [num_channel] * num_layer, dataset.get_adj(), nb_class,
-        #                on_cuda=on_cuda, add_residual=skip_connections, attention_layer=opt.attention_layer,
-        #                add_emb=opt.use_emb,  transform_adj=const_transform, agregate_adj=agregate_adj)
-
         my_model = CGN(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=dataset.nb_class,
-                       on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=const_transform, agregate_adj=agregate_adj, use_gate=opt.use_gate)  # TODO: add a bunch of the options
-
-    elif model == 'mlp':
-        my_model = MLP(dataset.nb_nodes, [num_channel] * num_layer, dataset.nb_class,
-                       on_cuda=on_cuda)  # TODO: add a bunch of the options
+                       on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=const_transform, agregate_adj=agregate_adj, use_gate=opt.use_gate, striding_method=opt.pool_graph)  # TODO: add a bunch of the options
 
     elif model == 'lcg':
 
         my_model = LCG(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=dataset.nb_class,
-                       on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=const_transform, agregate_adj=agregate_adj, use_gate=opt.use_gate)  # TODO: add a bunch of the options
+                       on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=const_transform, agregate_adj=agregate_adj, use_gate=opt.use_gate, striding_method=opt.pool_graph)  # TODO: add a bunch of the options
 
     elif model == 'sgc':
         my_model = SGC(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=dataset.nb_class,
-                       on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=const_transform, agregate_adj=agregate_adj, use_gate=opt.use_gate)  # TODO: add a bunch of the options
+                       on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=const_transform, agregate_adj=agregate_adj, use_gate=opt.use_gate, striding_method=opt.pool_graph)  # TODO: add a bunch of the options
 
     elif model == 'slr':
         #nb_nodes, input_dim, adj, out_dim, on_cuda=True):
         my_model = SparseLogisticRegression(nb_nodes=dataset.nb_nodes, input_dim=1, adj=dataset.get_adj(), out_dim=dataset.nb_class,
+                       on_cuda=on_cuda)  # TODO: add a bunch of the options
+
+    elif model == 'mlp':
+        my_model = MLP(dataset.nb_nodes, [num_channel] * num_layer, dataset.nb_class,
                        on_cuda=on_cuda)  # TODO: add a bunch of the options
     elif model == 'cnn':
 
