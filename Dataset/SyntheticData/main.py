@@ -34,19 +34,23 @@ def sq2d_lattice_graph(x_size, y_size, value_fn):
             G.add_edge((node[0], node[1]+1), node)
     return G, nodeinorder
 
+def get_density(G):
+    vals = dict(nx.get_node_attributes(G, 'value'))
+    num_on = np.sum( list(vals.values()) )
+    num_total = len(list(vals.values()))
+    density = float(num_on)/float(num_total)
+    return density
 
-def if_percolates(G, x_size):
+def if_percolates_simple(G, x_size, y_size):
     T = G.copy()
     for data_node in G.nodes.data():
         if data_node[1]['value'] == 0:
             T.remove_node(data_node[0])
-        else:
-            pass
-
+        
     source = []
     ground = []
     M = T.copy()
-
+    
     for node in T.nodes():
         if node[0] == 0:
             new_node = (-1, node[1])
@@ -58,53 +62,55 @@ def if_percolates(G, x_size):
             M.add_node(new_node, value = 2)
             M.add_edge(new_node, node)
             source.append(new_node)
-
-    if len(source)==0 or len(ground)==0:
-        return M, False, None
-
-    # detect path
+    
+    
+    # detect path through 1-s
     for s_node in ground:
         for u, v in nx.dfs_edges(M, s_node):
             if v in source:
-                return M, True, nx.shortest_path(M, s_node, v)
+                return True
+   
+    return False
 
-    return M, False, None
-
-
-def sq2d_lattice_percolation(size_x=10, size_y=10, prob=0.5):
+def sq2d_lattice_percolation_simple(size_x=10, size_y=10, prob=0.3):
     def fp(): return f(prob)
 
     #Generating square lattice graph
     G, nio = sq2d_lattice_graph(size_x,size_y, fp)
+    G_0 = G.copy()
     
     #Getting density of open nodes
-    vals = dict(nx.get_node_attributes(G, 'value'))
-    num_on = np.sum( list(vals.values()) )
-    num_total = len(list(vals.values()))
-    density = float(num_on)/float(num_total)
-    #Checking percolation
-    T, perc, path = if_percolates(G, size_x)
+    density = get_density(G)
 
+    #Checking percolation
+    perc = if_percolates_simple(G, size_x, size_y)
+    
+    upper_density_threshold = 0.51
+    lower_density_threshold = 0.49
 
     #correcting density
-    if not path is None:
-        for node in G.nodes:
-            if density<0.5:
-                break
-            if G.nodes[node]['value'] == 1 and (not node in path):
-                G.nodes[node]['value'] = 0
-                num_on -= 1
-                density = float(num_on)/float(num_total)
-    else:
-        for node in G.nodes:
-            if density<0.5:
-                break
-            if G.nodes[node]['value'] == 1:
-                G.nodes[node]['value'] = 0
-                num_on -= 1
-                density = float(num_on)/float(num_total)
+    while( density<lower_density_threshold or density>upper_density_threshold):
+        G_new = G.copy()
+        node = random.choice(list(G_new.nodes))
+        
+        if density<lower_density_threshold:
+            if G_new.nodes[node]['value'] == 1:
+                continue
+            G_new.nodes[node]['value'] = 1
 
-    return G, T, perc, density, nio
+        if density>upper_density_threshold:
+            if G_new.nodes[node]['value'] == 0:
+                continue
+            G_new.nodes[node]['value'] = 0
+
+
+        perc_new = if_percolates_simple(G_new, size_x, size_y)
+        if perc == perc_new:
+            G = G_new.copy()
+            density = get_density(G)
+
+    return G, G_0, perc, density, nio
+
 
 def sq2d_plot_graph(G):
     positionsG = {}
@@ -125,8 +131,8 @@ if __name__=='__main__':
     parser.add_argument('--dataset', help='Dataset filename')
     parser.add_argument('--test', type=int, help='Generate example')
     parser.add_argument('--N', type=int, default = 100, help='Number of examples')
-    parser.add_argument('--size_x', type=int, default = 10, help='X dim size')
-    parser.add_argument('--size_y', type=int, default = 10, help='Y dim size')
+    parser.add_argument('--size_x', type=int, default = 16, help='X dim size')
+    parser.add_argument('--size_y', type=int, default = 16, help='Y dim size')
     parser.add_argument('--prob', type=float, default = 0.562, help='On/off probability')
 
 
@@ -134,7 +140,11 @@ if __name__=='__main__':
 
     if not args.test is None:
         if args.dataset is None:
-            G, T, perc, dens, nio = sq2d_lattice_percolation(size_x=10, size_y=10, prob = 0.562)
+            try:
+                G, T, perc, dens, nio = sq2d_lattice_percolation_simple(size_x=10, size_y=10, prob = 0.562)
+            except:
+                print 'Try again'
+                sys.exit(0)
             print 'Percolation = ', perc, 'Density = ', dens
 
             plt.subplot(121)
@@ -176,7 +186,7 @@ if __name__=='__main__':
         fmy = h5py.File(args.dataset,"w")
 
         #generate graph
-        G, T, perc, dens, nio = sq2d_lattice_percolation( args.size_x, args.size_y, args.prob)
+        G, T, perc, dens, nio = sq2d_lattice_percolation_simple( args.size_x, args.size_y, args.prob)
         node_list = nio#list(G.nodes())
         
         M = len(node_list)
@@ -195,7 +205,7 @@ if __name__=='__main__':
             if i%2 == 0: #generate positive example
                 perc = False
                 while perc == False:
-                    G, T, perc, dens, nio = sq2d_lattice_percolation( args.size_x, args.size_y, args.prob)
+                    G, T, perc, dens, nio = sq2d_lattice_percolation_simple( args.size_x, args.size_y, args.prob)
                 attrs = nx.get_node_attributes(G, 'value')
                 features = np.zeros((M,), dtype='float32')
                 for j,node in enumerate(node_list):
@@ -206,7 +216,7 @@ if __name__=='__main__':
             else: #generate negative example
                 perc = True
                 while perc == True:
-                    G, T, perc, dens, nio = sq2d_lattice_percolation( args.size_x, args.size_y, args.prob)
+                    G, T, perc, dens, nio = sq2d_lattice_percolation_simple( args.size_x, args.size_y, args.prob)
                 attrs = nx.get_node_attributes(G, 'value')
                 features = np.zeros((M,), dtype='float32')
                 for j,node in enumerate(node_list):
