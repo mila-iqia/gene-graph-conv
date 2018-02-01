@@ -114,6 +114,9 @@ def setup_tensorboard_log(tensorboard_dir, exp_name, opt):
     return writer, exp_dir
 
 def monitor_everything(model, dataset, opt, exp_dir):
+
+    print "Saving everything in:", exp_dir
+
     print "Extracting the important features..."
     features = feature_selection(model, dataset, opt)
     pickle.dump(features, open(os.path.join(exp_dir, 'features.pkl'), 'wb'))
