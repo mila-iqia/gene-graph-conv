@@ -26,7 +26,7 @@ def build_parser():
     parser.add_argument('--l1-loss', default=0., type=float, help='L1 loss.')
     parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
     parser.add_argument('--data-dir', default='/data/milatmp1/dutilfra/transcriptome/graph/', help='The folder contening the dataset.')
-    parser.add_argument('--dataset', choices=['random', 'tcga-tissue', 'tcga-brca', 'tcga-label', 'tcga-gbm', 'percolate'], default='random', help='Which dataset to use.')
+    parser.add_argument('--dataset', choices=['random', 'tcga-tissue', 'tcga-brca', 'tcga-label', 'tcga-gbm', 'percolate', 'nslr-syn'], default='random', help='Which dataset to use.')
     parser.add_argument('--clinical-file', type=str, default='PANCAN_clinicalMatrix.gz', help='File to read labels from')
     parser.add_argument('--clinical-label', type=str, default='gender', help='Label to join with data')
     parser.add_argument('--scale-free', action='store_true', help='If we want a scale-free random adjacency matrix for the dataset.')
@@ -82,6 +82,7 @@ def main(argv=None):
     nb_examples = opt.nb_examples
     nb_per_class = opt.nb_per_class
     train_ratio = opt.train_ratio
+    lambdas = opt.lambdas if type(opt.lambdas) == list else [opt.lambdas]
     l1_loss = opt.l1_loss # TODO: add
 
     # The experiment unique id.
@@ -174,7 +175,7 @@ def main(argv=None):
 
             # Compute and print loss
             cross_loss = criterion(y_pred, targets)
-            other_loss = sum([r * l for r, l in zip(my_model.regularization(), opt.lambdas)])
+            other_loss = sum([r * l for r, l in zip(my_model.regularization(), lambdas)])
             total_loss = cross_loss + other_loss
 
 
@@ -199,7 +200,7 @@ def main(argv=None):
         ]
         summary = "epoch {}, cross_loss: {:.03f}, total_loss: {:.03f}, precision_train: {:0.3f}, precision_valid: {:0.3f}, time: {:.02f} sec".format(*summary)
         logging.info(summary)
-        if max_valid < acc['valid']:
+        if max_valid < acc['valid'] and t != 0:
             max_valid = acc['valid']
             best_summary = summarize(t, cross_loss.data[0], total_loss.data[0], acc)
 

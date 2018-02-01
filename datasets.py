@@ -98,7 +98,6 @@ class GraphGeneDataset(GraphDataset):
 
 
         graph_file = os.path.join(self.graph_dir, self.graph_file)
-
         self.file = h5py.File(graph_file, 'r')
         self.data = np.array(self.file['expression_data'])
         self.nb_nodes = self.data.shape[1]
@@ -132,6 +131,8 @@ class GraphGeneDataset(GraphDataset):
         return sample
 
     def labels_name(self, l):
+        if type(self.label_name[str(l)]) == np.ndarray:
+            return l
         return self.label_name[str(l)]
 
 
@@ -443,6 +444,13 @@ class GBMDataset(GraphGeneDataset):
         dataset = self
 
 
+class NSLRSyntheticDataset(GraphGeneDataset):
+    " Glioblastoma Multiforme dataset with coexpression graph"
+    def __init__(self, graph_dir="/data/lisa/data/genomics/TCGA/", graph_file="syn_nslr.hdf5", nb_class=2, **kwargs):
+        super(NSLRSyntheticDataset, self).__init__(graph_dir=graph_dir, graph_file=graph_file, nb_class=nb_class, name='NSLRSyntheticDataset', **kwargs)
+        dataset = self
+
+
 def random_adjacency_matrix(nb_nodes, approx_nb_edges, scale_free=True):
 
     nodes = np.arange(nb_nodes)
@@ -582,6 +590,10 @@ def get_dataset(opt):
     elif dataset_name == 'tcga-gbm':
         logging.info("Getting TCGA GBM Dataset")
         dataset = GBMDataset()
+
+    elif dataset_name == 'nslr-syn':
+        logging.info("Getting NSLR Synthetic Dataset")
+        dataset = NSLRSyntheticDataset()
 
     else:
         raise ValueError
