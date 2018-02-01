@@ -238,7 +238,7 @@ class GraphNetwork(nn.Module):
                 else:
                     last_g = last_g * g
 
-                x = last_g * x
+                x = g * x
             else:
                 x = layer(x)
 

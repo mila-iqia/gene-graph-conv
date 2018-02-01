@@ -14,7 +14,7 @@ class AgregateGraph(object):
     Given x values, a adjacency graph, and a list of value to keep, return the coresponding x.
     """
 
-    def __init__(self, adj, to_keep, please_ignore=False, type='max', on_cuda=False, **kwargs):
+    def __init__(self, adj, to_keep, please_ignore=False, type='strip', on_cuda=False, **kwargs):
 
         self.type = type
         self.please_ignore = please_ignore
@@ -41,6 +41,7 @@ class AgregateGraph(object):
         x = x.permute(0, 2, 1).contiguous() # put in ex, channel, node
         x_shape = x.size()
         #import ipdb; ipdb.set_trace()
+        #import pdb; pdb.set_trace()
 
         # For now let's only do the MaxPooling agregate one.
         if self.type == 'max':
@@ -48,7 +49,7 @@ class AgregateGraph(object):
         elif self.type == 'mean':
             max_value = (x.view(-1, x.size(-1), 1) * adj).mean(dim=1)
         elif self.type == 'strip':
-            max_value = x.view(-1, x.size(-1), 1)
+            max_value = x.view(-1, x.size(-1))
         else:
             raise ValueError()
 
@@ -60,6 +61,9 @@ def selectNodes(opt, layer_id, adj, seed=1993):
 
     nb_nodes = adj.shape[0]
     np.random.seed(seed)
+
+    if opt == 'ignore':
+        to_keep = np.zeros((nb_nodes,))
 
     if opt == 'random': # keep a node on
         rand_order = np.arange(nb_nodes)
