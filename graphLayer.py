@@ -14,13 +14,15 @@ class AgregateGraph(object):
     Given x values, a adjacency graph, and a list of value to keep, return the coresponding x.
     """
 
-    def __init__(self, adj, to_keep, please_ignore=False, type='max', on_cuda=True, **kwargs):
+    def __init__(self, adj, to_keep, please_ignore=False, type='max', on_cuda=False, **kwargs):
 
         self.type = type
         self.please_ignore = please_ignore
         self.adj = adj
         self.to_keep = to_keep
         self.on_cuda = on_cuda
+
+        print to_keep
 
         print "We are keeping {} elements.".format(to_keep.sum())
 
@@ -38,12 +40,13 @@ class AgregateGraph(object):
 
         x = x.permute(0, 2, 1).contiguous() # put in ex, channel, node
         x_shape = x.size()
+        #import ipdb; ipdb.set_trace()
 
         # For now let's only do the MaxPooling agregate one.
         if self.type == 'max':
             max_value = (x.view(-1, x.size(-1), 1) * adj).max(dim=1)[0]
         elif self.type == 'mean':
-            max_value = (x.view(-1, x.size(-1), 1) * adj).mean(dim=1)[0]
+            max_value = (x.view(-1, x.size(-1), 1) * adj).mean(dim=1)
         elif self.type == 'strip':
             max_value = x.view(-1, x.size(-1), 1)
         else:
@@ -53,41 +56,29 @@ class AgregateGraph(object):
         retn = retn.view(x_shape).permute(0, 2, 1).contiguous() # put back in ex, node, channel
         return retn
 
-def selectNodes(opt, skip_size, adj):
+def selectNodes(opt, layer_id, adj, seed=1993):
 
+    nb_nodes = adj.shape[0]
+    np.random.seed(seed)
 
-    if opt == 'node_order':
-        to_keep = np.arange(0, adj.shape[0]) % skip_size
+    if opt == 'random': # keep a node on
+        rand_order = np.arange(nb_nodes)
+        np.random.shuffle(rand_order)
 
-    if opt == 'color':
-        G = networkx.Graph(adj)
-        colors = networkx.greedy_color(G, 'DSATUR') # largest first
-        # For now we delete the nodes that as color 0
-        to_keep = np.array([0 if colors[i] <= skip_size else 1 for i in range(adj.shape[0])])
+        to_keep = np.array([0 if i % (2**(layer_id+1)) == 0 else 1 for i in rand_order])
 
-    if opt == 'random':
-        pass
-    if opt == 'percolate': # I'm a bit feed up, so let's do the pooling by hand.:
+    if opt == 'grid': # It's a grid. Gonna simulate  stride of 2.
 
-        order = np.array([[15, 2, 39, 3, 9],
-                          [5, 17, 27, 37, 49],
-                          [38, 28, 12, 0, 44],
-                          [30, 41, 8, 19, 24],
-                          [20, 10, 40, 35, 6],
-                          [13, 22, 33, 46, 18],
-                          [4, 42, 25, 16, 47],
-                          [45, 7, 21, 32, 43],
-                          [34, 23, 14, 1, 31],
-                          [26, 36, 48, 11, 29]])
+        tmp = int(np.sqrt(nb_nodes))
+        order = np.arange(nb_nodes).reshape((tmp, tmp))
 
         for i in range(order.shape[0]):
-            if (i % 2**(skip_size)) != 0:
+            if (i % 2**(layer_id+1)) != 0:
                 order[i] = -1
 
         for i in range(order.shape[1]):
-            if (i % 2**(skip_size)) != 0:
+            if (i % 2**(layer_id+1)) != 0:
                 order[:, i] = -1
-
 
         to_keep = np.array([0 if i in order.flatten() else 1 for i in range(len(order.flatten()))])
 
@@ -213,7 +204,7 @@ class AugmentGraphConnectivity(object):
         return new_adj
 
 class GraphLayer(nn.Module):
-    def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, id_layer=None, transform_adj=None, agregate_adj=None):
+    def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, id_layer=None, transform_adj=None, agregate_adj=None, striding_method=None):
         super(GraphLayer, self).__init__()
         self.my_layers = []
         self.on_cuda = on_cuda
@@ -223,6 +214,7 @@ class GraphLayer(nn.Module):
         self.in_dim = in_dim
         self.channels = channels
         self.id_layer = id_layer
+        self.striding_method = striding_method
 
 
         # We can technically do that online, but it's a bit messy and slow, if we need to
@@ -235,12 +227,8 @@ class GraphLayer(nn.Module):
 
         self.to_keep = np.ones((self.nb_nodes,))
 
-        if self.agregate_adj:
-            self.to_keep = np.arange(0, self.nb_nodes) % (2**(self.id_layer+1)) # TODO, have a more fancy striding protocole.
-            self.to_keep = (self.to_keep == 0).astype(float)
-
-            #self.to_keep = selectNodes('percolate', id_layer+1, adj)
-
+        if self.striding_method is not None:
+            self.to_keep = selectNodes(self.striding_method, id_layer, adj)
 
         if self.agregate_adj:
             self.agregate_adj = transforms.Compose(
@@ -257,8 +245,8 @@ class GraphLayer(nn.Module):
 
 class CGNLayer(GraphLayer):
 
-    def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, id_layer=None, transform_adj=None, agregate_adj=None):
-        super(CGNLayer, self).__init__(adj, in_dim, channels, on_cuda, id_layer, transform_adj, agregate_adj)
+    def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, id_layer=None, transform_adj=None, agregate_adj=None, striding_method=None):
+        super(CGNLayer, self).__init__(adj, in_dim, channels, on_cuda, id_layer, transform_adj, agregate_adj, striding_method=striding_method)
 
     def init_params(self):
         self.edges = torch.LongTensor(np.array(np.where(self.adj))) # The list of edges
@@ -305,8 +293,8 @@ class CGNLayer(GraphLayer):
 
 
 class LCGLayer(GraphLayer):
-    def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, id_layer=None, transform_adj=None, agregate_adj=None):
-        super(LCGLayer, self).__init__(adj, in_dim, channels, on_cuda, id_layer, transform_adj, agregate_adj)
+    def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, id_layer=None, transform_adj=None, agregate_adj=None, striding_method=None):
+        super(LCGLayer, self).__init__(adj, in_dim, channels, on_cuda, id_layer, transform_adj, agregate_adj, striding_method=striding_method)
 
 
     def init_params(self):
@@ -378,8 +366,8 @@ class LCGLayer(GraphLayer):
 
 # spectral graph conv
 class SGCLayer(GraphLayer):
-    def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, id_layer=None, transform_adj=None, agregate_adj=None):
-        super(SGCLayer, self).__init__(adj, in_dim, channels, on_cuda, id_layer, transform_adj, agregate_adj)
+    def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, id_layer=None, transform_adj=None, agregate_adj=None, striding_method=None):
+        super(SGCLayer, self).__init__(adj, in_dim, channels, on_cuda, id_layer, transform_adj, agregate_adj, striding_method=striding_method)
 
     def init_params(self):
         if self.channels != 1: logging.info("Setting Channels to 1 on SGCLayer, only number of channels supported")
@@ -429,10 +417,10 @@ def get_transform(opt):
 
     # TODO add some kind of different pruning, like max, average, etc... that will be determine here.
     # Right now the intax is a bit intense, but in the future it will be more parametrizable.
-    if opt.prune_graph: # graph pruning, etc.
-        logging.info("Pruning the graph...")
-        const_transform += [lambda **kargs: AugmentGraphConnectivity(**kargs)]
-        transform += [lambda **kargs: AgregateGraph(on_cuda=opt.cuda, **kargs)]
+    if opt.pool_graph is not None: # graph pruning, etc.
+        print "Adding a pooling mecanism in the graph..."
+        const_transform += [lambda **kargs: AugmentGraphConnectivity(**kargs)] # Add edges,
+        transform += [lambda **kargs: AgregateGraph(on_cuda=opt.cuda, **kargs)] # remove nodes.
 
     if opt.add_self:
         logging.info("Adding self connection to the graph...")
