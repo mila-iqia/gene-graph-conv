@@ -23,7 +23,7 @@ def build_parser():
     parser.add_argument('--tensorboard-dir', default='./testing123/', help='The folder where to store the experiments. Will be created if not already exists.')
     parser.add_argument('--lr', default=1e-3, type=float, help='learning rate')
     parser.add_argument('--weight-decay', default=0., type=float, help='weight decay (L2 loss).')
-    parser.add_argument('--l1-loss', default=0., type=float, help='L1 loss.')
+    parser.add_argument('--l1-loss-lambda', default=0., type=float, help='L1 loss lambda.')
     parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
     parser.add_argument('--data-dir', default='/data/milatmp1/dutilfra/transcriptome/graph/', help='The folder contening the dataset.')
     parser.add_argument('--dataset', choices=['random', 'tcga-tissue', 'tcga-brca', 'tcga-label', 'tcga-gbm', 'percolate', 'nslr-syn'], default='random', help='Which dataset to use.')
@@ -83,7 +83,7 @@ def main(argv=None):
     nb_per_class = opt.nb_per_class
     train_ratio = opt.train_ratio
     lambdas = opt.lambdas if type(opt.lambdas) == list else [opt.lambdas]
-    l1_loss = opt.l1_loss # TODO: add
+    l1_loss_lambda = opt.l1_loss_lambda
 
     # The experiment unique id.
     param = vars(opt).copy()
@@ -133,8 +133,7 @@ def main(argv=None):
 
     # Train the cgn
     criterion = torch.nn.CrossEntropyLoss(size_average=True)
-    l1loss = torch.nn.L1Loss()
-    #optimizer = torch.optim.SGD(my_model.parameters(), lr=learning_rate, momentum=momentum, weight_decay=weight_decay)
+    l1_criterion = torch.nn.L1Loss(size_average=False)
     optimizer = torch.optim.Adam(my_model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
     if on_cuda:
@@ -157,7 +156,6 @@ def main(argv=None):
 
             inputs = Variable(inputs, requires_grad=False).float()
             targets = Variable(targets, requires_grad=False).long()
-            #print targets.sum(dim=1)
 
             if on_cuda:
                 inputs = inputs.cuda()
@@ -167,17 +165,15 @@ def main(argv=None):
             y_pred = my_model(inputs).float()
 
             # The l1 loss
-            # l1_crit = torch.nn.L1Loss(size_average=False)
-            # reg_loss = 0
-            # for param in my_model.parameters():
-            #     reg_loss += l1_crit(param, torch.FloatTensor(0.))
-            # other_loss = l1_loss * reg_loss
+            l1_loss = 0
+            for param in my_model.parameters():
+                l1_loss += l1_criterion(param, Variable(torch.FloatTensor(param.size()).zero_(), requires_grad=False))
+            li_loss = l1_loss * l1_loss_lambda
 
             # Compute and print loss
             cross_loss = criterion(y_pred, targets)
             other_loss = sum([r * l for r, l in zip(my_model.regularization(), lambdas)])
-            total_loss = cross_loss + other_loss
-
+            total_loss = cross_loss + other_loss + l1_loss
 
             # Zero gradients, perform a backward pass, and update the weights.
             optimizer.zero_grad()

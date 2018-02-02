@@ -132,7 +132,7 @@ class GraphGeneDataset(GraphDataset):
 
     def labels_name(self, l):
         if type(self.label_name[str(l)]) == np.ndarray:
-            return l
+            return self.label_name[str(l)][0]
         return self.label_name[str(l)]
 
 

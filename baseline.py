@@ -14,34 +14,48 @@ from itertools import product, combinations
 # Use "default" mode as our shared baseline -- these settings shouldn't really be changed.
 # Use "test" mode  to ensure that all the models are working, it will be quick (a minute or two)
 # Use "freeplay" mode to mess around with the parameters and try to improve our settings.
-default = {"num_experiments": 2,
+default = {"num_experiments": 5,
            "models": ['mlp', 'slr', 'cgn', 'lcg'],
            "datasets": ['random', 'percolate', 'tcga-gbm'],
            "grid_width": 5,
-           "vars_to_explore":[('num_layer', 1, 4, int), ('lr', 1e-5, 1e-3, float), ('num_channel', 1, 64, int)],
-           "epoch": 50,
-           "batch_size": 100
+           "vars_to_explore":{
+                'slr': [('lr', 1e-2, .2, float), ('weight_decay', 0.0, 0.5, float), ('lambdas', 0.0, .5, float)],
+                'mlp': [('lr', .06, .1, float), ('weight_decay', 0.3, 0.5, float), ('num_layer', 1, 3, int)],
+                'cgn': [('lr', .02, .1, float), ('weight_decay', 0.2, 0.5, float), ('num_channel', 16, 128, int), ('num_layer', 1, 3, int)]
+                },
+           "epoch": 100,
+           "batch_size": 100,
+           "train_ratio": .6,
            }
 test = {"num_experiments": 5,
         "models": ['mlp', 'cgn'],
         "datasets": ['tcga-gbm'],
         "grid_width": 3,
-        "vars_to_explore":[('weight-decay', 0.0, 0.1, float), ('lr', 1e-7, 1e-3, float)],
+        "vars_to_explore":[('weight_decay', 0.0, 0.1, float), ('lr', 1e-7, 1e-3, float), ('num_channel', 1, 64, int)],
         "epoch": 100,
-        "batch_size": 10
+        "batch_size": 10,
+        "train_ratio": .666,
         }
-freeplay = {"num_experiments": 5,
-            "models": ['slr', 'mlp', 'cgn'],
-            "datasets": ['tcga-gbm', 'percolate', 'random'],
-            "grid_width": 3,
-            "vars_to_explore":[('num_layer', 1, 2, int), ('lr', 1e-5, 1e-3, float)],
-            "epoch": 50,
-            "batch_size": 100}
+freeplay = {"num_experiments": 50,
+           "models": ['mlp', 'slr', 'cgn', 'lcg'],
+           "datasets": ['random', 'percolate', 'tcga-gbm'],
+           "grid_width": 1,
+           "vars_to_explore":{
+                'slr': [('lr', .048, .2, float), ('weight_decay', 0.3, 0.5, float), ('lambdas', 0.0, .5, float)],
+                'mlp': [('lr', .06, .1, float), ('weight_decay', 0.3, 0.5, float), ('num_layer', 1, 3, int)],
+                'cgn': [('lr', .02, .1, float), ('weight_decay', 0.2, 0.5, float), ('num_channel', 16, 128, int), ('num_layer', 1, 3, int)]
+                },
+           "epoch": 100,
+           "batch_size": 100,
+           "train_ratio": .6,
+           }
 
 
 def build_parser():
     parser = conv_graph.build_parser()
     parser.add_argument('--mode', default="default", help="The type of baseline tests to launch", choices=['default', 'test', 'freeplay'])
+    parser.add_argument('--baseline-dataset', help="The type of baseline tests to launch", choices=['random', 'tcga-tissue', 'tcga-brca', 'tcga-label', 'tcga-gbm', 'percolate', 'nslr-syn'])
+    parser.add_argument('--baseline-model', help="The type of baseline tests to launch", choices=['cgn', 'mlp', 'lcg', 'sgc', 'slr', 'cnn'])
     return parser
 
 def parse_args(argv):
@@ -52,10 +66,18 @@ def main(argv=None):
     opt = parse_args(argv)
     mode = globals()[opt.mode]
     setting = vars(opt)
+
     setting['epoch'] = mode['epoch']
     setting['batch_size'] = mode['batch_size']
     baseline_mode = setting['mode']
+    if setting.get('baseline_dataset'):
+        mode['datasets'] = [setting['baseline_dataset']]
+    if setting.get('baseline_model'):
+        mode['models'] = [setting['baseline_model']]
     del setting['mode']
+    del setting['baseline_model']
+    del setting['baseline_dataset']
+
 
     cols = ['model', 'dataset', 'param-1', 'val1', 'param-2', 'val2', 'train', 'valid', 'test', 'total_loss', 'cross_loss', 'seed', 'epoch', 'num_trials', 'valid_mean', 'valid_std', 'train_mean', 'train_std']
     to_print = pd.DataFrame()
@@ -64,7 +86,7 @@ def main(argv=None):
         setting['dataset'] = dataset
         set_num_channel(model, setting)
 
-        for hyperparam1, hyperparam2 in combinations(mode['vars_to_explore'], 2):
+        for hyperparam1, hyperparam2 in combinations(mode['vars_to_explore'][model], 2):
             hyper_param_name_1, min_value_1, max_value_1, param_type1 = hyperparam1
             hyper_param_name_2, min_value_2, max_value_2, param_type2 = hyperparam2
             for val1 in np.arange(min_value_1, max_value_1, float(max_value_1 - min_value_1)/mode['grid_width']):
@@ -76,9 +98,8 @@ def main(argv=None):
                         setting['seed'] = seed
                         summary = format_summary(conv_graph.main(opt), hyper_param_name_1, hyper_param_name_2, param_type1(val1), param_type2(val2), seed, model, dataset)
                         summaries = summaries.append(pd.DataFrame.from_dict(summary), ignore_index=True)
-                        #print setting
-                        print summaries.to_string(index=False, header=False)
                     to_print = log_summary(summaries, mode, model, dataset, hyper_param_name_1, param_type1(val1), hyper_param_name_2, param_type2(val2), cols, to_print)
+                    print to_print.to_string(index=False)
     print to_print.to_string(index=False)
 
 
