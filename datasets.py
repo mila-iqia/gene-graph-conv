@@ -597,8 +597,8 @@ def get_dataset(opt):
         
     elif dataset_name == 'percolate-plus':
         logging.info("Getting percolate-plus Dataset")
-        pdataset = datasets.PercolateDataset()
-        dataset = datasets.GraphWithNoise(dataset=pdataset, num_added_nodes=100)
+        pdataset = PercolateDataset()
+        dataset = GraphWithNoise(dataset=pdataset, num_added_nodes=100)
     else:
         raise ValueError
 
@@ -630,11 +630,30 @@ class GraphWithNoise(object):
         newadj = np.zeros((num_features+num_added_nodes, num_features+num_added_nodes))
         newadj[:num_features, :num_features] = oldadj # set to 0 to see it in an image
         self.adj = newadj
+        
+        self.nb_class = dataset.nb_class
+        self.labels = dataset.labels
+        self.nb_nodes = self.adj.shape[0]
 
     def labels_name(self, l):
         return self.dataset.labels_name(l)
 
     def get_adj(self):
         return self.adj
+    
+    def __len__(self):
+        return self.data.shape[0]
+    
+    def __getitem__(self, idx):
+
+        sample = self.data[idx]
+        sample = np.expand_dims(sample, axis=-1)
+        label = self.labels[idx]
+        sample = {'sample': sample, 'labels': label}
+
+        if self.dataset.transform:
+            sample = self.dataset.transform(sample)
+
+        return sample
     
 
