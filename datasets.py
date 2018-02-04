@@ -599,3 +599,38 @@ def get_dataset(opt):
         raise ValueError
 
     return dataset
+
+class GraphWithNoise(object):
+    """
+    Will add random features and add these nodes as not connected
+    
+    Usage:
+    pdataset = datasets.PercolateDataset()
+    dataset = datasets.GraphWithNoise(dataset=pdataset, num_added_nodes=100)
+    """
+    def __init__(self, dataset=None, num_added_nodes=10):
+
+        self.num_added_nodes = num_added_nodes
+        self.dataset = dataset
+        
+        num_samples = dataset.data.shape[0]
+        num_features = dataset.data.shape[1]
+        
+        newdata = np.random.random((num_samples, num_features+num_added_nodes))
+        newdata = (newdata*2)-1 # normalize; maybe adapt to data?
+        newdata[:num_samples, :num_features] = dataset.data # set to 0 to see it in an image
+        self.data = newdata
+        
+        oldadj = dataset.get_adj()
+        
+        newadj = np.zeros((num_features+num_added_nodes, num_features+num_added_nodes))
+        newadj[:num_features, :num_features] = oldadj # set to 0 to see it in an image
+        self.adj = newadj
+
+    def labels_name(self, l):
+        return self.dataset.labels_name(l)
+
+    def get_adj(self):
+        return self.adj
+    
+
