@@ -594,7 +594,11 @@ def get_dataset(opt):
     elif dataset_name == 'nslr-syn':
         logging.info("Getting NSLR Synthetic Dataset")
         dataset = NSLRSyntheticDataset()
-
+        
+    elif dataset_name == 'percolate-plus':
+        logging.info("Getting percolate-plus Dataset")
+        pdataset = datasets.PercolateDataset()
+        dataset = datasets.GraphWithNoise(dataset=pdataset, num_added_nodes=100)
     else:
         raise ValueError
 
