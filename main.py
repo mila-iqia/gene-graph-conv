@@ -168,7 +168,7 @@ def main(argv=None):
             l1_loss = 0
             for param in my_model.parameters():
                 l1_loss += l1_criterion(param, Variable(torch.FloatTensor(param.size()).zero_(), requires_grad=False))
-            li_loss = l1_loss * l1_loss_lambda
+            l1_loss = l1_loss * l1_loss_lambda
 
             # Compute and print loss
             cross_loss = criterion(y_pred, targets)
