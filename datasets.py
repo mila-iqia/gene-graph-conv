@@ -589,15 +589,15 @@ def get_dataset(opt):
 
     elif dataset_name == 'tcga-gbm':
         logging.info("Getting TCGA GBM Dataset")
-        dataset = GBMDataset()
+        dataset = GBMDataset(use_random_adj=scale_free)
 
     elif dataset_name == 'nslr-syn':
         logging.info("Getting NSLR Synthetic Dataset")
-        dataset = NSLRSyntheticDataset()
+        dataset = NSLRSyntheticDataset(use_random_adj=scale_free)
         
     elif dataset_name == 'percolate-plus':
         logging.info("Getting percolate-plus Dataset")
-        pdataset = PercolateDataset()
+        pdataset = PercolateDataset(use_random_adj=scale_free)
         dataset = GraphWithNoise(dataset=pdataset, num_added_nodes=100)
     else:
         raise ValueError
