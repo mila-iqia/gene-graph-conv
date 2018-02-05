@@ -26,7 +26,7 @@ def build_parser():
     parser.add_argument('--l1-loss-lambda', default=0., type=float, help='L1 loss lambda.')
     parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
     parser.add_argument('--data-dir', default='/data/milatmp1/dutilfra/transcriptome/graph/', help='The folder contening the dataset.')
-    parser.add_argument('--dataset', choices=['random', 'tcga-tissue', 'tcga-brca', 'tcga-label', 'tcga-gbm', 'percolate', 'nslr-syn'], default='random', help='Which dataset to use.')
+    parser.add_argument('--dataset', choices=['random', 'tcga-tissue', 'tcga-brca', 'tcga-label', 'tcga-gbm', 'percolate', 'nslr-syn', 'percolate-plus'], default='random', help='Which dataset to use.')
     parser.add_argument('--clinical-file', type=str, default='PANCAN_clinicalMatrix.gz', help='File to read labels from')
     parser.add_argument('--clinical-label', type=str, default='gender', help='Label to join with data')
     parser.add_argument('--scale-free', action='store_true', help='If we want a scale-free random adjacency matrix for the dataset.')
@@ -60,16 +60,6 @@ def parse_args(argv):
     else:
         opt = argv
     return opt
-
-def calculate_l1_loss(my_model, l1_loss_lambda, l1_criterion, on_cuda):
-    l1_loss = 0
-    for param in my_model.parameters():
-        if on_cuda:
-            l1_target = Variable(torch.FloatTensor(param.size()).zero_()).cuda()
-        else:
-            l1_target = Variable(torch.FloatTensor(param.size()).zero_())
-        l1_loss += l1_criterion(param, l1_target)
-    return l1_loss * l1_loss_lambda
 
 
 def main(argv=None):
@@ -177,7 +167,7 @@ def main(argv=None):
             # Compute and print loss
             cross_loss = criterion(y_pred, targets)
             other_loss = sum([r * l for r, l in zip(my_model.regularization(), lambdas)])
-            l1_loss = calculate_l1_loss(my_model, l1_loss_lambda, l1_criterion, on_cuda)
+            l1_loss = models.setup_l1_loss(my_model, l1_loss_lambda, l1_criterion, on_cuda)
             total_loss = cross_loss + other_loss + l1_loss
 
             # Zero gradients, perform a backward pass, and update the weights.
