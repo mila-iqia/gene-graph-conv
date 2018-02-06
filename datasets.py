@@ -367,7 +367,8 @@ class PercolateDataset(GraphDataset):
         labels_data = []
 
         for i in range(num_samples):
-            print ".",
+            if i % 10 == 0:
+                print ".",
             perc = False
             if i%2 == 0: #generate positive example
                 perc = False
@@ -403,6 +404,7 @@ class PercolateDataset(GraphDataset):
         self.labels = labels_data
         
         self.nb_class = 2
+        self.nb_nodes = self.data.shape[1]
 
 
     def __getitem__(self, idx):
@@ -648,13 +650,35 @@ def get_dataset(opt):
         logging.info("Getting percolate-plus Dataset")
         size_perc = 4
         extra_cn = 10
-        extra_ucn = 10
-        pdataset = PercolateDataset(use_random_adj=scale_free, size_x=size_perc, size_y=size_perc, center=False, extra_cn=extra_cn)
+        extra_ucn = 0
+        num_samples = 1000
+        
+        cache_name = "perc_%d_%d_%d_%d"%(size_perc, extra_cn, extra_ucn, num_samples)
+        pdataset = get_from_cache(cache_name)
+        if pdataset is None:
+            pdataset = PercolateDataset(num_samples=num_samples, use_random_adj=scale_free, size_x=size_perc, size_y=size_perc, center=False, extra_cn=extra_cn)
+            save_to_cache(pdataset, cache_name)
+            
         dataset = GraphWithNoise(dataset=pdataset, num_added_nodes=extra_ucn)
     else:
         raise ValueError
 
     return dataset
+
+import pickle
+import os, os.path
+cache_location = "./cache/"
+def get_from_cache(key):
+    if os.path.isfile(cache_location + str(key) + ".p"):
+        return pickle.load(open(cache_location + str(key) + ".p","rb"))
+    else:
+        return None
+    
+def save_to_cache(thing, key):
+    if not os.path.exists(cache_location):
+        os.makedirs(cache_location)
+    pickle.dump(thing, open(cache_location + str(key) + ".p","wb"))
+
 
 class GraphWithNoise(object):
     """
