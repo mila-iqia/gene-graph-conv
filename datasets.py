@@ -653,7 +653,7 @@ def get_dataset(opt):
         extra_ucn = opt.extra_ucn
         num_samples = 1000
 
-        cache_name = "perc_%d_%d_%d_%d"%(size_perc, extra_cn, extra_ucn, num_samples)
+        cache_name = "perc_%d_%d_%d"%(size_perc, extra_cn, num_samples)
         pdataset = get_from_cache(cache_name)
         if pdataset is None:
             pdataset = PercolateDataset(num_samples=num_samples, use_random_adj=scale_free, size_x=size_perc, size_y=size_perc, center=False, extra_cn=extra_cn)
