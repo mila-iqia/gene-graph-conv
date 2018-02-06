@@ -61,7 +61,6 @@ def main(argv=None):
     for seed in range(0, static_settings['num_trials']):
         setting['seed'] = seed
         summary = format_summary(conv_graph.main(opt), setting)
-        import pdb; pdb.set_trace()
         summaries = summaries.append(pd.DataFrame.from_dict(summary), ignore_index=True)
     to_print = log_summary(summaries, setting, cols, to_print, param_to_vary, param_value)
     print to_print.to_string(index=False)
