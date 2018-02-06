@@ -7,12 +7,12 @@ import h5py
 import networkx
 import pandas as pd
 import collections
+import random
 from torchvision import transforms, utils
 
 
 class GraphDataset(Dataset):
-    def __init__(self, name,
-                 transform=None, use_random_adj=False, percentile=100):
+    def __init__(self, name, transform=None, use_random_adj=False, percentile=100, center=True):
 
         """
         Args:
@@ -55,7 +55,8 @@ class GraphDataset(Dataset):
         self.transform = transform
 
         # Center
-        self.data = self.data - self.data.mean(axis=0) # Ugly, to redo.
+        if center:
+            self.data = self.data - self.data.mean(axis=0) # Ugly, to redo.
 
     def load_data(self):
         raise NotImplementedError()
@@ -333,27 +334,77 @@ class PercolateDataset(GraphDataset):
     A random dataset where the goal if to find if we can percolate from one side of the graph to the other.
     """
 
-    def __init__(self, graph_dir='./Dataset/SyntheticData/', graph_file='test.hdf5', **kwargs):
+    def __init__(self, size_x=4, size_y=4, extra_cn=0, num_samples=100, **kwargs):
 
-        self.graph_dir = graph_dir
-        self.graph_file = graph_file
         self.nb_class = 2
+        self.size_x = size_x
+        self.size_y = size_y
+        self.num_samples = num_samples
+        self.extra_cn = extra_cn # uninformative connected nodes
 
         super(PercolateDataset, self).__init__(name='PercolateDataset', **kwargs)
 
 
     def load_data(self):
-        graph_file = os.path.join(self.graph_dir, self.graph_file)
 
-        self.file = h5py.File(graph_file, 'r')
-        self.data = np.array(self.file['expression_data'])
-        self.nb_nodes = self.data.shape[1]
-        self.labels = self.file['labels_data']
-        self.adj = np.array(self.file['graph_data']).astype('float32')
-        self.sample_names = np.array(range(self.data.shape[0]))
-        self.node_names = np.array(range(self.data.shape[1]))
+        import percolate
+        import networkx as nx
+        size_x = self.size_x + self.extra_cn
+        size_y = self.size_y + self.extra_cn
+        prob = 0.562
+        num_samples = self.num_samples
+
+        if self.extra_cn != 0:
+            if self.size_x != self.size_y:
+                print "Not designed to add extra nodes with non-square graphs"
+
+        test_size_limit = self.size_x
+
+        np.random.seed(0)
+        random.seed(0)
+
+        expression_data = []
+        labels_data = []
+
+        for i in range(num_samples):
+            if i % 10 == 0:
+                print ".",
+            perc = False
+            if i%2 == 0: #generate positive example
+                perc = False
+                while perc == False:
+                    G, T, perc, dens, nio = percolate.sq2d_lattice_percolation_simple(size_x, size_y, prob=prob,
+                                                                                      test_size_limit=test_size_limit)
+                attrs = nx.get_node_attributes(G, 'value')
+                features = np.zeros((len(attrs),), dtype='float32')
+                for j,node in enumerate(nio):
+                    features[j] = attrs[node]
+                expression_data.append(features)
+                labels_data.append(1)
+
+            else: #generate negative example
+                perc = True
+                while perc == True:
+                    G, T, perc, dens, nio = percolate.sq2d_lattice_percolation_simple(size_x, size_y, prob=prob,
+                                                                                      test_size_limit=test_size_limit)
+                attrs = nx.get_node_attributes(G, 'value')
+                features = np.zeros((len(attrs),), dtype='float32')
+                for j,node in enumerate(nio):
+                    features[j] = attrs[node]
+                expression_data.append(features)
+                labels_data.append(0)
+
+        adj = nx.adjacency_matrix(G, nodelist=nio).todense()
+        expression_data = np.asarray(expression_data)
+        labels_data = np.asarray(labels_data)
+
+        self.nio = nio
+        self.adj = adj
+        self.data = expression_data
+        self.labels = labels_data
 
         self.nb_class = 2
+        self.nb_nodes = self.data.shape[1]
 
 
     def __getitem__(self, idx):
@@ -594,20 +645,45 @@ def get_dataset(opt):
     elif dataset_name == 'nslr-syn':
         logging.info("Getting NSLR Synthetic Dataset")
         dataset = NSLRSyntheticDataset(use_random_adj=scale_free)
-        
+
     elif dataset_name == 'percolate-plus':
         logging.info("Getting percolate-plus Dataset")
-        pdataset = PercolateDataset(use_random_adj=scale_free)
-        dataset = GraphWithNoise(dataset=pdataset, num_added_nodes=100)
+        size_perc = opt.size_perc
+        extra_cn = opt.extra_cn
+        extra_ucn = opt.extra_ucn
+        num_samples = 1000
+
+        cache_name = "perc_%d_%d_%d_%d"%(size_perc, extra_cn, extra_ucn, num_samples)
+        pdataset = get_from_cache(cache_name)
+        if pdataset is None:
+            pdataset = PercolateDataset(num_samples=num_samples, use_random_adj=scale_free, size_x=size_perc, size_y=size_perc, center=False, extra_cn=extra_cn)
+            save_to_cache(pdataset, cache_name)
+
+        dataset = GraphWithNoise(dataset=pdataset, num_added_nodes=extra_ucn)
     else:
         raise ValueError
 
     return dataset
 
+import pickle
+import os, os.path
+cache_location = "./cache/"
+def get_from_cache(key):
+    if os.path.isfile(cache_location + str(key) + ".p"):
+        return pickle.load(open(cache_location + str(key) + ".p","rb"))
+    else:
+        return None
+
+def save_to_cache(thing, key):
+    if not os.path.exists(cache_location):
+        os.makedirs(cache_location)
+    pickle.dump(thing, open(cache_location + str(key) + ".p","wb"))
+
+
 class GraphWithNoise(object):
     """
     Will add random features and add these nodes as not connected
-    
+
     Usage:
     pdataset = datasets.PercolateDataset()
     dataset = datasets.GraphWithNoise(dataset=pdataset, num_added_nodes=100)
@@ -616,21 +692,21 @@ class GraphWithNoise(object):
 
         self.num_added_nodes = num_added_nodes
         self.dataset = dataset
-        
+
         num_samples = dataset.data.shape[0]
         num_features = dataset.data.shape[1]
-        
+
         newdata = np.random.random((num_samples, num_features+num_added_nodes))
         newdata = (newdata*2)-1 # normalize; maybe adapt to data?
         newdata[:num_samples, :num_features] = dataset.data # set to 0 to see it in an image
         self.data = newdata
-        
+
         oldadj = dataset.get_adj()
-        
+
         newadj = np.zeros((num_features+num_added_nodes, num_features+num_added_nodes))
         newadj[:num_features, :num_features] = oldadj # set to 0 to see it in an image
         self.adj = newadj
-        
+
         self.nb_class = dataset.nb_class
         self.labels = dataset.labels
         self.nb_nodes = self.adj.shape[0]
@@ -640,10 +716,10 @@ class GraphWithNoise(object):
 
     def get_adj(self):
         return self.adj
-    
+
     def __len__(self):
         return self.data.shape[0]
-    
+
     def __getitem__(self, idx):
 
         sample = self.data[idx]
@@ -655,5 +731,3 @@ class GraphWithNoise(object):
             sample = self.dataset.transform(sample)
 
         return sample
-    
-

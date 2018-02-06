@@ -51,7 +51,9 @@ def build_parser():
     parser.add_argument('--use-emb', default=None, type=int, help="If we want to add node embeddings.")
     parser.add_argument('--use-gate', default=0., type=float, help="The lambda for the gate pooling/striding. is ignore if = 0.")
     parser.add_argument('--lambdas', default=[], type=float, nargs='*', help="A list of lambda for the specified models.")
-
+    parser.add_argument('--size-perc', default=4, type=int, help="The size of the connected percolate graph in percolate-plus datsaet")
+    parser.add_argument('--extra-cn', default=10, type=int, help="The number of extra nodes with edges in the percolate-plus dataset.")
+    parser.add_argument('--extra-ucn', default=0, type=int, help="The number of extra nodes without edges in the percolate-plus dataset")
     return parser
 
 def parse_args(argv):
@@ -60,6 +62,7 @@ def parse_args(argv):
     else:
         opt = argv
     return opt
+
 
 def main(argv=None):
 
@@ -117,7 +120,6 @@ def main(argv=None):
     torch.cuda.manual_seed_all(seed)
     torch.manual_seed(seed)
 
-
     # creating the dataset
     logging.info("Getting the dataset...")
     dataset = datasets.get_dataset(opt)
@@ -165,20 +167,10 @@ def main(argv=None):
             # Forward pass: Compute predicted y by passing x to the model
             y_pred = my_model(inputs).float()
 
-            # The l1 loss
-            l1_loss = 0
-            for param in my_model.parameters():
-                zeros = Variable(torch.FloatTensor(param.size()).zero_(), requires_grad=False)
-
-                if opt.cuda:
-                    zeros = zeros.cuda()
-
-                l1_loss += l1_criterion(param, zeros)
-            l1_loss = l1_loss * l1_loss_lambda
-
             # Compute and print loss
             cross_loss = criterion(y_pred, targets)
             other_loss = sum([r * l for r, l in zip(my_model.regularization(), lambdas)])
+            l1_loss = models.setup_l1_loss(my_model, l1_loss_lambda, l1_criterion, on_cuda)
             total_loss = cross_loss + other_loss + l1_loss
 
             # Zero gradients, perform a backward pass, and update the weights.
