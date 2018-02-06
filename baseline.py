@@ -16,9 +16,9 @@ static_settings = {
                    "batch_size": 100,
                    "train_ratio": .6,
                    "model_vars":{
-                        'slr': [('lr', .001), ('num_channel', 32), ('weight_decay', 0.0), ('l1-loss-lambda', 0.0), ('lambdas', 0.25), ('num_layer', 1)],
-                        'mlp': [('lr', .001), ('num_channel', 32), ('weight_decay', 0.0), ('l1-loss-lambda', 0.0), ('lambdas', 0.0), ('num_layer', 1)],
-                        'cgn': [('lr', .015), ('num_channel', 128), ('weight_decay', 0.1), ('l1-loss-lambda', 0.5), ('lambdas', 0.0), ('num_layer', 1)]
+                        'slr': [('lr', .001), ('num_channel', 32), ('weight_decay', 0.0), ('l1_loss_lambda', 0.0), ('lambdas', 0.25), ('num_layer', 1)],
+                        'mlp': [('lr', .001), ('num_channel', 32), ('weight_decay', 0.0), ('l1_loss_lambda', 0.0), ('lambdas', 0.0), ('num_layer', 1)],
+                        'cgn': [('lr', .015), ('num_channel', 128), ('weight_decay', 0.1), ('l1_loss_lambda', 0.5), ('lambdas', 0.0), ('num_layer', 1)]
                         }
                    }
 
