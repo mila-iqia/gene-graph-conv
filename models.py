@@ -304,7 +304,7 @@ class LCG(GraphNetwork):
 
 # Create a module for MLP
 class MLP(nn.Module):
-    def __init__(self,input_dim, channels, out_dim=None, on_cuda=True):
+    def __init__(self, input_dim, channels, out_dim=None, on_cuda=True):
         super(MLP, self).__init__()
 
         self.my_layers = []
@@ -336,6 +336,39 @@ class MLP(nn.Module):
 
         x = self.last_layer(x.view(nb_examples, -1))
 
+        return x
+
+    def regularization(self):
+        return []
+
+# Create a module for MLP
+class Random(nn.Module):
+    def __init__(self, input_dim, channels, out_dim=None, on_cuda=True):
+        super(Random, self).__init__()
+
+        self.my_layers = []
+        self.out_dim = out_dim
+        self.on_cuda = on_cuda
+
+        dims = [input_dim] + channels
+
+        logging.info("Constructing the network...")
+        layers = []
+        for c_in, c_out in zip(dims[:-1], dims[1:]):
+            layer = nn.Linear(c_in, c_out)
+            layers.append(layer)
+        self.my_layers = nn.ModuleList(layers)
+
+        if channels:
+            self.last_layer = nn.Linear(channels[-1], out_dim)
+        else:
+            self.last_layer = nn.Linear(input_dim, out_dim)
+
+        logging.info("Done!")
+
+    def forward(self, x):
+        nb_examples, nb_nodes, nb_channels = x.size()
+        x = Variable(torch.cuda.FloatTensor(np.random.random_integers(-1, 1, (nb_examples, self.out_dim))))
         return x
 
     def regularization(self):
@@ -429,14 +462,15 @@ def get_model(opt, dataset):
 
     elif model == 'slr':
         #nb_nodes, input_dim, adj, out_dim, on_cuda=True):
-        my_model = SparseLogisticRegression(nb_nodes=dataset.nb_nodes, input_dim=1, adj=dataset.get_adj(), out_dim=dataset.nb_class,
-                       on_cuda=on_cuda)  # TODO: add a bunch of the options
+        my_model = SparseLogisticRegression(nb_nodes=dataset.nb_nodes, input_dim=1, adj=dataset.get_adj(), out_dim=dataset.nb_class, on_cuda=on_cuda)  # TODO: add a bunch of the options
 
     elif model == 'mlp':
-        my_model = MLP(dataset.nb_nodes, [num_channel] * num_layer, dataset.nb_class,
-                       on_cuda=on_cuda)  # TODO: add a bunch of the options
-    elif model == 'cnn':
+        my_model = MLP(dataset.nb_nodes, [num_channel] * num_layer, dataset.nb_class, on_cuda=on_cuda)  # TODO: add a bunch of the options
 
+    elif model == 'random':
+        my_model = Random(dataset.nb_nodes, [num_channel] * num_layer, dataset.nb_class, on_cuda=on_cuda)
+
+    elif model == 'cnn':
         assert opt.dataset == 'percolate'
         # TODO: to change the shape.
         grid_shape = int(np.sqrt(dataset.get_adj().shape[0])) # for now we
