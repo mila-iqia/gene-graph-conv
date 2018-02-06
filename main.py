@@ -31,7 +31,7 @@ def build_parser():
     parser.add_argument('--clinical-label', type=str, default='gender', help='Label to join with data')
     parser.add_argument('--scale-free', action='store_true', help='If we want a scale-free random adjacency matrix for the dataset.')
     parser.add_argument('--cuda', action='store_true', help='If we want to run on gpu.')
-    parser.add_argument('--norm-adj', action='store_true', help="If we want to normalize the adjancy matrix.")
+    parser.add_argument('--norm-adj', default=True, type=bool, help="If we want to normalize the adjancy matrix.")
     parser.add_argument('--log', choices=['tensorboard', 'console', 'silent'], default='tensorboard', help="Don't store anything in tensorboard, otherwise a segfault can happen.")
     parser.add_argument('--name', type=str, default=None, help="If we want to add a random str to the folder.")
 
@@ -45,7 +45,7 @@ def build_parser():
     parser.add_argument('--nb-per-class', default=None, type=int, help="Number of samples per class.")
     parser.add_argument('--train-ratio', default=0.6, type=float, help="The ratio of data to be used in the training set.")
     parser.add_argument('--percentile', default=100, type=float, help="How many edges to keep.")
-    parser.add_argument('--add-self', action='store_true', help="Add self references in the graph.")
+    parser.add_argument('--add-self', default=True, type=bool, help="Add self references in the graph.")
     parser.add_argument('--attention-layer', default=0, type=int, help="The number of attention layer to add to the last layer. Only implemented for CGN.")
     parser.add_argument('--pool-graph', default=None, choices=['random', 'grid', 'ignore'], help="If we want to pool the graph.")
     parser.add_argument('--use-emb', default=None, type=int, help="If we want to add node embeddings.")
