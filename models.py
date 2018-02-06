@@ -449,6 +449,26 @@ def get_model(opt, dataset):
 
     return my_model
 
+def setup_l1_loss(my_model, l1_loss_lambda, l1_criterion, on_cuda):
+    l1_loss = 0
+    if hasattr(my_model, 'my_logistic_layers'):
+        l1_loss += calculate_l1_loss(my_model.my_logistic_layers.parameters(), l1_loss_lambda, l1_criterion, on_cuda)
+    if hasattr(my_model, 'my_layers') and len(my_model.my_layers) > 0 and type(my_model.my_layers[0]) == torch.nn.modules.linear.Linear:
+        l1_loss += calculate_l1_loss(my_model.my_layers[0].parameters(), l1_loss_lambda, l1_criterion, on_cuda)
+    return l1_loss
+
+
+def calculate_l1_loss(param_generator, l1_loss_lambda, l1_criterion, on_cuda):
+    l1_loss = 0
+    for param in param_generator:
+        if on_cuda:
+            l1_target = Variable(torch.FloatTensor(param.size()).zero_()).cuda()
+        else:
+            l1_target = Variable(torch.FloatTensor(param.size()).zero_())
+        l1_loss += l1_criterion(param, l1_target)
+    return l1_loss * l1_loss_lambda
+
+
 # # Create a module for the CGN:
 # #TODO: refactor LCG, CGN and CGN, they are pretty much all the same, should make a super class GraphNetwork.
 # # Then we would only need the add the bells and wishle at only one place.

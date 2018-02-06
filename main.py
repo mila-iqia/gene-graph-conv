@@ -61,6 +61,7 @@ def parse_args(argv):
         opt = argv
     return opt
 
+
 def main(argv=None):
 
     opt = parse_args(argv)
@@ -116,7 +117,6 @@ def main(argv=None):
     torch.cuda.manual_seed_all(seed)
     torch.manual_seed(seed)
 
-
     # creating the dataset
     logging.info("Getting the dataset...")
     dataset = datasets.get_dataset(opt)
@@ -164,15 +164,10 @@ def main(argv=None):
             # Forward pass: Compute predicted y by passing x to the model
             y_pred = my_model(inputs).float()
 
-            # The l1 loss
-            l1_loss = 0
-            for param in my_model.parameters():
-                l1_loss += l1_criterion(param, Variable(torch.FloatTensor(param.size()).zero_(), requires_grad=False))
-            l1_loss = l1_loss * l1_loss_lambda
-
             # Compute and print loss
             cross_loss = criterion(y_pred, targets)
             other_loss = sum([r * l for r, l in zip(my_model.regularization(), lambdas)])
+            l1_loss = models.setup_l1_loss(my_model, l1_loss_lambda, l1_criterion, on_cuda)
             total_loss = cross_loss + other_loss + l1_loss
 
             # Zero gradients, perform a backward pass, and update the weights.
