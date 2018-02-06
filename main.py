@@ -51,7 +51,9 @@ def build_parser():
     parser.add_argument('--use-emb', default=None, type=int, help="If we want to add node embeddings.")
     parser.add_argument('--use-gate', default=0., type=float, help="The lambda for the gate pooling/striding. is ignore if = 0.")
     parser.add_argument('--lambdas', default=[], type=float, nargs='*', help="A list of lambda for the specified models.")
-
+    parser.add_argument('--size-perc', default=4, type=int, help="The size of the connected percolate graph in percolate-plus datsaet")
+    parser.add_argument('--extra-cn', default=10, type=int, help="The number of extra nodes with edges in the percolate-plus dataset.")
+    parser.add_argument('--extra-ucn', default=0, type=int, help="The number of extra nodes without edges in the percolate-plus dataset")
     return parser
 
 def parse_args(argv):
