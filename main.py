@@ -43,16 +43,16 @@ def build_parser():
     parser.add_argument('--nb-class', default=None, type=int, help="Number of class for the dataset (won't work with random graph).")
     parser.add_argument('--nb-examples', default=None, type=int, help="Number of samples to train on.")
     parser.add_argument('--nb-per-class', default=None, type=int, help="Number of samples per class.")
-    parser.add_argument('--train-ratio', default=0.8, type=float, help="The ratio of data to be used in the training set.")
+    parser.add_argument('--train-ratio', default=0.6, type=float, help="The ratio of data to be used in the training set.")
     parser.add_argument('--percentile', default=100, type=float, help="How many edges to keep.")
     parser.add_argument('--add-self', action='store_true', help="Add self references in the graph.")
     parser.add_argument('--attention-layer', default=0, type=int, help="The number of attention layer to add to the last layer. Only implemented for CGN.")
-    parser.add_argument('--pool-graph', default=None, choices=['ignore', 'hierarchy'], help="If we want to pool the graph.")
+    parser.add_argument('--pool-graph', default=None, choices=['random', 'grid', 'ignore'], help="If we want to pool the graph.")
     parser.add_argument('--use-emb', default=None, type=int, help="If we want to add node embeddings.")
     parser.add_argument('--use-gate', default=0., type=float, help="The lambda for the gate pooling/striding. is ignore if = 0.")
     parser.add_argument('--lambdas', default=[], type=float, nargs='*', help="A list of lambda for the specified models.")
     parser.add_argument('--size-perc', default=4, type=int, help="The size of the connected percolate graph in percolate-plus datsaet")
-    parser.add_argument('--extra-cn', default=10, type=int, help="The number of extra nodes with edges in the percolate-plus dataset.")
+    parser.add_argument('--extra-cn', default=0, type=int, help="The number of extra nodes with edges in the percolate-plus dataset.")
     parser.add_argument('--extra-ucn', default=0, type=int, help="The number of extra nodes without edges in the percolate-plus dataset")
     return parser
 
@@ -104,7 +104,6 @@ def main(argv=None):
     del param['clinical_label']
     del param['nb_per_class']
     del param['lambdas']
-    del param['pool_graph']
     v_to_delete = []
     for v in param:
         if param[v] is None:

@@ -16,4 +16,4 @@ case $i in
     ;;
 esac
 done
-python -W ignore baseline.py  --cuda --log=silent --baseline-model=$model --baseline-dataset=$dataset --vary-param-name="extra-ucn" --vary-param-value=$param
+python -W ignore baseline.py --log=silent --baseline-model=$model --baseline-dataset=$dataset --vary-param-name="extra-ucn" --vary-param-value=$param

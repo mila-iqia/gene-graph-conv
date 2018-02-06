@@ -11,7 +11,7 @@ do
         export dataset=$dataset
         export model=$model
         export param=$value
-        sbatch --gres=gpu -x mila00 ./baseline.sh -m=$model -d=$dataset -p=$value
+        ./baseline.sh -m=$model -d=$dataset -p=$value
       done
     done
 done
