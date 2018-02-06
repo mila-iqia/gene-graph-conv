@@ -47,7 +47,7 @@ def build_parser():
     parser.add_argument('--percentile', default=100, type=float, help="How many edges to keep.")
     parser.add_argument('--add-self', action='store_true', help="Add self references in the graph.")
     parser.add_argument('--attention-layer', default=0, type=int, help="The number of attention layer to add to the last layer. Only implemented for CGN.")
-    parser.add_argument('--pool-graph', default=None, choices=['random', 'grid', 'ignore'], help="If we want to pool the graph.")
+    parser.add_argument('--pool-graph', default=None, choices=['ignore', 'hierarchy'], help="If we want to pool the graph.")
     parser.add_argument('--use-emb', default=None, type=int, help="If we want to add node embeddings.")
     parser.add_argument('--use-gate', default=0., type=float, help="The lambda for the gate pooling/striding. is ignore if = 0.")
     parser.add_argument('--lambdas', default=[], type=float, nargs='*', help="A list of lambda for the specified models.")
@@ -101,6 +101,7 @@ def main(argv=None):
     del param['clinical_label']
     del param['nb_per_class']
     del param['lambdas']
+    del param['pool_graph']
     v_to_delete = []
     for v in param:
         if param[v] is None:
@@ -167,7 +168,12 @@ def main(argv=None):
             # The l1 loss
             l1_loss = 0
             for param in my_model.parameters():
-                l1_loss += l1_criterion(param, Variable(torch.FloatTensor(param.size()).zero_(), requires_grad=False))
+                zeros = Variable(torch.FloatTensor(param.size()).zero_(), requires_grad=False)
+
+                if opt.cuda:
+                    zeros = zeros.cuda()
+
+                l1_loss += l1_criterion(param, zeros)
             l1_loss = l1_loss * l1_loss_lambda
 
             # Compute and print loss

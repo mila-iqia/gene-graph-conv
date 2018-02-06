@@ -151,7 +151,7 @@ class SparseLogisticRegression(nn.Module):
 class GraphNetwork(nn.Module):
 
     def __init__(self, nb_nodes, input_dim, channels, adj, out_dim,
-                 on_cuda=True, add_emb=None, transform_adj=None, agregate_adj=None, graphLayerType=graphLayer.CGNLayer, striding_method=None, use_gate=0.0001):
+                 on_cuda=True, add_emb=None, transform_adj=None, agregate_adj=None, graphLayerType=graphLayer.CGNLayer, use_gate=0.0001):
         super(GraphNetwork, self).__init__()
 
         if transform_adj is None:
@@ -179,8 +179,15 @@ class GraphNetwork(nn.Module):
         for i, [c_in, c_out] in enumerate(zip(dims[:-1], dims[1:])):
             # transformation to apply at each layer.
 
-            transform_tmp = transforms.Compose([foo(please_ignore=i == 0, unique_id=i) for foo in transform_adj])
-            layer = graphLayerType(adj, c_in, c_out, on_cuda, i, transform_adj=transform_tmp, agregate_adj=agregate_adj, striding_method=striding_method)
+            #transform_tmp = transforms.Compose([foo(please_ignore=i == 0, unique_id=i) for foo in transform_adj])
+            #transform_tmp = None
+            #agregate_tmp = None
+            #if transform_adj is not None:
+            #    transform_tmp = transform_adj(i)
+            #if agregate_adj is not None:
+            #    agregate_tmp = agregate_adj(i)
+
+            layer = graphLayerType(adj, c_in, c_out, on_cuda, i, transform_adj=transform_adj, agregate_adj=agregate_adj)
             layer.register_forward_hook(save_computations) # For monitoring
             convs.append(layer)
 
@@ -411,21 +418,24 @@ def get_model(opt, dataset):
     on_cuda = opt.cuda
     skip_connections = opt.skip_connections
 
-    const_transform, agregate_adj = graphLayer.get_transform(opt)
+    adj_transform, agregate_function = graphLayer.get_transform(opt, dataset.get_adj())
 
     if model == 'cgn':
         # To have a feel of the model, please take a look at cgn.ipynb
         my_model = CGN(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=dataset.nb_class,
-                       on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=const_transform, agregate_adj=agregate_adj, use_gate=opt.use_gate, striding_method=opt.pool_graph)  # TODO: add a bunch of the options
+                       on_cuda=on_cuda, add_emb=opt.use_emb,
+                       transform_adj=adj_transform,agregate_adj=agregate_function, use_gate=opt.use_gate)  # TODO: add a bunch of the options
 
     elif model == 'lcg':
 
         my_model = LCG(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=dataset.nb_class,
-                       on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=const_transform, agregate_adj=agregate_adj, use_gate=opt.use_gate, striding_method=opt.pool_graph)  # TODO: add a bunch of the options
+                       on_cuda=on_cuda, add_emb=opt.use_emb,
+                       transform_adj=adj_transform,agregate_adj=agregate_function, use_gate=opt.use_gate)   # TODO: add a bunch of the options
 
     elif model == 'sgc':
         my_model = SGC(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=dataset.nb_class,
-                       on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=const_transform, agregate_adj=agregate_adj, use_gate=opt.use_gate, striding_method=opt.pool_graph)  # TODO: add a bunch of the options
+                       on_cuda=on_cuda, add_emb=opt.use_emb,
+                       transform_adj=adj_transform,agregate_adj=agregate_function, use_gate=opt.use_gate)   # TODO: add a bunch of the options
 
     elif model == 'slr':
         #nb_nodes, input_dim, adj, out_dim, on_cuda=True):
@@ -437,8 +447,10 @@ def get_model(opt, dataset):
                        on_cuda=on_cuda)  # TODO: add a bunch of the options
     elif model == 'cnn':
 
-        assert opt.dataset == 'percolate'
+        assert  'percolate' in opt.dataset
         # TODO: to change the shape.
+        #import ipdb; ipdb.set_trace()
+
         grid_shape = int(np.sqrt(dataset.get_adj().shape[0])) # for now we
         grid_shape = [grid_shape, grid_shape]
 
