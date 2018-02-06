@@ -62,11 +62,9 @@ class PoolGraph(object):
         self.on_cuda = on_cuda
         self.nb_nodes = self.adj.shape[0]
 
-        print to_keep
-
-        print "We are keeping {} elements.".format(to_keep.sum())
+        logging.info("We are keeping {} elements.".format(to_keep.sum()))
         if to_keep.sum() == adj.shape[0]:
-            print "We are keeping all the nodes. ignoring the agregation step."
+            logging.info("We are keeping all the nodes. ignoring the agregation step.")
             self.please_ignore = True
 
         #edges = torch.LongTensor(np.array(np.where(self.adj))) # The list of edges
