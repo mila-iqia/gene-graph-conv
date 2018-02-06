@@ -61,7 +61,7 @@ class ElementwiseGateLayer(nn.Module):
         self.in_dim = id_dim
         super(ElementwiseGateLayer, self).__init__()
 
-        self.attn = nn.Linear(self.in_dim, 1, bias=False)
+        self.attn = nn.Linear(self.in_dim, 1, bias=True)
 
     def forward(self, x):
 
@@ -358,6 +358,8 @@ class CNN(nn.Module):
         self.out_dim = out_dim
         self.grid_shape = grid_shape
         kernel_size = 2
+        stride = 1
+        padding = 0
 
         layers = []
         dims = [input_dim] + channels
@@ -366,7 +368,7 @@ class CNN(nn.Module):
 
         for c_in, c_out in zip(dims[:-1], dims[1:]):
             layer = nn.Sequential(
-                nn.Conv2d(c_in, c_out, kernel_size=kernel_size, padding=0),
+                nn.Conv2d(c_in, c_out, kernel_size=kernel_size, padding=padding, stride=stride),
                 # nn.BatchNorm2d(16), # True that maybe?
                 nn.ReLU(),
                 #nn.MaxPool2d(2)
@@ -374,8 +376,9 @@ class CNN(nn.Module):
 
             layers.append(layer)
 
-            print current_size, (current_size - (kernel_size -1))/1
-            current_size = (current_size - (kernel_size-1))/1
+            new_size = np.ceil((current_size + 2*padding - (kernel_size -1))/float(stride))
+            print current_size, new_size
+            current_size = int(new_size)
 
         self.my_layers = nn.ModuleList(layers)
         out = current_size * current_size * dims[-1]

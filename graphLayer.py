@@ -147,14 +147,14 @@ class AggregationGraph(object):
 
         # For each layer, build the adjs and the nodes to keep.
         for no_layer in range(self.nb_layer):
-            n_clusters = nb_nodes / (2 ** (no_layer + 1))
+
 
             if self.adj_transform: # Transform the adj if necessary.
                 current_adj = self.adj_transform(current_adj)
 
             all_transformed_adj.append(current_adj)
 
-            to_keep, adj = self.cluster_specific_layer(to_keep, n_clusters, np.array(current_adj))
+            to_keep, adj = self.cluster_specific_layer(to_keep, no_layer, np.array(current_adj))
             all_to_keep.append(to_keep)
             all_agregate_adjs.append(adj)
 
@@ -164,12 +164,14 @@ class AggregationGraph(object):
         self.agregate_adjs = all_agregate_adjs
         self.adjs = all_transformed_adj
 
-    def get_nodes_cluster(self, last_to_keep, n_clusters, adj):
+    def get_nodes_cluster(self, last_to_keep, layer_id, adj):
         # TODO: add other kind of clustering (i.e. random, grid, etc.)
 
+        nb_nodes = adj.shape[0]
         ids = range(adj.shape[0])
 
         if self.cluster_type == 'hierarchy':
+            n_clusters = nb_nodes / (2 ** (layer_id + 1))
             # For a specific layer, return the ids. The merging and stuff's gonna be compute later.
             self.clustering = sklearn.cluster.AgglomerativeClustering(n_clusters=n_clusters, affinity='euclidean',
                                                                       memory='testing123_123', connectivity=(adj > 0.).astype(int),
@@ -178,7 +180,20 @@ class AggregationGraph(object):
             ids = self.clustering.fit_predict(self.adj) # all nodes has a cluster.
 
         elif self.cluster_type is None:
+
+
             pass
+
+        elif self.cluster_type  == 'grid':
+
+            import ipdb; ipdb.set_trace()
+
+            grid_size = int(np.sqrt(nb_nodes))
+            #ids =
+
+            ids = [1 if (i % grid_size) ==  0 else 0 for i in range(nb_nodes)]
+
+
         else:
             raise ValueError('Cluster type {} unknown.'.format(self.cluster_type))
 
