@@ -646,8 +646,11 @@ def get_dataset(opt):
         
     elif dataset_name == 'percolate-plus':
         logging.info("Getting percolate-plus Dataset")
-        pdataset = PercolateDataset(use_random_adj=scale_free)
-        dataset = GraphWithNoise(dataset=pdataset, num_added_nodes=100)
+        size_perc = 4
+        extra_cn = 10
+        extra_ucn = 10
+        pdataset = PercolateDataset(use_random_adj=scale_free, size_x=size_perc, size_y=size_perc, center=False, extra_cn=extra_cn)
+        dataset = GraphWithNoise(dataset=pdataset, num_added_nodes=extra_ucn)
     else:
         raise ValueError
 
