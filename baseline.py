@@ -16,9 +16,9 @@ static_settings = {
                    "batch_size": 100,
                    "train_ratio": .6,
                    "model_vars":{
-                        'slr': [('lr', .001), ('num_channel', 32), ('weight_decay', 0.0), ('l1-loss-lambda', 0.0), ('lambdas', 0.25), ('num_layer', 1), ('extra-ucn', 0)],
-                        'mlp': [('lr', .001), ('num_channel', 32), ('weight_decay', 0.0), ('l1-loss-lambda', 0.0), ('lambdas', 0.0), ('num_layer', 1), ('extra-ucn', 0)],
-                        'cgn': [('lr', .015), ('num_channel', 128), ('weight_decay', 0.1), ('l1-loss-lambda', 0.5), ('lambdas', 0.0), ('num_layer', 1), ('extra-ucn', 0)]
+                        'slr': [('lr', .001), ('num_channel', 32), ('weight_decay', 0.0), ('l1-loss-lambda', 0.0), ('lambdas', 0.25), ('num_layer', 1)],
+                        'mlp': [('lr', .001), ('num_channel', 32), ('weight_decay', 0.0), ('l1-loss-lambda', 0.0), ('lambdas', 0.0), ('num_layer', 1)],
+                        'cgn': [('lr', .015), ('num_channel', 128), ('weight_decay', 0.1), ('l1-loss-lambda', 0.5), ('lambdas', 0.0), ('num_layer', 1)]
                         }
                    }
 
@@ -61,6 +61,7 @@ def main(argv=None):
     for seed in range(0, static_settings['num_trials']):
         setting['seed'] = seed
         summary = format_summary(conv_graph.main(opt), setting)
+        import pdb; pdb.set_trace()
         summaries = summaries.append(pd.DataFrame.from_dict(summary), ignore_index=True)
     to_print = log_summary(summaries, setting, cols, to_print, param_to_vary, param_value)
     print to_print.to_string(index=False)
