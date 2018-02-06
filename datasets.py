@@ -7,12 +7,12 @@ import h5py
 import networkx
 import pandas as pd
 import collections
+import random
 from torchvision import transforms, utils
 
 
 class GraphDataset(Dataset):
-    def __init__(self, name,
-                 transform=None, use_random_adj=False, percentile=100):
+    def __init__(self, name, transform=None, use_random_adj=False, percentile=100, center=True):
 
         """
         Args:
@@ -55,7 +55,8 @@ class GraphDataset(Dataset):
         self.transform = transform
 
         # Center
-        self.data = self.data - self.data.mean(axis=0) # Ugly, to redo.
+        if center:
+            self.data = self.data - self.data.mean(axis=0) # Ugly, to redo.
 
     def load_data(self):
         raise NotImplementedError()
@@ -333,26 +334,74 @@ class PercolateDataset(GraphDataset):
     A random dataset where the goal if to find if we can percolate from one side of the graph to the other.
     """
 
-    def __init__(self, graph_dir='./Dataset/SyntheticData/', graph_file='test.hdf5', **kwargs):
+    def __init__(self, size_x=4, size_y=4, extra_cn=0, num_samples=100, **kwargs):
 
-        self.graph_dir = graph_dir
-        self.graph_file = graph_file
         self.nb_class = 2
-
+        self.size_x = size_x
+        self.size_y = size_y
+        self.num_samples = num_samples
+        self.extra_cn = extra_cn # uninformative connected nodes
+        
         super(PercolateDataset, self).__init__(name='PercolateDataset', **kwargs)
 
 
     def load_data(self):
-        graph_file = os.path.join(self.graph_dir, self.graph_file)
 
-        self.file = h5py.File(graph_file, 'r')
-        self.data = np.array(self.file['expression_data'])
-        self.nb_nodes = self.data.shape[1]
-        self.labels = self.file['labels_data']
-        self.adj = np.array(self.file['graph_data']).astype('float32')
-        self.sample_names = np.array(range(self.data.shape[0]))
-        self.node_names = np.array(range(self.data.shape[1]))
+        import percolate
+        import networkx as nx
+        size_x = self.size_x + self.extra_cn
+        size_y = self.size_y + self.extra_cn
+        prob = 0.562
+        num_samples = self.num_samples
 
+        if self.extra_cn != 0:
+            if self.size_x != self.size_y:
+                print "Not designed to add extra nodes with non-square graphs"
+           
+        test_size_limit = self.size_x
+
+        np.random.seed(0)
+        random.seed(0)
+
+        expression_data = []
+        labels_data = []
+
+        for i in range(num_samples):
+            print ".",
+            perc = False
+            if i%2 == 0: #generate positive example
+                perc = False
+                while perc == False:
+                    G, T, perc, dens, nio = percolate.sq2d_lattice_percolation_simple(size_x, size_y, prob=prob, 
+                                                                                      test_size_limit=test_size_limit)
+                attrs = nx.get_node_attributes(G, 'value')
+                features = np.zeros((len(attrs),), dtype='float32')
+                for j,node in enumerate(nio):
+                    features[j] = attrs[node]
+                expression_data.append(features)
+                labels_data.append(1)
+
+            else: #generate negative example
+                perc = True
+                while perc == True:
+                    G, T, perc, dens, nio = percolate.sq2d_lattice_percolation_simple(size_x, size_y, prob=prob, 
+                                                                                      test_size_limit=test_size_limit)
+                attrs = nx.get_node_attributes(G, 'value')
+                features = np.zeros((len(attrs),), dtype='float32')
+                for j,node in enumerate(nio):
+                    features[j] = attrs[node]
+                expression_data.append(features)
+                labels_data.append(0)
+
+        adj = nx.adjacency_matrix(G, nodelist=nio).todense()
+        expression_data = np.asarray(expression_data)
+        labels_data = np.asarray(labels_data)
+
+        self.nio = nio
+        self.adj = adj
+        self.data = expression_data
+        self.labels = labels_data
+        
         self.nb_class = 2
 
 

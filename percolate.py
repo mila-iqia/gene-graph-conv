@@ -47,6 +47,14 @@ def if_percolates_simple(G, x_size, y_size):
         if data_node[1]['value'] == 0:
             T.remove_node(data_node[0])
         
+    for data_node in T.copy().nodes():
+        if data_node[0] >= x_size:
+            T.remove_node(data_node)
+            
+    for data_node in T.copy().nodes():
+        if data_node[1] >= y_size:
+            T.remove_node(data_node)
+
     source = []
     ground = []
     M = T.copy()
@@ -72,9 +80,13 @@ def if_percolates_simple(G, x_size, y_size):
    
     return False
 
-def sq2d_lattice_percolation_simple(size_x=10, size_y=10, prob=0.3):
+def sq2d_lattice_percolation_simple(size_x=10, size_y=10, prob=0.3, test_size_limit=None):
     def fp(): return f(prob)
 
+    if (size_x % 2 != 0) or (size_y % 2 != 0) or (test_size_limit is not None and test_size_limit % 2 != 0):
+        print "Sizes must be even"
+        return None
+    
     #Generating square lattice graph
     G, nio = sq2d_lattice_graph(size_x,size_y, fp)
     G_0 = G.copy()
@@ -83,7 +95,10 @@ def sq2d_lattice_percolation_simple(size_x=10, size_y=10, prob=0.3):
     density = get_density(G)
 
     #Checking percolation
-    perc = if_percolates_simple(G, size_x, size_y)
+    if test_size_limit is not None:
+        perc = if_percolates_simple(G, test_size_limit, test_size_limit)
+    else:
+        perc = if_percolates_simple(G, size_x, size_y)
     
     upper_density_threshold = 0.51
     lower_density_threshold = 0.49
@@ -92,7 +107,6 @@ def sq2d_lattice_percolation_simple(size_x=10, size_y=10, prob=0.3):
     while( density<lower_density_threshold or density>upper_density_threshold):
         G_new = G.copy()
         node = random.choice(list(G_new.nodes))
-        
         if density<lower_density_threshold:
             if G_new.nodes[node]['value'] == 1:
                 continue
@@ -103,8 +117,11 @@ def sq2d_lattice_percolation_simple(size_x=10, size_y=10, prob=0.3):
                 continue
             G_new.nodes[node]['value'] = 0
 
-
-        perc_new = if_percolates_simple(G_new, size_x, size_y)
+        if test_size_limit is not None:
+            perc_new = if_percolates_simple(G_new, test_size_limit, test_size_limit)
+        else:
+            perc_new = if_percolates_simple(G_new, size_x, size_y)
+        
         if perc == perc_new:
             G = G_new.copy()
             density = get_density(G)
