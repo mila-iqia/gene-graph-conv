@@ -60,6 +60,7 @@ class PoolGraph(object):
         self.adj = adj
         self.to_keep = to_keep
         self.on_cuda = on_cuda
+        self.nb_nodes = self.adj.shape[0]
 
         print to_keep
 
@@ -68,12 +69,21 @@ class PoolGraph(object):
             print "We are keeping all the nodes. ignoring the agregation step."
             self.please_ignore = True
 
+        #edges = torch.LongTensor(np.array(np.where(self.adj))) # The list of edges
+        #flat_adj = self.adj.flatten()[np.where(self.adj.flatten())] # get the value
+        #flat_adj = torch.FloatTensor(flat_adj)
+
+        # Constructing a sparse matrix
+        #logging.info("Constructing the sparse matrix...")
+        #self.adj = torch.sparse.FloatTensor(edges, flat_adj, torch.Size([self.nb_nodes ,self.nb_nodes]))#.to_dense()
+
     def __call__(self, x):
 
         # x if of the shape (ex, node, channel)
         if self.please_ignore:
             return x
 
+        #adj = Variable(torch.FloatTensor(self.adj), requires_grad=False)
         adj = Variable(torch.FloatTensor(self.adj), requires_grad=False)
         to_keep = Variable(torch.FloatTensor(self.to_keep.astype(float)), requires_grad=False)
         if self.on_cuda:
@@ -82,6 +92,8 @@ class PoolGraph(object):
 
         x = x.permute(0, 2, 1).contiguous() # put in ex, channel, node
         x_shape = x.size()
+
+        #import ipdb; ipdb.set_trace()
 
         if self.type == 'max':
             max_value = (x.view(-1, x.size(-1), 1) * adj).max(dim=1)[0]
@@ -142,7 +154,7 @@ class AggregationGraph(object):
 
             all_transformed_adj.append(current_adj)
 
-            to_keep, adj = self.cluster_specific_layer(to_keep, n_clusters, self.adj)
+            to_keep, adj = self.cluster_specific_layer(to_keep, n_clusters, np.array(current_adj))
             all_to_keep.append(to_keep)
             all_agregate_adjs.append(adj)
 
@@ -160,7 +172,7 @@ class AggregationGraph(object):
         if self.cluster_type == 'hierarchy':
             # For a specific layer, return the ids. The merging and stuff's gonna be compute later.
             self.clustering = sklearn.cluster.AgglomerativeClustering(n_clusters=n_clusters, affinity='euclidean',
-                                                                      memory=None, connectivity=(adj > 0.).astype(int),
+                                                                      memory='testing123_123', connectivity=(adj > 0.).astype(int),
                                                     compute_full_tree='auto', linkage='ward')
 
             ids = self.clustering.fit_predict(self.adj) # all nodes has a cluster.
@@ -280,6 +292,8 @@ class SelfConnection(object):
         self.please_ignore = please_ignore
 
     def __call__(self, adj):
+
+        print "Adding self connection!"
 
         if self.add_self_connection:
             np.fill_diagonal(adj, 1.)
