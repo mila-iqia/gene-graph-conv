@@ -1,6 +1,7 @@
 library(pROC)
 library(MASS)
 library(glmnet)
+library(rhdf5)
 # ------------------------------------------
 # Please first set the path
 # working_dir = "C:/Users/dell/Desktop/NSLR"
@@ -8,13 +9,18 @@ library(glmnet)
 
 source('Fun_Auxiliary.R')
 source('Fun_NSLR.R')
+source('write_synthetic_data.R')
+source("https://bioconductor.org/biocLite.R")
+biocLite("rhdf5")
 
 # ------------------------------------------
 # Generate a simple simulation data
 snrlam0 = 3
 f.num0  = 100
-sim.data = GET.SIM.DATA2(smaple.num = 700, feature.num=f.num0, random.seed = 10, snrlam=snrlam0)
+sim.data = GET.SIM.DATA2(smaple.num = 500, feature.num=f.num0, random.seed = 10, snrlam=snrlam0)
 adj = get_sim_prior_Net(f.num0, 40, 0.3,0.05)
+
+write_hdf5_syn_data(sim.data, adj)
 
 Train.id = 1:300
 Valid.id = 301:500
