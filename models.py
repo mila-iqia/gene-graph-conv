@@ -452,7 +452,6 @@ def get_model(opt, dataset):
     num_channel = opt.num_channel
     num_layer = opt.num_layer
     on_cuda = opt.cuda
-    skip_connections = opt.skip_connections
 
     adj_transform, agregate_function = graphLayer.get_transform(opt, dataset.get_adj())
 
@@ -484,7 +483,7 @@ def get_model(opt, dataset):
         my_model = Random(dataset.nb_nodes, [num_channel] * num_layer, dataset.nb_class, on_cuda=on_cuda)
 
     elif model == 'cnn':
-        assert 'percolate' in opt.dataset
+        assert opt.dataset == 'percolate'
         # TODO: to change the shape.
         #import ipdb; ipdb.set_trace()
 
