@@ -72,7 +72,7 @@ def if_percolates_simple(G, x_size, y_size):
    
     return False
 
-def sq2d_lattice_percolation_simple(size_x=10, size_y=10, prob=0.3, extra_cn=0):
+def sq2d_lattice_percolation_simple(size_x=10, size_y=10, prob=0.3, extra_cn=0, disconnected=0):
     def fp(): return f(prob)
     
     #Generating square lattice graph
@@ -117,6 +117,10 @@ def sq2d_lattice_percolation_simple(size_x=10, size_y=10, prob=0.3, extra_cn=0):
         nx.set_node_attributes(G_big,name="value",values=nx.get_node_attributes(G,"value"))
         G = G_big    
         nio = nio_big
+        
+    if disconnected > 0:
+        for i in range(disconnected):
+            G.remove_edges_from(G.edges(nio[i]))
             
     return G, G_0, perc, density, nio
 

@@ -334,13 +334,14 @@ class PercolateDataset(GraphDataset):
     A random dataset where the goal if to find if we can percolate from one side of the graph to the other.
     """
 
-    def __init__(self, size_x=4, size_y=4, extra_cn=0, num_samples=100, **kwargs):
+    def __init__(self, size_x=4, size_y=4, extra_cn=0, num_samples=100, disconnected=0, **kwargs):
 
         self.nb_class = 2
         self.size_x = size_x
         self.size_y = size_y
         self.num_samples = num_samples
-        self.extra_cn = extra_cn # uninformative connected nodes
+        self.extra_cn = extra_cn # uninformative connected layers of nodes
+        self.disconnected = disconnected # number of nodes to disconnect
 
         super(PercolateDataset, self).__init__(name='PercolateDataset', **kwargs)
 
@@ -354,6 +355,7 @@ class PercolateDataset(GraphDataset):
         prob = 0.562
         num_samples = self.num_samples
         extra_cn = self.extra_cn
+        disconnected=self.disconnected
 
         if self.extra_cn != 0:
             if self.size_x != self.size_y:
@@ -373,7 +375,7 @@ class PercolateDataset(GraphDataset):
                 perc = False
                 while perc == False:
                     G, T, perc, dens, nio = percolate.sq2d_lattice_percolation_simple(size_x, size_y, prob=prob,
-                                                                                      extra_cn=extra_cn)
+                                                                   extra_cn=extra_cn, disconnected=disconnected)
                 attrs = nx.get_node_attributes(G, 'value')
                 features = np.zeros((len(attrs),), dtype='float32')
                 for j,node in enumerate(nio):
@@ -385,7 +387,7 @@ class PercolateDataset(GraphDataset):
                 perc = True
                 while perc == True:
                     G, T, perc, dens, nio = percolate.sq2d_lattice_percolation_simple(size_x, size_y, prob=prob,
-                                                                                      extra_cn=extra_cn)
+                                                                    extra_cn=extra_cn, disconnected=disconnected)
                 attrs = nx.get_node_attributes(G, 'value')
                 features = np.zeros((len(attrs),), dtype='float32')
                 for j,node in enumerate(nio):
@@ -650,6 +652,7 @@ def get_dataset(opt):
         size_perc = opt.size_perc
         extra_cn = opt.extra_cn
         extra_ucn = opt.extra_ucn
+        disconnected = opt.disconnected
         num_samples = 1000
 
         pdataset = PercolateDataset(num_samples=num_samples, use_random_adj=scale_free, size_x=size_perc, size_y=size_perc, center=False, extra_cn=extra_cn)
