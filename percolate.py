@@ -46,14 +46,6 @@ def if_percolates_simple(G, x_size, y_size):
     for data_node in G.nodes.data():
         if data_node[1]['value'] == 0:
             T.remove_node(data_node[0])
-        
-    for data_node in T.copy().nodes():
-        if data_node[0] >= x_size:
-            T.remove_node(data_node)
-            
-    for data_node in T.copy().nodes():
-        if data_node[1] >= y_size:
-            T.remove_node(data_node)
 
     source = []
     ground = []
@@ -80,12 +72,8 @@ def if_percolates_simple(G, x_size, y_size):
    
     return False
 
-def sq2d_lattice_percolation_simple(size_x=10, size_y=10, prob=0.3, test_size_limit=None):
+def sq2d_lattice_percolation_simple(size_x=10, size_y=10, prob=0.3, extra_cn=0, disconnected=0):
     def fp(): return f(prob)
-
-    if (size_x % 2 != 0) or (size_y % 2 != 0) or (test_size_limit is not None and test_size_limit % 2 != 0):
-        print "Sizes must be even"
-        return None
     
     #Generating square lattice graph
     G, nio = sq2d_lattice_graph(size_x,size_y, fp)
@@ -95,10 +83,7 @@ def sq2d_lattice_percolation_simple(size_x=10, size_y=10, prob=0.3, test_size_li
     density = get_density(G)
 
     #Checking percolation
-    if test_size_limit is not None:
-        perc = if_percolates_simple(G, test_size_limit, test_size_limit)
-    else:
-        perc = if_percolates_simple(G, size_x, size_y)
+    perc = if_percolates_simple(G, size_x, size_y)
     
     upper_density_threshold = 0.51
     lower_density_threshold = 0.49
@@ -117,15 +102,26 @@ def sq2d_lattice_percolation_simple(size_x=10, size_y=10, prob=0.3, test_size_li
                 continue
             G_new.nodes[node]['value'] = 0
 
-        if test_size_limit is not None:
-            perc_new = if_percolates_simple(G_new, test_size_limit, test_size_limit)
-        else:
-            perc_new = if_percolates_simple(G_new, size_x, size_y)
+        perc_new = if_percolates_simple(G_new, size_x, size_y)
         
         if perc == perc_new:
             G = G_new.copy()
             density = get_density(G)
 
+    if extra_cn > 0:
+        #for testing comment out this code
+        #def fp_test(): return f(1)
+        
+        # generate a big graph and then copy nodes from the smaller graph
+        G_big, nio_big = sq2d_lattice_graph(size_x+extra_cn,size_y+extra_cn, fp)
+        nx.set_node_attributes(G_big,name="value",values=nx.get_node_attributes(G,"value"))
+        G = G_big    
+        nio = nio_big
+        
+    if disconnected > 0:
+        for i in range(disconnected):
+            G.remove_edges_from(G.edges(nio[i]))
+            
     return G, G_0, perc, density, nio
 
 
