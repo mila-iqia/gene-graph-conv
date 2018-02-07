@@ -484,7 +484,7 @@ def get_model(opt, dataset):
         my_model = Random(dataset.nb_nodes, [num_channel] * num_layer, dataset.nb_class, on_cuda=on_cuda)
 
     elif model == 'cnn':
-        assert opt.dataset == 'percolate'
+        assert 'percolate' in opt.dataset
         # TODO: to change the shape.
         #import ipdb; ipdb.set_trace()
 
