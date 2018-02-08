@@ -509,20 +509,30 @@ class CGNLayer(GraphLayer):
         return x
 
     def forward(self, x):
-        adj = Variable(self.sparse_adj, requires_grad=False)
-
-        if self.on_cuda:
-            adj = adj.cuda()
 
         x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
+        size = x.size()
 
+        adj = Variable(self.sparse_adj, requires_grad=False)
+
+        #id_to_keep = self.my_dropout(torch.FloatTensor(np.ones((size[0], size[-1])))).cuda().unsqueeze(1)
+
+        #if self.on_cuda:
+        #    adj = adj.cuda()
+        #    id_to_keep = id_to_keep.cuda()
+
+        #old_x = x
         eye_x = self.eye_linear(x)
-        x = self._adj_mul(x, adj) # local average
+        #import ipdb; ipdb.set_trace()
+        #eye_x = (eye_x * id_to_keep)
+
+        x = self._adj_mul(x, adj)# + old_x# local average
 
 
 
 
-        x = torch.cat([self.linear(x), eye_x], dim=1)# conv
+        x = torch.cat([self.linear(x), eye_x], dim=1)# + old_x# conv
+        #x = (x * id_to_keep)
         #x = self.linear(x)
         x = x.permute(0, 2, 1).contiguous()  # from ex, ch, node -> ex, node, ch
 

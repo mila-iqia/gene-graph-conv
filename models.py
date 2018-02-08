@@ -151,7 +151,7 @@ class SparseLogisticRegression(nn.Module):
 class GraphNetwork(nn.Module):
 
     def __init__(self, nb_nodes, input_dim, channels, adj, out_dim,
-                 on_cuda=True, add_emb=None, transform_adj=None, agregate_adj=None, graphLayerType=graphLayer.CGNLayer, use_gate=0.0001):
+                 on_cuda=True, add_emb=None, transform_adj=None, agregate_adj=None, graphLayerType=graphLayer.CGNLayer, use_gate=0.0001, dropout=False):
         super(GraphNetwork, self).__init__()
 
         if transform_adj is None:
@@ -165,6 +165,8 @@ class GraphNetwork(nn.Module):
         self.add_emb = add_emb
         self.graphLayerType = graphLayerType
         self.agregate_adj = agregate_adj
+        self.dropout = dropout
+
 
         if add_emb:
             logging.info("Adding node embeddings.")
@@ -221,6 +223,11 @@ class GraphNetwork(nn.Module):
         else:
             self.gates = [None] * (len(dims) - 1)
 
+        self.my_dropouts = [None] * (len(dims) - 1)
+        if dropout:
+            print "Doing drop-out"
+            self.my_dropouts = nn.ModuleList([torch.nn.Dropout(int(dropout)*min(id_layer / 10., 0.5)) for id_layer in range(len(dims)-1)])
+
         logging.info("Done!")
 
         # TODO: add all the funky bells and stuff that the old CGN has.
@@ -233,7 +240,9 @@ class GraphNetwork(nn.Module):
 
 
         last_g = None
-        for i, [layer, gate] in enumerate(zip(self.my_convs, self.gates)):
+        for i, [layer, gate, dropout] in enumerate(zip(self.my_convs, self.gates, self.my_dropouts)):
+
+            old_x = x
 
             if self.use_gate > 0.:
 
@@ -249,7 +258,15 @@ class GraphNetwork(nn.Module):
             else:
                 x = layer(x)
 
-            x = F.relu(x)
+            x = F.relu(x)# + old_x
+
+            if dropout is not None:
+                id_to_keep = dropout(torch.FloatTensor(np.ones((x.size(0), x.size(1))))).unsqueeze(2)
+
+                if self.on_cuda:
+                    id_to_keep = id_to_keep.cuda()
+
+                x = x * id_to_keep
 
         x = self.my_logistic_layers[-1](x.view(nb_examples, -1))
 
@@ -311,12 +328,13 @@ class LCG(GraphNetwork):
 
 # Create a module for MLP
 class MLP(nn.Module):
-    def __init__(self, input_dim, channels, out_dim=None, on_cuda=True):
+    def __init__(self, input_dim, channels, out_dim=None, on_cuda=True, dropout=False):
         super(MLP, self).__init__()
 
         self.my_layers = []
         self.out_dim = out_dim
         self.on_cuda = on_cuda
+        self.dropout = dropout
 
         dims = [input_dim] + channels
 
@@ -332,6 +350,11 @@ class MLP(nn.Module):
         else:
             self.last_layer = nn.Linear(input_dim, out_dim)
 
+        self.my_dropout = None
+        if dropout:
+            print "Doing Drop-out"
+            self.my_dropout = torch.nn.Dropout(0.5)
+
         logging.info("Done!")
 
     def forward(self, x):
@@ -340,6 +363,10 @@ class MLP(nn.Module):
         x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
         for layer in self.my_layers:
             x = F.relu(layer(x.view(nb_examples, -1)))  # or relu, sigmoid...
+
+            if self.dropout:
+                #import ipdb; ipdb.set_trace()
+                x = self.my_dropout(x)
 
         x = self.last_layer(x.view(nb_examples, -1))
 
@@ -460,25 +487,25 @@ def get_model(opt, dataset):
         # To have a feel of the model, please take a look at cgn.ipynb
         my_model = CGN(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=dataset.nb_class,
                        on_cuda=on_cuda, add_emb=opt.use_emb,
-                       transform_adj=adj_transform,agregate_adj=agregate_function, use_gate=opt.use_gate)  # TODO: add a bunch of the options
+                       transform_adj=adj_transform,agregate_adj=agregate_function, use_gate=opt.use_gate, dropout=opt.dropout)  # TODO: add a bunch of the options
 
     elif model == 'lcg':
 
         my_model = LCG(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=dataset.nb_class,
                        on_cuda=on_cuda, add_emb=opt.use_emb,
-                       transform_adj=adj_transform,agregate_adj=agregate_function, use_gate=opt.use_gate)   # TODO: add a bunch of the options
+                       transform_adj=adj_transform,agregate_adj=agregate_function, use_gate=opt.use_gate, dropout=opt.dropout)   # TODO: add a bunch of the options
 
     elif model == 'sgc':
         my_model = SGC(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=dataset.nb_class,
                        on_cuda=on_cuda, add_emb=opt.use_emb,
-                       transform_adj=adj_transform,agregate_adj=agregate_function, use_gate=opt.use_gate)   # TODO: add a bunch of the options
+                       transform_adj=adj_transform,agregate_adj=agregate_function, use_gate=opt.use_gate, dropout=opt.dropout)   # TODO: add a bunch of the options
 
     elif model == 'slr':
         #nb_nodes, input_dim, adj, out_dim, on_cuda=True):
         my_model = SparseLogisticRegression(nb_nodes=dataset.nb_nodes, input_dim=1, adj=dataset.get_adj(), out_dim=dataset.nb_class, on_cuda=on_cuda)  # TODO: add a bunch of the options
 
     elif model == 'mlp':
-        my_model = MLP(dataset.nb_nodes, [num_channel] * num_layer, dataset.nb_class, on_cuda=on_cuda)  # TODO: add a bunch of the options
+        my_model = MLP(dataset.nb_nodes, [num_channel] * num_layer, dataset.nb_class, on_cuda=on_cuda, dropout=opt.dropout)  # TODO: add a bunch of the options
 
     elif model == 'random':
         my_model = Random(dataset.nb_nodes, [num_channel] * num_layer, dataset.nb_class, on_cuda=on_cuda)

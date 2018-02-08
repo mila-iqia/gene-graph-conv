@@ -37,6 +37,7 @@ def build_parser():
 
     # Model specific options
     parser.add_argument('--num-channel', default=32, type=int, help='Number of channel in the model.')
+    parser.add_argument('--dropout', action='store_true', help='If we want to perform dropout in the model..')
     parser.add_argument('--skip-connections', action='store_true', help='If we want to add skip connection from every layer to the last.')
     parser.add_argument('--model', default='cgn', choices=['cgn', 'mlp', 'lcg', 'sgc', 'slr', 'cnn', 'random'], help='Number of channel in the CGN.')
     parser.add_argument('--num-layer', default=1, type=int, help='Number of convolution layer in the CGN.')
@@ -179,8 +180,9 @@ def main(argv=None):
             optimizer.step()
 
         time_this_epoch = time.time() - start_timer
+        my_model.eval()
         acc = record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, nb_class, dataset, on_cuda)
-
+        my_model.train()
         # small summary.
         summary= [
             t,
