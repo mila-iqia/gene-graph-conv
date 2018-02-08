@@ -655,7 +655,7 @@ def get_dataset(opt):
         disconnected = opt.disconnected
         num_samples = 1000
 
-        pdataset = PercolateDataset(num_samples=num_samples, use_random_adj=scale_free, size_x=size_perc, size_y=size_perc, center=False, extra_cn=extra_cn)
+        pdataset = PercolateDataset(num_samples=num_samples, use_random_adj=scale_free, size_x=size_perc, size_y=size_perc, extra_cn=extra_cn, disconnected=disconnected)
 
         dataset = GraphWithNoise(dataset=pdataset, num_added_nodes=extra_ucn)
     else:
