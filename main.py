@@ -38,7 +38,6 @@ def build_parser():
     # Model specific options
     parser.add_argument('--num-channel', default=32, type=int, help='Number of channel in the model.')
     parser.add_argument('--dropout', action='store_true', help='If we want to perform dropout in the model..')
-    parser.add_argument('--skip-connections', action='store_true', help='If we want to add skip connection from every layer to the last.')
     parser.add_argument('--model', default='cgn', choices=['cgn', 'mlp', 'lcg', 'sgc', 'slr', 'cnn', 'random'], help='Number of channel in the CGN.')
     parser.add_argument('--num-layer', default=1, type=int, help='Number of convolution layer in the CGN.')
     parser.add_argument('--nb-class', default=None, type=int, help="Number of class for the dataset (won't work with random graph).")
@@ -180,9 +179,14 @@ def main(argv=None):
             optimizer.step()
 
         time_this_epoch = time.time() - start_timer
+<<<<<<< HEAD
         my_model.eval()
         acc = record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, nb_class, dataset, on_cuda)
         my_model.train()
+=======
+        acc, auc = record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, nb_class, dataset, on_cuda)
+
+>>>>>>> a909d03c0d80765e09361758a01d93ddb1dc2a4d
         # small summary.
         summary= [
             t,
@@ -190,15 +194,17 @@ def main(argv=None):
             total_loss.data[0],
             acc['train'],
             acc['valid'],
-            #auc_dict['train'],
-            #auc_dict['valid'],
+            acc['test'],
+            auc['train'],
+            auc['valid'],
+            auc['test'],
             time_this_epoch
         ]
-        summary = "epoch {}, cross_loss: {:.03f}, total_loss: {:.03f}, precision_train: {:0.3f}, precision_valid: {:0.3f}, time: {:.02f} sec".format(*summary)
+        summary = "epoch {}, cross_loss: {:.03f}, total_loss: {:.03f}, acc_train: {:0.3f}, acc_valid: {:0.3f}, acc_test:{:0.3f}, auc_train: {:0.3f}, auc_valid:{:0.3f}, auc_test:{:0.3f} time: {:.02f} sec".format(*summary)
         logging.info(summary)
         if max_valid < acc['valid'] and t != 0:
             max_valid = acc['valid']
-            best_summary = summarize(t, cross_loss.data[0], total_loss.data[0], acc)
+            best_summary = summarize(t, cross_loss.data[0], total_loss.data[0], acc, auc)
 
     logging.info("Done!")
 

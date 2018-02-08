@@ -306,7 +306,7 @@ class SelfConnection(object):
 
     def __call__(self, adj):
 
-        print "Adding self connection!"
+        logging.info("Adding self connection!")
 
         if self.add_self_connection:
             np.fill_diagonal(adj, 1.)
