@@ -306,7 +306,7 @@ class SelfConnection(object):
 
     def __call__(self, adj):
 
-        print "Adding self connection!"
+        logging.info("Adding self connection!")
 
         if self.add_self_connection:
             np.fill_diagonal(adj, 1.)
@@ -495,7 +495,8 @@ class CGNLayer(GraphLayer):
         logging.info("Constructing the sparse matrix...")
         sparse_adj = torch.sparse.FloatTensor(self.edges, flat_adj, torch.Size([self.nb_nodes ,self.nb_nodes]))#.to_dense()
         self.register_buffer('sparse_adj', sparse_adj)
-        self.linear = nn.Conv1d(self.in_dim, self.channels, 1, bias=True)
+        self.linear = nn.Conv1d(self.in_dim, self.channels/2, 1, bias=True) # something to be done witht he stride?
+        self.eye_linear = nn.Conv1d(self.in_dim, self.channels/2, 1, bias=True)
 
     def _adj_mul(self, x, D):
 
@@ -515,12 +516,14 @@ class CGNLayer(GraphLayer):
 
         x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
 
+        eye_x = self.eye_linear(x)
         x = self._adj_mul(x, adj) # local average
 
 
 
 
-        x = self.linear(x) # conv
+        x = torch.cat([self.linear(x), eye_x], dim=1)# conv
+        #x = self.linear(x)
         x = x.permute(0, 2, 1).contiguous()  # from ex, ch, node -> ex, node, ch
 
         # We can do max pooling and stuff, if we want.

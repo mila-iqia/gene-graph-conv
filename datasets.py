@@ -369,7 +369,7 @@ class PercolateDataset(GraphDataset):
 
         for i in range(num_samples):
             if i % 10 == 0:
-                print ".",
+                logging.info("."),
             perc = False
             if i%2 == 0: #generate positive example
                 perc = False
