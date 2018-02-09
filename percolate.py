@@ -107,7 +107,7 @@ def sq2d_lattice_percolation_simple(size_x=10, size_y=10, prob=0.3, extra_cn=0, 
         if perc == perc_new:
             G = G_new.copy()
             density = get_density(G)
-
+    
     if extra_cn > 0:
         #for testing comment out this code
         #def fp_test(): return f(1)
@@ -115,12 +115,14 @@ def sq2d_lattice_percolation_simple(size_x=10, size_y=10, prob=0.3, extra_cn=0, 
         # generate a big graph and then copy nodes from the smaller graph
         G_big, nio_big = sq2d_lattice_graph(size_x+extra_cn,size_y+extra_cn, fp)
         nx.set_node_attributes(G_big,name="value",values=nx.get_node_attributes(G,"value"))
-        G = G_big    
+        G = G_big
         nio = nio_big
         
     if disconnected > 0:
-        for i in range(disconnected):
-            G.remove_edges_from(G.edges(nio[i]))
+        edges = np.asarray(G_0.edges())
+        edges_to_destroy = np.random.choice(edges.shape[0],disconnected)
+        for e in edges_to_destroy:
+            G.remove_edges_from([list(G_0.edges())[e]])
             
     return G, G_0, perc, density, nio
 
