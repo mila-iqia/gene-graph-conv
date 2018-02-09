@@ -227,7 +227,7 @@ class GraphNetwork(nn.Module):
         self.my_dropouts = [None] * (len(dims) - 1)
         if dropout:
             print "Doing drop-out"
-            self.my_dropouts = nn.ModuleList([torch.nn.Dropout(int(dropout)*min(id_layer / 10., 0.4)) for id_layer in range(len(dims)-1)])
+            self.my_dropouts = nn.ModuleList([torch.nn.Dropout(int(dropout)*min((id_layer+1) / 10., 0.4)) for id_layer in range(len(dims)-1)])
 
         logging.info("Done!")
 
