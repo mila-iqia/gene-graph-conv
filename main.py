@@ -179,14 +179,10 @@ def main(argv=None):
             optimizer.step()
 
         time_this_epoch = time.time() - start_timer
-<<<<<<< HEAD
         my_model.eval()
-        acc = record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, nb_class, dataset, on_cuda)
-        my_model.train()
-=======
         acc, auc = record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, nb_class, dataset, on_cuda)
+        my_model.train()
 
->>>>>>> a909d03c0d80765e09361758a01d93ddb1dc2a4d
         # small summary.
         summary= [
             t,
