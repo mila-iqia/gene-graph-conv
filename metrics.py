@@ -9,9 +9,8 @@ def format_mini(mini, model, on_cuda):
     if on_cuda:
         inputs = inputs.cuda()
         targets = targets.cuda()
-
-    targets = targets.data.cpu().long().numpy()
-    preds = model(inputs).max(dim=1)[1].data.cpu().long().numpy()
+    targets = targets.data.cpu().numpy()
+    preds = model(inputs)
     return preds, targets
 
 
@@ -21,7 +20,8 @@ def accuracy(data, model, no_class = None, on_cuda=False):
 
     for mini in data:
         preds, targets = format_mini(mini, model, on_cuda)
-
+        preds = preds.max(dim=1)[1].data.cpu().long().numpy()
+        targets = targets.astype(long)
         id_to_keep = np.ones_like(targets)
         if no_class is not None:
             id_to_keep = targets == no_class
@@ -38,6 +38,7 @@ def auc(data, model, no_class = None, on_cuda=False):
 
     for mini in data:
         preds, targets = format_mini(mini, model, on_cuda)
+        preds = [x[1] for x in preds.data.cpu().numpy()]
         all_preds = np.concatenate([all_preds, preds])
         all_targets = np.concatenate([all_targets, targets])
 
@@ -72,6 +73,7 @@ def compute_metrics_per_class(data, model, nb_class, idx_to_str, on_cuda=False,
     all_preds, all_targets = [], []
     for mini in data:
         preds, targets = format_mini(mini, model, on_cuda)
+        preds = preds.max(dim=1)[1].data.cpu().long().numpy()
         all_preds = np.concatenate([all_preds, preds])
         all_targets = np.concatenate([all_targets, targets])
 

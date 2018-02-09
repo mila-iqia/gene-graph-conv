@@ -197,8 +197,8 @@ def main(argv=None):
         ]
         summary = "epoch {}, cross_loss: {:.03f}, total_loss: {:.03f}, acc_train: {:0.3f}, acc_valid: {:0.3f}, acc_test:{:0.3f}, auc_train: {:0.3f}, auc_valid:{:0.3f}, auc_test:{:0.3f} time: {:.02f} sec".format(*summary)
         logging.info(summary)
-        if max_valid < acc['valid'] and t != 0:
-            max_valid = acc['valid']
+        if max_valid < auc['valid'] and t != 0:
+            max_valid = auc['valid']
             best_summary = summarize(t, cross_loss.data[0], total_loss.data[0], acc, auc)
 
     logging.info("Done!")

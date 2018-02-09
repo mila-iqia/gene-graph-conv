@@ -1,6 +1,7 @@
 import torch
 import logging
 import numpy as np
+from itertools import repeat
 from torch.autograd import Variable
 import torch.nn.functional as F
 from torch import nn
@@ -402,7 +403,8 @@ class Random(nn.Module):
 
     def forward(self, x):
         nb_examples, nb_nodes, nb_channels = x.size()
-        x = Variable(torch.cuda.FloatTensor(np.random.random_integers(-1, 1, (nb_examples, self.out_dim))))
+        guesses = [np.random.permutation(x) for x in repeat(range(self.out_dim), nb_examples)]
+        x = Variable(torch.cuda.FloatTensor(guesses))
         return x
 
     def regularization(self):
@@ -530,6 +532,8 @@ def setup_l1_loss(my_model, l1_loss_lambda, l1_criterion, on_cuda):
         l1_loss += calculate_l1_loss(my_model.my_logistic_layers.parameters(), l1_loss_lambda, l1_criterion, on_cuda)
     if hasattr(my_model, 'my_layers') and len(my_model.my_layers) > 0 and type(my_model.my_layers[0]) == torch.nn.modules.linear.Linear:
         l1_loss += calculate_l1_loss(my_model.my_layers[0].parameters(), l1_loss_lambda, l1_criterion, on_cuda)
+    if hasattr(my_model, 'last_layer') and type(my_model.last_layer) == torch.nn.modules.linear.Linear:
+        l1_loss += calculate_l1_loss(my_model.last_layer.parameters(), l1_loss_lambda, l1_criterion, on_cuda)
     return l1_loss
 
 

@@ -479,11 +479,10 @@ def split_dataset(dataset, batch_size=100, random=False, train_ratio=0.8, seed=1
 
         idx_train = all_idx[:nb_train]
         idx_valid = all_idx[nb_train:nb_train + nb_rest]
-        idx_test = all_idx[nb_train:nb_train + nb_rest]
+        idx_test = all_idx[nb_train:nb_train + 2 * nb_rest]
 
     train_set = DataLoader(dataset, batch_size=batch_size, sampler=SubsetRandomSampler(idx_train))
     test_set = DataLoader(dataset, batch_size=batch_size, sampler=SubsetRandomSampler(idx_test))
-
     valid_set = DataLoader(dataset, batch_size=batch_size, sampler=SubsetRandomSampler(idx_valid))
     logger.info("Our sets are of length: train={}, valid={}, tests={}".format(len(idx_train), len(idx_valid), len(idx_test)))
     return train_set, valid_set, test_set
@@ -655,7 +654,7 @@ def get_dataset(opt):
         disconnected = opt.disconnected
         num_samples = 1000
 
-        pdataset = PercolateDataset(num_samples=num_samples, use_random_adj=scale_free, size_x=size_perc, size_y=size_perc, extra_cn=extra_cn, disconnected=disconnected)
+        pdataset = PercolateDataset(num_samples=num_samples, use_random_adj=scale_free, size_x=size_perc, size_y=size_perc, center=False, extra_cn=extra_cn)
 
         dataset = GraphWithNoise(dataset=pdataset, num_added_nodes=extra_ucn)
     else:
