@@ -147,6 +147,7 @@ def main(argv=None):
 
     max_valid = 0
     best_summary = {}
+    patience = 20
 
     # The training.
     for t in range(epoch):
@@ -197,9 +198,14 @@ def main(argv=None):
         ]
         summary = "epoch {}, cross_loss: {:.03f}, total_loss: {:.03f}, acc_train: {:0.3f}, acc_valid: {:0.3f}, acc_test:{:0.3f}, auc_train: {:0.3f}, auc_valid:{:0.3f}, auc_test:{:0.3f} time: {:.02f} sec".format(*summary)
         logging.info(summary)
-        if max_valid < auc['valid'] and t != 0:
+
+        patience = patience - 1
+        if patience == 0:
+            break
+        if max_valid < auc['valid'] and t > 5:
             max_valid = auc['valid']
             best_summary = summarize(t, cross_loss.data[0], total_loss.data[0], acc, auc)
+            patience = 20
 
     logging.info("Done!")
 
