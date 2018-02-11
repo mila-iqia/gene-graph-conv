@@ -227,7 +227,8 @@ class GraphNetwork(nn.Module):
         self.my_dropouts = [None] * (len(dims) - 1)
         if dropout:
             print "Doing drop-out"
-            self.my_dropouts = nn.ModuleList([torch.nn.Dropout(int(dropout)*min(id_layer / 10., 0.5)) for id_layer in range(len(dims)-1)])
+            self.my_dropouts = nn.ModuleList([torch.nn.Dropout(int(dropout)*min((id_layer+1) / 10., 0.4)) for id_layer in range(len(dims)-1)])
+            #self.my_dropouts = nn.ModuleList([torch.nn.Dropout(0.5) for id_layer in range(len(dims)-1)])
 
         logging.info("Done!")
 
@@ -263,6 +264,7 @@ class GraphNetwork(nn.Module):
 
             if dropout is not None:
                 id_to_keep = dropout(torch.FloatTensor(np.ones((x.size(0), x.size(1))))).unsqueeze(2)
+                #import ipdb; ipdb.set_trace()
 
                 if self.on_cuda:
                     id_to_keep = id_to_keep.cuda()
@@ -532,6 +534,8 @@ def setup_l1_loss(my_model, l1_loss_lambda, l1_criterion, on_cuda):
         l1_loss += calculate_l1_loss(my_model.my_logistic_layers.parameters(), l1_loss_lambda, l1_criterion, on_cuda)
     if hasattr(my_model, 'my_layers') and len(my_model.my_layers) > 0 and type(my_model.my_layers[0]) == torch.nn.modules.linear.Linear:
         l1_loss += calculate_l1_loss(my_model.my_layers[0].parameters(), l1_loss_lambda, l1_criterion, on_cuda)
+    if hasattr(my_model, 'last_layer') and type(my_model.last_layer) == torch.nn.modules.linear.Linear:
+        l1_loss += calculate_l1_loss(my_model.last_layer.parameters(), l1_loss_lambda, l1_criterion, on_cuda)
     return l1_loss
 
 

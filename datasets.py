@@ -475,10 +475,12 @@ def split_dataset(dataset, batch_size=100, random=False, train_ratio=0.8, seed=1
         nb_example = len(all_idx)
         nb_train = int(nb_example * train_ratio)
         nb_rest = (nb_example - nb_train) / 2
+        nb_valid = nb_train + int(nb_rest)
+        nb_test = nb_train + 2 * int(nb_rest)
 
         idx_train = all_idx[:nb_train]
-        idx_valid = all_idx[nb_train:nb_train + nb_rest]
-        idx_test = all_idx[nb_train:nb_train + 2 * nb_rest]
+        idx_valid = all_idx[nb_train:nb_valid]
+        idx_test = all_idx[nb_valid:nb_test]
 
     train_set = DataLoader(dataset, batch_size=batch_size, sampler=SubsetRandomSampler(idx_train))
     test_set = DataLoader(dataset, batch_size=batch_size, sampler=SubsetRandomSampler(idx_test))
@@ -652,8 +654,7 @@ def get_dataset(opt):
         extra_ucn = opt.extra_ucn
         disconnected = opt.disconnected
         num_samples = 1000
-
-        pdataset = PercolateDataset(num_samples=num_samples, use_random_adj=scale_free, size_x=size_perc, size_y=size_perc, center=False, extra_cn=extra_cn)
+        pdataset = PercolateDataset(num_samples=num_samples, use_random_adj=scale_free, size_x=size_perc, size_y=size_perc, center=False, disconnected=disconnected, extra_cn=extra_cn)
 
         dataset = GraphWithNoise(dataset=pdataset, num_added_nodes=extra_ucn)
     else:

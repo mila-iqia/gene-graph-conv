@@ -15,4 +15,4 @@ case $i in
     ;;
 esac
 done
-python -W ignore baseline.py --log=silent --cuda --baseline-model=$model --baseline-dataset=$dataset
+python -W ignore ../../../baseline.py --log=silent --cuda --baseline-model=$model --baseline-dataset=$dataset
