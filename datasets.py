@@ -93,8 +93,6 @@ class GraphGeneDataset(GraphDataset):
 
         super(GraphGeneDataset, self).__init__(**kwargs)
 
-        self.label_name = self.labels.attrs
-
     def load_data(self):
 
 
@@ -107,16 +105,17 @@ class GraphGeneDataset(GraphDataset):
         self.sample_names = self.file['sample_names']
         self.node_names = np.array(self.file['gene_names'])
         self.nb_class = self.nb_class if self.nb_class is not None else len(self.labels[0])
-
+        
+        self.label_name = self.labels.attrs
+        
+        if self.labels.shape != self.labels[:].reshape(-1).shape: 
+            print "Converting one-hot labels to integers"
+            self.labels = np.argmax(self.labels[:], axis=1)
+        
         # Take a number of subclasses
         if self.sub_class is not None:
-            self.data = self.data[sum([(self.labels[:, i] == 1.) for i in self.sub_class]) >= 1]
-            self.labels = self.labels[sum([(self.labels[:, i] == 1.) for i in self.sub_class]) >= 1, :]
-            self.labels = self.labels[:, self.sub_class]
-
-            # Update the labels, since we only take a subset.
-            self.label_name = {str(i): self.label_name[str(k)] for i, k in enumerate(self.sub_class)}
-            self.label_name.update({self.label_name[str(k)]: str(k) for k in self.label_name.keys()})
+            self.data = self.data[[i in self.sub_class for i in self.labels]]
+            self.labels = self.labels[[i in self.sub_class for i in self.labels]]
             self.nb_class = len(self.sub_class)
 
     def __getitem__(self, idx):
@@ -193,7 +192,7 @@ class BRCACoexpr(GraphGeneDataset):
 
     """Breast cancer, with coexpression graph. """
 
-    def __init__(self, graph_dir='/data/lisa/data/genomics/TCGA/', graph_file='BRCA_coexpr.hdf5', nb_class=None, **kwargs):
+    def __init__(self, graph_dir='/data/lisa/data/genomics/TCGA/', graph_file='BRCA_coexpr.hdf5', nb_class=2, **kwargs):
 
         # For this dataset, when we chose 2 classes, it's the 'Infiltrating Ductal Carcinoma'
         # and the 'Infiltrating Lobular Carcinoma'
@@ -630,10 +629,10 @@ def get_dataset(opt):
 
         logging.info("Getting TCGA BRCA type")
         # To have a feel of TCGA, take a look at 'view_graph_TCGA.ipynb'
-        dataset = BRCACoexpr(nb_class=nb_class, use_random_adj=scale_free, percentile=percentile)
+        dataset = BRCACoexpr(use_random_adj=scale_free, percentile=percentile)
 
-        if nb_class is None: # means we keep all the class (29 I think)
-            nb_class = len(dict(dataset.labels.attrs))/2
+        #if nb_class is None: # means we keep all the class (29 I think)
+        #    nb_class = len(dict(dataset.labels.attrs))/2
 
     elif dataset_name == 'percolate':
         dataset = PercolateDataset(use_random_adj=scale_free)
