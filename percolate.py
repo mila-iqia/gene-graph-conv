@@ -50,7 +50,7 @@ def if_percolates_simple(G, x_size, y_size):
     source = []
     ground = []
     M = T.copy()
-    
+
     for node in T.nodes():
         if node[0] == 0:
             new_node = (-1, node[1])
@@ -62,29 +62,29 @@ def if_percolates_simple(G, x_size, y_size):
             M.add_node(new_node, value = 2)
             M.add_edge(new_node, node)
             source.append(new_node)
-    
-    
+
+
     # detect path through 1-s
     for s_node in ground:
         for u, v in nx.dfs_edges(M, s_node):
             if v in source:
                 return True
-   
+
     return False
 
 def sq2d_lattice_percolation_simple(size_x=10, size_y=10, prob=0.3, extra_cn=0, disconnected=0):
     def fp(): return f(prob)
-    
+
     #Generating square lattice graph
     G, nio = sq2d_lattice_graph(size_x,size_y, fp)
     G_0 = G.copy()
-    
+
     #Getting density of open nodes
     density = get_density(G)
 
     #Checking percolation
     perc = if_percolates_simple(G, size_x, size_y)
-    
+
     upper_density_threshold = 0.51
     lower_density_threshold = 0.49
 
@@ -103,27 +103,30 @@ def sq2d_lattice_percolation_simple(size_x=10, size_y=10, prob=0.3, extra_cn=0, 
             G_new.nodes[node]['value'] = 0
 
         perc_new = if_percolates_simple(G_new, size_x, size_y)
-        
+
         if perc == perc_new:
             G = G_new.copy()
             density = get_density(G)
-    
+
     if extra_cn > 0:
         #for testing comment out this code
         #def fp_test(): return f(1)
-        
+
         # generate a big graph and then copy nodes from the smaller graph
         G_big, nio_big = sq2d_lattice_graph(size_x+extra_cn,size_y+extra_cn, fp)
         nx.set_node_attributes(G_big,name="value",values=nx.get_node_attributes(G,"value"))
         G = G_big
         nio = nio_big
-        
-    if disconnected > 0:
-        edges = np.asarray(G_0.edges())
-        edges_to_destroy = np.random.choice(edges.shape[0],disconnected)
-        for e in edges_to_destroy:
-            G.remove_edges_from([list(G_0.edges())[e]])
-            
+
+    edges = np.asarray(G_0.edges())
+    if disconnected > edges.shape[0]:
+        raise Exception("You can't remove that many edges from a percolate graph of this size")
+
+    choices = np.random.choice(edges.shape[0], disconnected, replace=False)
+
+    for i in range(0, disconnected):
+        G.remove_edges_from([list(G_0.edges())[choices[i]]])
+
     return G, G_0, perc, density, nio
 
 
@@ -185,7 +188,7 @@ if __name__=='__main__':
             for x in xrange(args.size_x):
                 for y in xrange(args.size_y):
                     nodeinorder.append((y,x))
-            
+
             nx.draw_networkx(G, pos=nodeinorder,with_labels=True,nodelist=list(labelsG.keys()), node_color=list(labelsG.values()))
             plt.show()
 
@@ -203,7 +206,7 @@ if __name__=='__main__':
         #generate graph
         G, T, perc, dens, nio = sq2d_lattice_percolation_simple( args.size_x, args.size_y, args.prob)
         node_list = nio#list(G.nodes())
-        
+
         M = len(node_list)
         mat = nx.adjacency_matrix(G, nodelist=node_list).todense()
         # mat = nx.to_numpy_matrix(nx.adjacency_matrix(G), weight=None)
@@ -241,4 +244,3 @@ if __name__=='__main__':
 
         fmy.flush()
         fmy.close()
-
