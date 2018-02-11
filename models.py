@@ -264,6 +264,7 @@ class GraphNetwork(nn.Module):
 
             if dropout is not None:
                 id_to_keep = dropout(torch.FloatTensor(np.ones((x.size(0), x.size(1))))).unsqueeze(2)
+                #import ipdb; ipdb.set_trace()
 
                 if self.on_cuda:
                     id_to_keep = id_to_keep.cuda()

@@ -37,7 +37,7 @@ def build_parser():
 
     # Model specific options
     parser.add_argument('--num-channel', default=32, type=int, help='Number of channel in the model.')
-    parser.add_argument('--dropout', action='store_true', help='If we want to perform dropout in the model..')
+    parser.add_argument('--dropout', default=False, type=bool, help='If we want to perform dropout in the model..')
     parser.add_argument('--model', default='cgn', choices=['cgn', 'mlp', 'lcg', 'sgc', 'slr', 'cnn', 'random'], help='Number of channel in the CGN.')
     parser.add_argument('--num-layer', default=1, type=int, help='Number of convolution layer in the CGN.')
     parser.add_argument('--nb-class', default=None, type=int, help="Number of class for the dataset (won't work with random graph).")
@@ -205,7 +205,7 @@ def main(argv=None):
         if max_valid < auc['valid'] and t > 5:
             max_valid = auc['valid']
             best_summary = summarize(t, cross_loss.data[0], total_loss.data[0], acc, auc)
-            patience = 20
+            patience = 100
 
     logging.info("Done!")
 
