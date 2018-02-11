@@ -117,6 +117,8 @@ class GraphGeneDataset(GraphDataset):
             self.data = self.data[[i in self.sub_class for i in self.labels]]
             self.labels = self.labels[[i in self.sub_class for i in self.labels]]
             self.nb_class = len(self.sub_class)
+            for i,c in enumerate(np.sort(self.sub_class)):
+                self.labels[self.labels == c] = i
 
     def __getitem__(self, idx):
 
