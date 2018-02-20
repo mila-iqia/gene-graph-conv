@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-declare -a models=("lr_no_l1" "lr_with_l1" "slr_with_l1" "mlp" "cgn_pool" "cgn_no_pool" "cgn_dropout" "random")
-#declare -a models=("lr_no_l1")
-declare -a datasets=("synmin")
+declare -a models=("cgn_pool")
+declare -a datasets=("percolate-plus")
 if [ $# -eq 0 ]
   then
     exit
@@ -15,7 +14,7 @@ case $i in
 esac
 done
 
-DATE=$(date +%F%k%M)
+DATE=$(date +%F%k%M%S)
 declare -a exp_dir="data/$experiment/"
 declare -a data_dir=$DATE
 declare -a dir=$exp_dir$data_dir
@@ -30,6 +29,6 @@ do
     do
         export dataset=$dataset
         export model=$model
-        sbatch --gres=gpu -x mila00 ./baseline.sh -m=$model -d=$dataset
+        sbatch --gres=gpu:titanx -x mila00 ./baseline.sh -m=$model -d=$dataset
     done
 done

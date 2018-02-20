@@ -6,3 +6,4 @@ slurm-*
 cache/
 slurm/
 testing123/
+data/*/*
