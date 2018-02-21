@@ -81,37 +81,48 @@ def get_human_regulation_TRRUST(output_dir='raw_data', remove_unknown=False):
     return regulation_data, regulation_types
 
 def get_human_regulation_RegNetwork(output_dir='raw_data'):
-    csv_file_node = os.path.join(output_dir, 'human.node')
-    csv_file_source = os.path.join(output_dir, 'human.source')
-    if (not os.path.exists(csv_file_node) ) or (not os.path.exists(csv_file_source)):
-        os.system('wget http://www.regnetworkweb.org/download/human.zip')
-        os.system('unzip human.zip -d '+output_dir)
-        os.system('rm human.zip')
+    # csv_file_node = os.path.join(output_dir, 'human.node')
+    # csv_file_source = os.path.join(output_dir, 'human.source')
+    # if (not os.path.exists(csv_file_node) ) or (not os.path.exists(csv_file_source)):
+    #     os.system('wget http://www.regnetworkweb.org/download/human.zip')
+    #     os.system('unzip human.zip -d '+output_dir)
+    #     os.system('rm human.zip')
 
-    reg_file = os.path.join(output_dir, 'kegg.human.reg.direction')
-    if not os.path.exists(reg_file):
-        os.system('wget http://www.regnetworkweb.org/download/RegulatoryDirections.rar')
-        os.system('unrar e RegulatoryDirections.rar ' + output_dir)
-        os.system('rm RegulatoryDirections.rar')
+    # reg_file = os.path.join(output_dir, 'kegg.human.reg.direction')
+    # if not os.path.exists(reg_file):
+    #     os.system('wget http://www.regnetworkweb.org/download/RegulatoryDirections.rar')
+    #     os.system('unrar e RegulatoryDirections.rar ' + output_dir)
+    #     os.system('rm RegulatoryDirections.rar')
     
-    owl_file = os.path.join(output_dir, 'human.owl')
-    if not os.path.exists(owl_file):
-        os.system('wget http://www.regnetworkweb.org/download/human.owl.zip')
-        os.system('unzip human.owl.zip -d '+output_dir)
-        os.system('rm human.owl.zip')
+    # owl_file = os.path.join(output_dir, 'human.owl')
+    # if not os.path.exists(owl_file):
+    #     os.system('wget http://www.regnetworkweb.org/download/human.owl.zip')
+    #     os.system('unzip human.owl.zip -d '+output_dir)
+    #     os.system('rm human.owl.zip')
 
-    with open(csv_file_node) as fin:
-        for line in fin:
-            print line
-            # break
+    # with open(csv_file_node) as fin:
+    #     for line in fin:
+    #         print line
+    #         # break
 
-    with open(csv_file_source) as fin:
-        for line in fin:
-            print line
-            break
+    # with open(csv_file_source) as fin:
+    #     for line in fin:
+    #         print line
+    #         break
 
-    with open(reg_file) as fin:
+    # with open(reg_file) as fin:
+    #     for line in fin:
+    #         print line
+    #         break
+    data = []
+    csv_file = os.path.join(output_dir, 'export_Wed_Feb_21_18_09_14_UTC_2018.csv')
+    with open(csv_file) as fin:
         for line in fin:
-            print line
-            break
+            a = line.split(',')
+            gene1 = a[0][1:-1]
+            gene2 = a[2][1:-1]
+            data.append((gene1, gene2))
+    return data
+
+    #
     
