@@ -24,7 +24,6 @@ class AgregateGraph(object):
         self.striding_method = striding_method
         self.nb_nodes = adj.shape[0]
 
-
         # Change the adj (Connectivity and stuff)
         if self.transform_adj:
             logging.info("Transforming the adj matrix")
@@ -67,13 +66,6 @@ class PoolGraph(object):
             logging.info("We are keeping all the nodes. ignoring the agregation step.")
             self.please_ignore = True
 
-        #edges = torch.LongTensor(np.array(np.where(self.adj))) # The list of edges
-        #flat_adj = self.adj.flatten()[np.where(self.adj.flatten())] # get the value
-        #flat_adj = torch.FloatTensor(flat_adj)
-
-        # Constructing a sparse matrix
-        #logging.info("Constructing the sparse matrix...")
-        #self.adj = torch.sparse.FloatTensor(edges, flat_adj, torch.Size([self.nb_nodes ,self.nb_nodes]))#.to_dense()
 
     def __call__(self, x):
 
@@ -90,8 +82,6 @@ class PoolGraph(object):
 
         x = x.permute(0, 2, 1).contiguous() # put in ex, channel, node
         x_shape = x.size()
-
-        #import ipdb; ipdb.set_trace()
 
         if self.type == 'max':
             max_value = (x.view(-1, x.size(-1), 1) * adj).max(dim=1)[0]
@@ -361,10 +351,6 @@ class ApprNormalizeLaplacian(object):
         norm_transform = D_inv.dot(adj).dot(D_inv)
 
         logging.info("Done!")
-        #import ipdb; ipdb.set_trace()
-
-        #norm_transform = np.diag(to_keep)* norm_transform
-
 
         # saving the processed approximation
         if self.processed_path:

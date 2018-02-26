@@ -105,13 +105,13 @@ class GraphGeneDataset(GraphDataset):
         self.sample_names = self.file['sample_names']
         self.node_names = np.array(self.file['gene_names'])
         self.nb_class = self.nb_class if self.nb_class is not None else len(self.labels[0])
-        
+
         self.label_name = self.labels.attrs
-        
-        if self.labels.shape != self.labels[:].reshape(-1).shape: 
+
+        if self.labels.shape != self.labels[:].reshape(-1).shape:
             print "Converting one-hot labels to integers"
             self.labels = np.argmax(self.labels[:], axis=1)
-        
+
         # Take a number of subclasses
         if self.sub_class is not None:
             self.data = self.data[[i in self.sub_class for i in self.labels]]
@@ -259,76 +259,6 @@ class RandomGraphDataset(GraphDataset):
         labels = {0: 'neg', 'neg':0, 'pos':1, 1:'pos'}
         return labels[l]
 
-
-# class RandomGraphDatasetHard(Dataset):
-#     """
-#     A random dataset with a random graph for debugging
-#     """
-#     def __init__(self, nb_nodes=10, nb_edges=5, nb_examples=1000,
-#                  transform=None, transform_adj_func=None, scale_free=True, seed=1993):
-#
-#         np.random.seed(seed)
-#         self.nb_nodes = nb_nodes
-#         self.nb_examples = nb_examples
-#
-#         # Creating the graph
-#         # Degree matrix
-#         self.adj = random_adjacency_matrix(nb_nodes, nb_edges, scale_free)
-#
-#         ## ensure we have relationships between nodes for labels
-#
-#         print self.adj
-#
-#
-#         self.nb_edges = (self.adj.sum() - nb_nodes) / 2
-#         self.nb_class = 2
-#
-#         # Generating the data
-#         self.data = np.random.randn(nb_examples, nb_nodes, 1)
-#
-#         # It's technically a binary classification problem, but to make it more general I treat it as a classification problem
-#         self.labels = np.zeros((nb_examples, 2))
-#         self.labels[:, 0] = self.gt_fn(self.data).reshape(-1)
-#         self.labels[:, 1] = 1 - self.labels[:, 0]
-#
-#         # Transform and stuff
-#         self.transform = transform
-#         self.transform_adj = None
-#
-#         if transform_adj_func is not None:
-#             assert False # Francis was lazy, to refactorize.
-#             self.transform_adj = transform_adj_func(self.adj)
-#
-#
-#     def gt_fn(self,x):
-#         return (np.max(x[:,[0,1]], axis=1) > ((x[:,2]) + x[:,3]/2.0))*1.0
-#
-#     def __len__(self):
-#         return self.data.shape[0]
-#
-#     def __getitem__(self, idx):
-#
-#         sample = self.data[idx]
-#         sample = {'sample': sample, 'labels': self.labels[idx]}
-#
-#         if self.transform:
-#             sample = self.transform(sample)
-#
-#         return sample
-#
-#     def get_adj(self, transform=True):
-#
-#         if self.transform_adj is None:
-#             return self.adj
-#         else:
-#             return self.transform_adj
-#
-#     def labels_name(self, l):
-#
-#         labels = {0: 'neg', 'neg':0, 'pos':1, 1:'pos'}
-#
-#         return labels[l]
-
 class PercolateDataset(GraphDataset):
 
     """
@@ -367,7 +297,6 @@ class PercolateDataset(GraphDataset):
 
         expression_data = []
         labels_data = []
-
         for i in range(num_samples):
             if i % 10 == 0:
                 logging.info("."),
@@ -395,7 +324,6 @@ class PercolateDataset(GraphDataset):
                     features[j] = attrs[node]
                 expression_data.append(features)
                 labels_data.append(0)
-
         adj = nx.adjacency_matrix(G, nodelist=nio).todense()
         expression_data = np.asarray(expression_data)
         labels_data = np.asarray(labels_data)
@@ -644,7 +572,6 @@ def get_dataset(opt):
     elif dataset_name == 'tcga-gbm':
         logging.info("Getting TCGA GBM Dataset")
         dataset = GBMDataset(use_random_adj=scale_free)
-
     elif dataset_name == 'nslr-syn':
         logging.info("Getting NSLR Synthetic Dataset")
         dataset = NSLRSyntheticDataset(use_random_adj=scale_free)
@@ -655,7 +582,7 @@ def get_dataset(opt):
         extra_cn = opt.extra_cn
         extra_ucn = opt.extra_ucn
         disconnected = opt.disconnected
-        num_samples = 1000
+        num_samples = opt.perc_examples
         pdataset = PercolateDataset(num_samples=num_samples, use_random_adj=scale_free, size_x=size_perc, size_y=size_perc, center=False, disconnected=disconnected, extra_cn=extra_cn)
 
         dataset = GraphWithNoise(dataset=pdataset, num_added_nodes=extra_ucn)

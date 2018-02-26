@@ -55,6 +55,7 @@ def build_parser():
     parser.add_argument('--extra-cn', default=0, type=int, help="The number of extra nodes with edges in the percolate-plus dataset.")
     parser.add_argument('--extra-ucn', default=0, type=int, help="The number of extra nodes without edges in the percolate-plus dataset")
     parser.add_argument('--disconnected', default=0, type=int, help="The number of disconnected nodes from the perc subgraph without edges in the percolate-plus dataset")
+    parser.add_argument('--perc-examples', default=1000, type=int, help="The total number of percolate examples")
     return parser
 
 def parse_args(argv):
@@ -180,10 +181,11 @@ def main(argv=None):
             optimizer.step()
 
         time_this_epoch = time.time() - start_timer
+
         my_model.eval()
         acc, auc = record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, nb_class, dataset, on_cuda)
         my_model.train()
-        # small summary.
+
         summary= [
             t,
             cross_loss.data[0],
@@ -208,7 +210,6 @@ def main(argv=None):
             patience = 100
 
     logging.info("Done!")
-
     if opt.log == "console":
         monitoring.monitor_everything(my_model, valid_set, opt, exp_dir)
         logging.info("Nothing will be log, everything will only be shown on screen.")

@@ -14,4 +14,4 @@ case $i in
 esac
 done
 
-python -W ignore ~/Documents/code/conv-graph/search.py  --cuda --log=silent --search-model=$model --search-dataset=$dataset
+python -W ignore search.py  --cuda --log=silent --search-model=$model --search-dataset=$dataset
