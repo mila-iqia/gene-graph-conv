@@ -1,16 +1,16 @@
 import os
-import argparse
 import pandas as pd
 import numpy as np
-import matplotlib as mpl
 import matplotlib.pyplot as plt
-import fileinput
+
 
 def main(argv=None):
-    dfs = []
     df = pd.DataFrame()
-    params = [{'column_name': 'extra_cn', 'pretty_name': 'Percolate Task \n with Connected Uninformative Nodes'}, {'column_name': 'extra_ucn', 'pretty_name': 'Percolate Task \n with Unconnected Uninformative Nodes'}, {'column_name': 'disconnected', 'pretty_name': 'Percolate Task \n with Removed Edges'}]
-    model_names = {'lr_with_l1': 'Lasso', 'lr_no_l1': 'Logistic Regression','slr_no_l1': 'SLR (no L1)', 'random': 'Random', 'slr_with_l1': 'SLR', 'mlp': 'MLP', 'cgn_no_pool': 'GCN', 'cgn_pool': 'GCN (Pooling)', 'cgn_dropout': 'GCN (Dropout)'}
+    params = [{'column_name': 'extra_cn', 'pretty_name': 'Percolate Task \n with Connected Uninformative Nodes'},
+              {'column_name': 'extra_ucn', 'pretty_name': 'Percolate Task \n with Unconnected Uninformative Nodes'},
+              {'column_name': 'disconnected', 'pretty_name': 'Percolate Task \n with Removed Edges'}]
+    model_names = {'lr_with_l1': 'Lasso', 'lr_no_l1': 'Logistic Regression', 'slr_no_l1': 'SLR (no L1)', 'random': 'Random', 'slr_with_l1': 'SLR',
+                   'mlp': 'MLP', 'cgn_no_pool': 'GCN', 'cgn_pool': 'GCN (Pooling)', 'cgn_dropout': 'GCN (Dropout)'}
     x_axis = {'extra_cn': '# of Connected Uninformative Nodes', 'extra_ucn': '# of Unconnected Uninformative Nodes', 'disconnected': '# of Edges Removed'}
     linestyles = {'random': ':', 'slr_with_l1': '--', 'mlp': '--', 'cgn_no_pool': '-.', 'cgn_pool': ':', 'cgn_dropout': '-'}
     dirs = ['data/cn/iclr_data/', 'data/ucn/iclr_data/', 'data/disconnected/iclr_data/']
@@ -42,19 +42,20 @@ def main(argv=None):
                     if df.model[0] == "lr_with_l1":
                         continue
                     df.test_auc_mean.name = model_names[df.model[0]]
-                    dashes = []
                     if df.model[0] == "slr_with_l1":
-                        df.test_auc_mean.plot(ax=axes[index], yerr=df.test_auc_std, sharey=True, legend=False, markersize=0, linestyle=linestyles[df.model[0]], dashes=(5, 2), fontsize=13)
+                        df.test_auc_mean.plot(ax=axes[index], yerr=df.test_auc_std, sharey=True, legend=False, markersize=0,
+                                              linestyle=linestyles[df.model[0]], dashes=(5, 2), fontsize=13)
                     else:
                         df.test_auc_mean.plot(ax=axes[index], yerr=df.test_auc_std, sharey=True, legend=False, markersize=0, linestyle=linestyles[df.model[0]], fontsize=13)
 
-                    axes[index].set_title(v['pretty_name'], fontsize=22);
+                    axes[index].set_title(v['pretty_name'], fontsize=22)
                     axes[index].set_xlabel(x_axis[v['column_name']], fontsize=20, labelpad=14)
                     axes[index].set_ylabel('Mean AUROC', fontsize=20, labelpad=14)
     plt.legend(bbox_to_anchor=(-1.66, 1.18, 2.0, .122), loc=3, ncol=5, mode="expand", borderaxespad=0., fontsize=20, frameon=True)
 
     plt.subplots_adjust(left=None, bottom=None, right=None, top=0.8, wspace=0.05, hspace=1.1)
     plt.show()
+
 
 def calculate_cn(index):
     if index.tolist() == []:

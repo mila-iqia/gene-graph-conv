@@ -8,7 +8,6 @@ import networkx
 import pandas as pd
 import collections
 import random
-from torchvision import transforms, utils
 
 
 class GraphDataset(Dataset):
@@ -56,7 +55,7 @@ class GraphDataset(Dataset):
 
         # Center
         if center:
-            self.data = self.data - self.data.mean(axis=0) # Ugly, to redo.
+            self.data = self.data - self.data.mean(axis=0)  # Ugly, to redo.
 
     def load_data(self):
         raise NotImplementedError()
@@ -72,6 +71,7 @@ class GraphDataset(Dataset):
 
     def get_adj(self):
         return self.adj
+
 
 class GraphGeneDataset(GraphDataset):
     """General Dataset to load different graph gene dataset."""
@@ -94,8 +94,6 @@ class GraphGeneDataset(GraphDataset):
         super(GraphGeneDataset, self).__init__(**kwargs)
 
     def load_data(self):
-
-
         graph_file = os.path.join(self.graph_dir, self.graph_file)
         self.file = h5py.File(graph_file, 'r')
         self.data = np.array(self.file['expression_data'])
@@ -117,7 +115,7 @@ class GraphGeneDataset(GraphDataset):
             self.data = self.data[[i in self.sub_class for i in self.labels]]
             self.labels = self.labels[[i in self.sub_class for i in self.labels]]
             self.nb_class = len(self.sub_class)
-            for i,c in enumerate(np.sort(self.sub_class)):
+            for i, c in enumerate(np.sort(self.sub_class)):
                 self.labels[self.labels == c] = i
 
     def __getitem__(self, idx):
@@ -145,6 +143,7 @@ class TCGATissue(GraphGeneDataset):
     def __init__(self, graph_dir='/data/lisa/data/genomics/TCGA/', graph_file='TCGA_tissue_ppi.hdf5', **kwargs):
         super(TCGATissue, self).__init__(graph_dir=graph_dir, graph_file=graph_file, name='TCGATissue', **kwargs)
 
+
 class TCGAForLabel(GraphGeneDataset):
 
     """TCGA Dataset."""
@@ -152,33 +151,30 @@ class TCGAForLabel(GraphGeneDataset):
     def __init__(self,
                  graph_dir='/data/lisa/data/genomics/TCGA/',
                  graph_file='TCGA_tissue_ppi.hdf5',
-                 clinical_file = "PANCAN_clinicalMatrix.gz",
-                 clinical_label = "gender",
+                 clinical_file="PANCAN_clinicalMatrix.gz",
+                 clinical_label="gender",
                  **kwargs):
         super(TCGAForLabel, self).__init__(graph_dir=graph_dir, graph_file=graph_file, name='TCGAForLabel', **kwargs)
 
         dataset = self
 
         clinical_raw = pd.read_csv(graph_dir + clinical_file, compression='gzip', header=0, sep='\t', quotechar='"')
-        clinical_raw = clinical_raw.set_index("sampleID");
-
+        clinical_raw = clinical_raw.set_index("sampleID")
 
         logging.info("Possible labels to select from ", clinical_file, " are ", list(clinical_raw.columns))
         logging.info("Selected label is ", clinical_label)
-
 
         clinical = clinical_raw[[clinical_label]]
         clinical = clinical.dropna()
 
         data_raw = pd.DataFrame(dataset.data, index=dataset.sample_names)
-        data_raw.index.name ="sampleID"
+        data_raw.index.name = "sampleID"
         samples = pd.DataFrame(np.asarray(dataset.sample_names), index=dataset.sample_names)
-        samples.index.name ="sampleID"
+        samples.index.name = "sampleID"
 
         data_joined = data_raw.loc[clinical.index]
         data_joined = data_joined.dropna()
         clinical_joined = clinical.loc[data_joined.index]
-
 
         logging.info("clinical_raw", clinical_raw.shape, ", clinical", clinical.shape, ", clinical_joined", clinical_joined.shape)
         logging.info("data_raw", data_raw.shape, "data_joined", data_joined.shape)
@@ -187,7 +183,6 @@ class TCGAForLabel(GraphGeneDataset):
 
         self.labels = pd.get_dummies(clinical_joined).as_matrix().astype(np.float)
         self.data = data_joined.as_matrix()
-
 
 
 class BRCACoexpr(GraphGeneDataset):
@@ -256,8 +251,9 @@ class RandomGraphDataset(GraphDataset):
         return sample
 
     def labels_name(self, l):
-        labels = {0: 'neg', 'neg':0, 'pos':1, 1:'pos'}
+        labels = {0: 'neg', 'neg': 0, 'pos': 1, 1: 'pos'}
         return labels[l]
+
 
 class PercolateDataset(GraphDataset):
 
@@ -271,11 +267,10 @@ class PercolateDataset(GraphDataset):
         self.size_x = size_x
         self.size_y = size_y
         self.num_samples = num_samples
-        self.extra_cn = extra_cn # uninformative connected layers of nodes
-        self.disconnected = disconnected # number of nodes to disconnect
+        self.extra_cn = extra_cn  # uninformative connected layers of nodes
+        self.disconnected = disconnected  # number of nodes to disconnect
 
         super(PercolateDataset, self).__init__(name='PercolateDataset', **kwargs)
-
 
     def load_data(self):
 
@@ -286,7 +281,7 @@ class PercolateDataset(GraphDataset):
         prob = 0.562
         num_samples = self.num_samples
         extra_cn = self.extra_cn
-        disconnected=self.disconnected
+        disconnected = self.disconnected
 
         if self.extra_cn != 0:
             if self.size_x != self.size_y:
@@ -301,26 +296,26 @@ class PercolateDataset(GraphDataset):
             if i % 10 == 0:
                 logging.info("."),
             perc = False
-            if i%2 == 0: #generate positive example
+            if i % 2 == 0:  # generate positive example
                 perc = False
-                while perc == False:
+                while perc is False:
                     G, T, perc, dens, nio = percolate.sq2d_lattice_percolation_simple(size_x, size_y, prob=prob,
-                                                                   extra_cn=extra_cn, disconnected=disconnected)
+                                                                                      extra_cn=extra_cn, disconnected=disconnected)
                 attrs = nx.get_node_attributes(G, 'value')
                 features = np.zeros((len(attrs),), dtype='float32')
-                for j,node in enumerate(nio):
+                for j, node in enumerate(nio):
                     features[j] = attrs[node]
                 expression_data.append(features)
                 labels_data.append(1)
 
-            else: #generate negative example
+            else:  # generate negative example
                 perc = True
-                while perc == True:
+                while perc is True:
                     G, T, perc, dens, nio = percolate.sq2d_lattice_percolation_simple(size_x, size_y, prob=prob,
-                                                                    extra_cn=extra_cn, disconnected=disconnected)
+                                                                                      extra_cn=extra_cn, disconnected=disconnected)
                 attrs = nx.get_node_attributes(G, 'value')
                 features = np.zeros((len(attrs),), dtype='float32')
-                for j,node in enumerate(nio):
+                for j, node in enumerate(nio):
                     features[j] = attrs[node]
                 expression_data.append(features)
                 labels_data.append(0)
@@ -336,11 +331,9 @@ class PercolateDataset(GraphDataset):
         self.nb_class = 2
         self.nb_nodes = self.data.shape[1]
 
-
     def __getitem__(self, idx):
-
         sample = self.data[idx]
-        sample = np.expand_dims(sample, -1) # Addin a dim for the channels
+        sample = np.expand_dims(sample, -1)  # Addin a dim for the channels
 
         sample = {'sample': sample, 'labels': self.labels[idx]}
 
@@ -350,8 +343,9 @@ class PercolateDataset(GraphDataset):
         return sample
 
     def labels_name(self, l):
-        labels = {0: 'neg', 'neg':0, 'pos':1, 1:'pos'}
+        labels = {0: 'neg', 'neg': 0, 'pos': 1, 1: 'pos'}
         return labels[l]
+
 
 def split_dataset(dataset, batch_size=100, random=False, train_ratio=0.8, seed=1993, nb_samples=None, nb_per_class=None):
     logger = logging.getLogger()
@@ -398,10 +392,9 @@ def split_dataset(dataset, batch_size=100, random=False, train_ratio=0.8, seed=1
         idx_valid = idx_rest[:len(idx_rest)/2]
         idx_test = idx_rest[len(idx_rest)/2:]
 
-
         logger.info("Keeping {} examples in training set total.".format(len(idx_train)))
-    else:
 
+    else:
         nb_example = len(all_idx)
         nb_train = int(nb_example * train_ratio)
         nb_rest = (nb_example - nb_train) / 2
@@ -420,17 +413,19 @@ def split_dataset(dataset, batch_size=100, random=False, train_ratio=0.8, seed=1
 
 
 class GBMDataset(GraphGeneDataset):
+
     " Glioblastoma Multiforme dataset with coexpression graph"
+
     def __init__(self, graph_dir="/data/lisa/data/genomics/TCGA/", graph_file="gbm.hdf5", nb_class=2, **kwargs):
         super(GBMDataset, self).__init__(graph_dir=graph_dir, graph_file=graph_file, nb_class=nb_class, name='GBMDataset', **kwargs)
-        dataset = self
 
 
 class NSLRSyntheticDataset(GraphGeneDataset):
-    " Glioblastoma Multiforme dataset with coexpression graph"
+
+    " SynMin dataset with coexpression graph"
+
     def __init__(self, graph_dir="/data/lisa/data/genomics/TCGA/", graph_file="syn_nslr.hdf5", nb_class=2, **kwargs):
         super(NSLRSyntheticDataset, self).__init__(graph_dir=graph_dir, graph_file=graph_file, nb_class=nb_class, name='NSLRSyntheticDataset', **kwargs)
-        dataset = self
 
 
 def random_adjacency_matrix(nb_nodes, approx_nb_edges, scale_free=True):
@@ -446,7 +441,7 @@ def random_adjacency_matrix(nb_nodes, approx_nb_edges, scale_free=True):
 
     else:
         edges = np.array([(i, ((((i + np.random.randint(nb_nodes - 1)) % nb_nodes) + 1) % nb_nodes))
-                      for i in [np.random.randint(nb_nodes) for i in range(approx_nb_edges)]])
+                         for i in [np.random.randint(nb_nodes) for i in range(approx_nb_edges)]])
 
     # Adding self loop.
     edges = np.concatenate((edges, np.array([(i, i) for i in nodes])))
@@ -456,6 +451,7 @@ def random_adjacency_matrix(nb_nodes, approx_nb_edges, scale_free=True):
     A[edges[:, 0], edges[:, 1]] = 1.
     A[edges[:, 1], edges[:, 0]] = 1.
     return A
+
 
 class PruneGraph(object):
 
@@ -494,7 +490,7 @@ class PruneGraph(object):
         degree = adj.sum(axis=0)
         nb_edges = sorted(set(degree))
 
-        if deep == None:
+        if deep is None:
             deep = nb
 
         for i in range(0, step * deep):
@@ -510,17 +506,16 @@ class PruneGraph(object):
                 else:
                     adjs.append(adjs[-1])
 
-            except IndexError: # It's all zero, with just add the last in memory
+            except IndexError:  # It's all zero, with just add the last in memory
                 adjs.append(adjs[-1])
-
 
         if nb is not None:
             adjs = [x for i, x in enumerate(adjs) if i % len(adjs) / (nb-1) == 0]
 
         assert len(adjs) == (nb - 1)
 
-
         return [adj.copy()] + adjs
+
 
 # TODO: Factorize all the graph manipulation?
 def get_dataset(opt):
@@ -535,8 +530,6 @@ def get_dataset(opt):
     nb_examples = opt.nb_examples
     scale_free = opt.scale_free
     nb_class = opt.nb_class
-    model = opt.model
-    num_layer = opt.num_layer
     seed = opt.seed
     percentile = opt.percentile
 
@@ -554,17 +547,13 @@ def get_dataset(opt):
         # To have a feel of TCGA, take a look at 'view_graph_TCGA.ipynb'
         dataset = TCGATissue(nb_class=nb_class, use_random_adj=scale_free, percentile=percentile)
 
-        if nb_class is None: # means we keep all the class (29 I think)
+        if nb_class is None:  # means we keep all the class (29 I think)
             nb_class = len(dict(dataset.labels.attrs))/2
 
     elif dataset_name == 'tcga-brca':
 
         logging.info("Getting TCGA BRCA type")
-        # To have a feel of TCGA, take a look at 'view_graph_TCGA.ipynb'
         dataset = BRCACoexpr(use_random_adj=scale_free, percentile=percentile)
-
-        #if nb_class is None: # means we keep all the class (29 I think)
-        #    nb_class = len(dict(dataset.labels.attrs))/2
 
     elif dataset_name == 'percolate':
         dataset = PercolateDataset(use_random_adj=scale_free)
@@ -572,6 +561,7 @@ def get_dataset(opt):
     elif dataset_name == 'tcga-gbm':
         logging.info("Getting TCGA GBM Dataset")
         dataset = GBMDataset(use_random_adj=scale_free)
+
     elif dataset_name == 'nslr-syn':
         logging.info("Getting NSLR Synthetic Dataset")
         dataset = NSLRSyntheticDataset(use_random_adj=scale_free)
@@ -583,12 +573,11 @@ def get_dataset(opt):
         extra_ucn = opt.extra_ucn
         disconnected = opt.disconnected
         num_samples = opt.perc_examples
-        pdataset = PercolateDataset(num_samples=num_samples, use_random_adj=scale_free, size_x=size_perc, size_y=size_perc, center=False, disconnected=disconnected, extra_cn=extra_cn)
+        pdata = PercolateDataset(num_samples=num_samples, use_random_adj=scale_free, size_x=size_perc, size_y=size_perc, center=False, disconnected=disconnected, extra_cn=extra_cn)
+        dataset = GraphWithNoise(dataset=pdata, num_added_nodes=extra_ucn)
 
-        dataset = GraphWithNoise(dataset=pdataset, num_added_nodes=extra_ucn)
     else:
         raise ValueError
-
     return dataset
 
 
@@ -609,14 +598,14 @@ class GraphWithNoise(object):
         num_features = dataset.data.shape[1]
 
         newdata = np.random.random((num_samples, num_features+num_added_nodes))
-        newdata = (newdata*2)-1 # normalize; maybe adapt to data?
-        newdata[:num_samples, :num_features] = dataset.data # set to 0 to see it in an image
+        newdata = (newdata*2)-1  # normalize; maybe adapt to data?
+        newdata[:num_samples, :num_features] = dataset.data  # set to 0 to see it in an image
         self.data = newdata
 
         oldadj = dataset.get_adj()
 
         newadj = np.zeros((num_features+num_added_nodes, num_features+num_added_nodes))
-        newadj[:num_features, :num_features] = oldadj # set to 0 to see it in an image
+        newadj[:num_features, :num_features] = oldadj  # set to 0 to see it in an image
         self.adj = newadj
 
         self.nb_class = dataset.nb_class

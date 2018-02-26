@@ -1,14 +1,6 @@
 import main as conv_graph
-import argparse
-import json
 import numpy as np
 import pandas as pd
-import os
-import copy
-import logging
-import sys
-from collections import defaultdict
-from itertools import product, combinations
 
 static_settings = {
                    "num_trials": 3,
@@ -16,22 +8,26 @@ static_settings = {
                    "epoch": 100,
                    "batch_size": 100,
                    "train_ratio": .6,
-                   "vars_to_explore":{
+                   "vars_to_explore": {
                         'slr': [('lr', .001, .1), ('num_channel', 16, 256), ('num_layer', 0, 0)],
                         'mlp': [('lr', .001, .1), ('num_channel', 32, 256), ('weight_decay', 0.0, 0.5), ('l1-loss-lambda', 0.00, 0.6), ('lambdas', 0.0, 1e-7), ('num_layer', 0, 1)],
                         'cgn': [('lr', .01, .02), ('num_channel', 64, 200), ('weight_decay', 0.05, 0.15), ('l1-loss-lambda', 0.4, 0.6)]
                         }
                    }
 
+
 def build_parser():
     parser = conv_graph.build_parser()
-    parser.add_argument('--search-dataset', help="The type of dataset to search for good hyper-parameters", choices=['random', 'tcga-tissue', 'tcga-brca', 'tcga-label', 'tcga-gbm', 'percolate', 'nslr-syn'], required=True)
+    parser.add_argument('--search-dataset', help="The type of dataset to search",
+                        choices=['random', 'tcga-tissue', 'tcga-brca', 'tcga-label', 'tcga-gbm', 'percolate', 'nslr-syn'], required=True)
     parser.add_argument('--search-model', help="The type of model to search for good hyper-parameters", choices=['cgn', 'mlp', 'lcg', 'sgc', 'slr', 'cnn'], required=True)
     return parser
+
 
 def parse_args(argv):
     opt = build_parser().parse_args(argv)
     return opt
+
 
 def main(argv=None):
     opt = parse_args(argv)
@@ -113,7 +109,7 @@ def sample_value(min_value, max_value):
 
 
 def log_summary(summaries, setting, cols, to_print):
-    experiment = summaries[summaries['dataset']==setting['dataset']][summaries['model']==setting['model']].reset_index()
+    experiment = summaries[summaries['dataset'] == setting['dataset']][summaries['model'] == setting['model']].reset_index()
     pd.options.mode.chained_assignment = None  # default='warn'
     max_experiment = experiment.iloc[experiment['valid'].idxmax()]
     max_experiment.loc['valid_mean'] = experiment['valid'].mean()

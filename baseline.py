@@ -1,14 +1,7 @@
 import main as conv_graph
-import argparse
 import json
-import numpy as np
 import pandas as pd
-import os
-import copy
-import logging
-import sys
-from collections import defaultdict
-from itertools import product, combinations
+
 
 def build_parser():
     parser = conv_graph.build_parser()
@@ -16,9 +9,11 @@ def build_parser():
     parser.add_argument('--baseline-model', help="The type of baseline tests to launch", required=True)
     return parser
 
+
 def parse_args(argv):
     opt = build_parser().parse_args(argv)
     return opt
+
 
 def main(argv=None):
     opt = parse_args(argv)
@@ -33,7 +28,8 @@ def main(argv=None):
     model_config_name = setting['baseline_model']
     del setting['baseline_model']
     del setting['baseline_dataset']
-    cols = ['model', 'dataset', 'total_loss', 'cross_loss', 'auc_train', 'auc_valid', 'auc_test', 'seed', 'epoch', 'num_trials', 'valid_acc_mean', 'valid_acc_std', 'test_acc_mean', 'test_acc_std',  'valid_auc_mean', 'valid_auc_std', 'test_auc_mean', 'test_auc_std']
+    cols = ['model', 'dataset', 'total_loss', 'cross_loss', 'auc_train', 'auc_valid', 'auc_test', 'seed', 'epoch', 'num_trials', 'valid_acc_mean', 'valid_acc_std', 'test_acc_mean',
+            'test_acc_std',  'valid_auc_mean', 'valid_auc_std', 'test_auc_mean', 'test_auc_std']
     cols.append(static_settings['param_to_vary']['name'])
     for hyper_param_name, value in static_settings['model_vars'][model_config_name].iteritems():
         cols.append(hyper_param_name)
@@ -71,7 +67,7 @@ def format_summary(summary, setting, model_config_name, static_settings):
 
 
 def log_summary(summaries, setting, cols, to_print, param_to_vary, param_value, model_config_name, static_settings):
-    experiment = summaries[summaries['dataset']==setting['dataset']][summaries['model']==model_config_name].reset_index()
+    experiment = summaries[summaries['dataset'] == setting['dataset']][summaries['model'] == model_config_name].reset_index()
     pd.options.mode.chained_assignment = None  # default='warn'
     max_experiment = experiment.iloc[experiment['auc_valid'].idxmax()]
     max_experiment.loc['valid_acc_mean'] = experiment['acc_valid'].mean()

@@ -1,16 +1,12 @@
 import argparse
 import logging
-import tensorflow as tf
 import datasets
-import numpy as np
 import models
 import torch
 import time
 from torch.autograd import Variable
-import os
-import pickle
 import monitoring
-from metrics import accuracy, recall, f1_score, precision, compute_metrics_per_class, auc, record_metrics_for_epoch, summarize
+from metrics import record_metrics_for_epoch, summarize
 
 
 def build_parser():
@@ -26,13 +22,14 @@ def build_parser():
     parser.add_argument('--l1-loss-lambda', default=0., type=float, help='L1 loss lambda.')
     parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
     parser.add_argument('--data-dir', default='/data/milatmp1/dutilfra/transcriptome/graph/', help='The folder contening the dataset.')
-    parser.add_argument('--dataset', choices=['random', 'tcga-tissue', 'tcga-brca', 'tcga-label', 'tcga-gbm', 'percolate', 'nslr-syn', 'percolate-plus'], default='random', help='Which dataset to use.')
+    parser.add_argument('--dataset', choices=['random', 'tcga-tissue', 'tcga-brca', 'tcga-label', 'tcga-gbm', 'percolate', 'nslr-syn', 'percolate-plus'],
+                        default='random', help='Which dataset to use.')
     parser.add_argument('--clinical-file', type=str, default='PANCAN_clinicalMatrix.gz', help='File to read labels from')
     parser.add_argument('--clinical-label', type=str, default='gender', help='Label to join with data')
     parser.add_argument('--scale-free', action='store_true', help='If we want a scale-free random adjacency matrix for the dataset.')
     parser.add_argument('--cuda', action='store_true', help='If we want to run on gpu.')
     parser.add_argument('--norm-adj', default=True, type=bool, help="If we want to normalize the adjancy matrix.")
-    parser.add_argument('--log', choices=['tensorboard', 'console', 'silent'], default='tensorboard', help="Don't store anything in tensorboard, otherwise a segfault can happen.")
+    parser.add_argument('--log', choices=['tensorboard', 'console', 'silent'], default='tensorboard', help="Determines what kind of logging you get")
     parser.add_argument('--name', type=str, default=None, help="If we want to add a random str to the folder.")
 
     # Model specific options
@@ -54,9 +51,10 @@ def build_parser():
     parser.add_argument('--size-perc', default=4, type=int, help="The size of the connected percolate graph in percolate-plus datsaet")
     parser.add_argument('--extra-cn', default=0, type=int, help="The number of extra nodes with edges in the percolate-plus dataset.")
     parser.add_argument('--extra-ucn', default=0, type=int, help="The number of extra nodes without edges in the percolate-plus dataset")
-    parser.add_argument('--disconnected', default=0, type=int, help="The number of disconnected nodes from the perc subgraph without edges in the percolate-plus dataset")
+    parser.add_argument('--disconnected', default=0, type=int, help="The number of disconnected nodes from the perc subgraph without edges in percolate-plus")
     parser.add_argument('--perc-examples', default=1000, type=int, help="The total number of percolate examples")
     return parser
+
 
 def parse_args(argv):
     if type(argv) == list or argv is None:
@@ -67,7 +65,6 @@ def parse_args(argv):
 
 
 def main(argv=None):
-
     opt = parse_args(argv)
 
     # Enable us to silence logs
@@ -81,7 +78,6 @@ def main(argv=None):
     seed = opt.seed
     learning_rate = opt.lr
     weight_decay = opt.weight_decay
-    momentum = opt.momentum
     on_cuda = opt.cuda
     tensorboard_dir = opt.tensorboard_dir
     nb_examples = opt.nb_examples
@@ -186,7 +182,7 @@ def main(argv=None):
         acc, auc = record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, nb_class, dataset, on_cuda)
         my_model.train()
 
-        summary= [
+        summary = [
             t,
             cross_loss.data[0],
             total_loss.data[0],
@@ -198,7 +194,7 @@ def main(argv=None):
             auc['test'],
             time_this_epoch
         ]
-        summary = "epoch {}, cross_loss: {:.03f}, total_loss: {:.03f}, acc_train: {:0.3f}, acc_valid: {:0.3f}, acc_test:{:0.3f}, auc_train: {:0.3f}, auc_valid:{:0.3f}, auc_test:{:0.3f} time: {:.02f} sec".format(*summary)
+        summary = "epoch {}, cross_loss: {:.03f}, acc_train: {:0.3f}, acc_valid: {:0.3f}, auc_train: {:0.3f}, auc_valid:{:0.3f}, time: {:.02f} sec".format(*summary)
         logging.info(summary)
 
         patience = patience - 1

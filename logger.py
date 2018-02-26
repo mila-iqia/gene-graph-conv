@@ -1,10 +1,10 @@
+from StringIO import StringIO
+import numpy as np
+
 """Simple example on how to log scalars and images to tensorboard without tensor ops.
 License: Copyleft
 """
 __author__ = "Michael Gygli"
-
-from StringIO import StringIO
-import numpy as np
 
 
 class Logger(object):

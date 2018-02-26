@@ -2,6 +2,7 @@ import numpy as np
 from torch.autograd import Variable
 from sklearn import metrics
 
+
 def format_mini(mini, model, on_cuda):
     inputs = Variable(mini['sample'], requires_grad=False).float()
     targets = Variable(mini['labels'], requires_grad=False).float()
@@ -14,7 +15,7 @@ def format_mini(mini, model, on_cuda):
     return preds, targets
 
 
-def accuracy(data, model, no_class = None, on_cuda=False):
+def accuracy(data, model, no_class=None, on_cuda=False):
     acc = 0.
     total = 0.
 
@@ -33,7 +34,7 @@ def accuracy(data, model, no_class = None, on_cuda=False):
     return acc
 
 
-def auc(data, model, no_class = None, on_cuda=False):
+def auc(data, model, no_class=None, on_cuda=False):
     all_preds, all_targets = [], []
 
     for mini in data:
@@ -51,21 +52,24 @@ def recall(preds, gts, cl):
     total = sum(gts == cl)
     return tmp / float(total)
 
+
 def precision(preds, gts, cl):
     """How many selected item are revelant?"""
     tmp = ((gts == preds) * (gts == cl)).sum()
     total = sum(cl == preds)
     return tmp / float(total)
 
+
 def f1_score(preds, gts, cl):
     re = recall(preds, gts, cl)
     pre = precision(preds, gts, cl)
     return 2 * re * pre / (re + pre)
 
+
 def compute_metrics_per_class(data, model, nb_class, idx_to_str, on_cuda=False,
-                     metrics_foo={'recall': recall,
-                                  'precision': precision,
-                                  'f1_score': f1_score}):
+                              metrics_foo={'recall': recall,
+                                           'precision': precision,
+                                           'f1_score': f1_score}):
 
     metrics = {k: {} for k in metrics_foo.keys()}
 
@@ -83,6 +87,7 @@ def compute_metrics_per_class(data, model, nb_class, idx_to_str, on_cuda=False,
             metrics[i][idx_to_str(cl)] = m(all_preds, all_targets, cl)
 
     return metrics
+
 
 def record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, nb_class, dataset, on_cuda):
     # Add some metric for tensorboard
@@ -110,9 +115,10 @@ def record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch,
 
         if writer is not None:
             for m, value in metric_per_class.iteritems():
-               for cl, v in value.iteritems():
-                    writer.scalar_summary('{}/{}/{}'.format(m, set_name, cl), v, t) # metric/set/class
+                for cl, v in value.iteritems():
+                    writer.scalar_summary('{}/{}/{}'.format(m, set_name, cl), v, t)  # metric/set/class
     return acc, auc_dict
+
 
 def summarize(epoch, cross_loss, total_loss, accuracy, auc):
     summary = {
