@@ -1,3 +1,4 @@
+import datetime
 import torch
 import models
 import pickle
@@ -95,13 +96,13 @@ def get_representation(model, dataset, opt):
     return retn
 
 
-def setup_tensorboard_log(tensorboard_dir, exp_name, opt):
+def setup_tensorboard_log(tensorboard_dir, opt):
     writer = None
     exp_dir = None
     if not os.path.exists(tensorboard_dir):
         os.mkdir(tensorboard_dir)
 
-    exp_dir = os.path.join(tensorboard_dir, exp_name[:255])
+    exp_dir = os.path.join(tensorboard_dir, datetime.datetime.now().strftime("%F-%k%M%S"))
     if not os.path.exists(exp_dir):
         os.mkdir(exp_dir)
 

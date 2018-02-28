@@ -113,13 +113,13 @@ class SparseLogisticRegression(nn.Module):
         x = self.my_logistic_layers[-1](x)
         return x
 
-    def regularization(self):
+    def regularization(self, reg_lambda):
         laplacian = Variable(self.laplacian, requires_grad=False)
         if self.on_cuda:
             laplacian = laplacian.cuda()
         weight = self.my_logistic_layers[-1].weight
         reg = torch.abs(weight).mm(laplacian) * torch.abs(weight)
-        return [reg.sum()]
+        return reg.sum() * reg_lambda
 
 
 class GraphNetwork(nn.Module):
@@ -223,7 +223,7 @@ class GraphNetwork(nn.Module):
         x = self.my_logistic_layers[-1](x.view(nb_examples, -1))
         return x
 
-    def regularization(self):
+    def regularization(self, reg_lambda):
         return []
 
     def get_representation(self):
@@ -311,7 +311,7 @@ class MLP(nn.Module):
 
         return x
 
-    def regularization(self):
+    def regularization(self, reg_lambda):
         return []
 
 
@@ -345,7 +345,7 @@ class Random(nn.Module):
         x = Variable(torch.cuda.FloatTensor(guesses))
         return x
 
-    def regularization(self):
+    def regularization(self, reg_lambda):
         return []
 
 
@@ -394,7 +394,7 @@ class CNN(nn.Module):
         out = self.fc(out)
         return out
 
-    def regularization(self):
+    def regularization(self, reg_lambda):
         return []
 
 

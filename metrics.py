@@ -89,9 +89,11 @@ def compute_metrics_per_class(data, model, nb_class, idx_to_str, on_cuda=False,
     return metrics
 
 
-def record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, nb_class, dataset, on_cuda):
+def record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, dataset, on_cuda):
+    # calculate loss in test mode (matters for dropout)
+    my_model.eval()
+
     # Add some metric for tensorboard
-    # Loss
     if writer is not None:
         writer.scalar_summary('cross_loss', cross_loss.data[0], t)
         # writer.scalar_summary('other_loss', other_loss.data[0], t)
@@ -111,12 +113,15 @@ def record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch,
             writer.scalar_summary('accuracy_{}'.format(set_name), acc[set_name], t)
 
         # accuracy for a different class
-        metric_per_class = compute_metrics_per_class(my_set, my_model, nb_class, lambda x: dataset.labels_name(x), on_cuda=on_cuda)
+        metric_per_class = compute_metrics_per_class(my_set, my_model, dataset.nb_class, lambda x: dataset.labels_name(x), on_cuda=on_cuda)
 
         if writer is not None:
             for m, value in metric_per_class.iteritems():
                 for cl, v in value.iteritems():
                     writer.scalar_summary('{}/{}/{}'.format(m, set_name, cl), v, t)  # metric/set/class
+
+    # Go back to train mode
+    my_model.train()
     return acc, auc_dict
 
 

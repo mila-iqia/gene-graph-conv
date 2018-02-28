@@ -47,7 +47,7 @@ def build_parser():
     parser.add_argument('--pool-graph', default=None, choices=['ignore', 'hierarchy'], help="If we want to pool the graph.")
     parser.add_argument('--use-emb', default=None, type=int, help="If we want to add node embeddings.")
     parser.add_argument('--use-gate', default=0., type=float, help="The lambda for the gate pooling/striding. is ignore if = 0.")
-    parser.add_argument('--lambdas', default=[], type=float, nargs='*', help="A list of lambda for the specified models.")
+    parser.add_argument('--model_reg_lambda', default=0.0, type=float, nargs='*', help="A lambda for the regularization on a specific model.")
     parser.add_argument('--size-perc', default=4, type=int, help="The size of the connected percolate graph in percolate-plus datsaet")
     parser.add_argument('--extra-cn', default=0, type=int, help="The number of extra nodes with edges in the percolate-plus dataset.")
     parser.add_argument('--extra-ucn', default=0, type=int, help="The number of extra nodes without edges in the percolate-plus dataset")
@@ -64,90 +64,49 @@ def parse_args(argv):
     return opt
 
 
-def main(argv=None):
-    opt = parse_args(argv)
-
-    # Enable us to silence logs
+def setup_logger(opt):
     logging.basicConfig(format="%(message)s")
     logger = logging.getLogger()
     if opt.log != 'silent':
         logger.setLevel('INFO')
 
-    batch_size = opt.batch_size
-    epoch = opt.epoch
-    seed = opt.seed
-    learning_rate = opt.lr
-    weight_decay = opt.weight_decay
-    on_cuda = opt.cuda
-    tensorboard_dir = opt.tensorboard_dir
-    nb_examples = opt.nb_examples
-    nb_per_class = opt.nb_per_class
-    train_ratio = opt.train_ratio
-    lambdas = opt.lambdas if type(opt.lambdas) == list else [opt.lambdas]
-    l1_loss_lambda = opt.l1_loss_lambda
 
-    # The experiment unique id.
-    param = vars(opt).copy()
-
-    # Removing a bunch of useless tag
-    del param['data_dir']
-    del param['tensorboard_dir']
-    del param['cuda']
-    del param['log']
-    del param['train_ratio']
-    del param['epoch']
-    del param['batch_size']
-    del param['clinical_file']
-    del param['attention_layer']
-    del param['clinical_label']
-    del param['nb_per_class']
-    del param['lambdas']
-    v_to_delete = []
-    for v in param:
-        if param[v] is None:
-            v_to_delete.append(v)
-    for v in v_to_delete:
-        del param[v]
-
-    exp_name = '_'.join(['{}={}'.format(k, v) for k, v, in param.iteritems()])
-
+def main(argv=None):
+    opt = parse_args(argv)
+    setup_logger(opt)
     logging.info(vars(opt))
 
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.manual_seed(seed)
+    torch.cuda.manual_seed(opt.seed)
+    torch.cuda.manual_seed_all(opt.seed)
+    torch.manual_seed(opt.seed)
 
-    # creating the dataset
     logging.info("Getting the dataset...")
     dataset = datasets.get_dataset(opt)
+    train_set, valid_set, test_set = datasets.split_dataset(dataset, batch_size=opt.batch_size, seed=opt.seed,
+                                                            nb_samples=opt.nb_examples, train_ratio=opt.train_ratio, nb_per_class=opt.nb_per_class)
 
-    # dataset loader
-    train_set, valid_set, test_set = datasets.split_dataset(dataset, batch_size=batch_size, seed=seed,
-                                                            nb_samples=nb_examples, train_ratio=train_ratio, nb_per_class=nb_per_class)
-    nb_class = dataset.nb_class
-    # Creating a model
     logging.info("Getting the model...")
     my_model = models.get_model(opt, dataset)
     logging.info("Our model:")
     logging.info(my_model)
 
-    # Train the cgn
+    # Setup the loss
     criterion = torch.nn.CrossEntropyLoss(size_average=True)
     l1_criterion = torch.nn.L1Loss(size_average=False)
-    optimizer = torch.optim.Adam(my_model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    optimizer = torch.optim.Adam(my_model.parameters(), lr=opt.lr, weight_decay=opt.weight_decay)
 
-    if on_cuda:
+    if opt.cuda:
         logging.info("Putting the model on gpu...")
         my_model.cuda()
 
-    writer, exp_dir = monitoring.setup_tensorboard_log(tensorboard_dir, exp_name, opt)
+    writer, exp_dir = monitoring.setup_tensorboard_log(opt.tensorboard_dir, opt)
 
     max_valid = 0
     best_summary = {}
     patience = 20
 
     # The training.
-    for t in range(epoch):
+    for t in range(opt.epoch):
 
         start_timer = time.time()
 
@@ -158,7 +117,7 @@ def main(argv=None):
             inputs = Variable(inputs, requires_grad=False).float()
             targets = Variable(targets, requires_grad=False).long()
 
-            if on_cuda:
+            if opt.cuda:
                 inputs = inputs.cuda()
                 targets = targets.cuda()
 
@@ -167,9 +126,9 @@ def main(argv=None):
 
             # Compute and print loss
             cross_loss = criterion(y_pred, targets)
-            other_loss = sum([r * l for r, l in zip(my_model.regularization(), lambdas)])
-            l1_loss = models.setup_l1_loss(my_model, l1_loss_lambda, l1_criterion, on_cuda)
-            total_loss = cross_loss + other_loss + l1_loss
+            model_regularization_loss = my_model.regularization(opt.model_reg_lambda)
+            l1_loss = models.setup_l1_loss(my_model, opt.l1_loss_lambda, l1_criterion, opt.cuda)
+            total_loss = cross_loss + model_regularization_loss + l1_loss
 
             # Zero gradients, perform a backward pass, and update the weights.
             optimizer.zero_grad()
@@ -178,9 +137,7 @@ def main(argv=None):
 
         time_this_epoch = time.time() - start_timer
 
-        my_model.eval()
-        acc, auc = record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, nb_class, dataset, on_cuda)
-        my_model.train()
+        acc, auc = record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, dataset, opt.cuda)
 
         summary = [
             t,
@@ -188,10 +145,8 @@ def main(argv=None):
             total_loss.data[0],
             acc['train'],
             acc['valid'],
-            acc['test'],
             auc['train'],
             auc['valid'],
-            auc['test'],
             time_this_epoch
         ]
         summary = "epoch {}, cross_loss: {:.03f}, acc_train: {:0.3f}, acc_valid: {:0.3f}, auc_train: {:0.3f}, auc_valid:{:0.3f}, time: {:.02f} sec".format(*summary)
