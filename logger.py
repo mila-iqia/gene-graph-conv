@@ -1,5 +1,6 @@
 from StringIO import StringIO
 import numpy as np
+import tensorflow as tf
 
 """Simple example on how to log scalars and images to tensorboard without tensor ops.
 License: Copyleft

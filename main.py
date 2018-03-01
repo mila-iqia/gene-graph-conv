@@ -1,5 +1,6 @@
 import argparse
 import logging
+import tensorflow as tf  # necessary to import here to avoid segfault
 import datasets
 import models
 import torch
@@ -82,11 +83,13 @@ def main(argv=None):
 
     logging.info("Getting the dataset...")
     dataset = datasets.get_dataset(opt)
+
     train_set, valid_set, test_set = datasets.split_dataset(dataset, batch_size=opt.batch_size, seed=opt.seed,
                                                             nb_samples=opt.nb_examples, train_ratio=opt.train_ratio, nb_per_class=opt.nb_per_class)
 
     logging.info("Getting the model...")
     my_model = models.get_model(opt, dataset)
+
     logging.info("Our model:")
     logging.info(my_model)
 

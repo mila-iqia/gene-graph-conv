@@ -224,7 +224,7 @@ class GraphNetwork(nn.Module):
         return x
 
     def regularization(self, reg_lambda):
-        return []
+        return 0.0
 
     def get_representation(self):
 
@@ -312,7 +312,7 @@ class MLP(nn.Module):
         return x
 
     def regularization(self, reg_lambda):
-        return []
+        return 0.0
 
 
 class Random(nn.Module):
@@ -346,7 +346,7 @@ class Random(nn.Module):
         return x
 
     def regularization(self, reg_lambda):
-        return []
+        return 0.0
 
 
 class CNN(nn.Module):
@@ -395,7 +395,7 @@ class CNN(nn.Module):
         return out
 
     def regularization(self, reg_lambda):
-        return []
+        return 0.0
 
 
 def get_model(opt, dataset):

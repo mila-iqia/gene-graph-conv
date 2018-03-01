@@ -107,7 +107,9 @@ def setup_tensorboard_log(tensorboard_dir, opt):
         os.mkdir(exp_dir)
 
     if opt.log == 'tensorboard':
+        from logger import Logger
         pickle.dump(opt, open(os.path.join(exp_dir, 'options.pkl'), 'wb'))
+        writer = Logger(exp_dir)
         print "We will log everything in ", exp_dir
 
     return writer, exp_dir
