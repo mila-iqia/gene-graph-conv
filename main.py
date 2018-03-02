@@ -17,7 +17,7 @@ def build_parser():
     parser.add_argument('--epoch', default=10, type=int, help='The number of epochs we want ot train the network.')
     parser.add_argument('--seed', default=1993, type=int, help='Seed for random initialization and stuff.')
     parser.add_argument('--batch-size', default=100, type=int, help="The batch size.")
-    parser.add_argument('--tensorboard-dir', default='./testing123/', help='The folder where to store the experiments. Will be created if not already exists.')
+    parser.add_argument('--tensorboard-dir', default='./experiments/', help='The folder where to store the experiments. Will be created if not already exists.')
     parser.add_argument('--lr', default=1e-3, type=float, help='learning rate')
     parser.add_argument('--weight-decay', default=0., type=float, help='weight decay (L2 loss).')
     parser.add_argument('--l1-loss-lambda', default=0., type=float, help='L1 loss lambda.')
@@ -30,13 +30,15 @@ def build_parser():
     parser.add_argument('--scale-free', action='store_true', help='If we want a scale-free random adjacency matrix for the dataset.')
     parser.add_argument('--cuda', action='store_true', help='If we want to run on gpu.')
     parser.add_argument('--norm-adj', default=True, type=bool, help="If we want to normalize the adjancy matrix.")
-    parser.add_argument('--log', choices=['tensorboard', 'console', 'silent'], default='tensorboard', help="Determines what kind of logging you get")
+    parser.add_argument('--log', choices=['console', 'silent'], default='console', help="Determines what kind of logging you get")
     parser.add_argument('--name', type=str, default=None, help="If we want to add a random str to the folder.")
 
     # Model specific options
     parser.add_argument('--num-channel', default=32, type=int, help='Number of channel in the model.')
     parser.add_argument('--dropout', default=False, type=bool, help='If we want to perform dropout in the model..')
     parser.add_argument('--model', default='cgn', choices=['cgn', 'mlp', 'lcg', 'sgc', 'slr', 'cnn', 'random'], help='Number of channel in the CGN.')
+    parser.add_argument('--experiment-var', type=str, default='na', help='var that we are experimenting on, used for dir name.')
+    parser.add_argument('--trial-number', type=str, default='1', help='the trial number of the experiment.')
     parser.add_argument('--num-layer', default=1, type=int, help='Number of convolution layer in the CGN.')
     parser.add_argument('--nb-class', default=None, type=int, help="Number of class for the dataset (won't work with random graph).")
     parser.add_argument('--nb-examples', default=None, type=int, help="Number of samples to train on.")
@@ -102,7 +104,7 @@ def main(argv=None):
         logging.info("Putting the model on gpu...")
         my_model.cuda()
 
-    writer, exp_dir = monitoring.setup_tensorboard_log(opt.tensorboard_dir, opt)
+    writer, exp_dir = monitoring.setup_tensorboard_log(opt)
 
     max_valid = 0
     best_summary = {}
@@ -140,7 +142,7 @@ def main(argv=None):
 
         time_this_epoch = time.time() - start_timer
 
-        acc, auc = record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, dataset, opt.cuda)
+        acc, auc = record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, dataset, opt)
 
         summary = [
             t,
@@ -164,9 +166,7 @@ def main(argv=None):
             patience = 100
 
     logging.info("Done!")
-    if opt.log == "console":
-        monitoring.monitor_everything(my_model, valid_set, opt, exp_dir)
-        logging.info("Nothing will be log, everything will only be shown on screen.")
+    monitoring.monitor_everything(my_model, valid_set, opt, exp_dir)
     return best_summary
 
 if __name__ == '__main__':

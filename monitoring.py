@@ -4,6 +4,7 @@ import models
 import pickle
 import os
 import logging
+from logger import Logger
 from torch.autograd import Variable
 
 
@@ -96,22 +97,16 @@ def get_representation(model, dataset, opt):
     return retn
 
 
-def setup_tensorboard_log(tensorboard_dir, opt):
-    writer = None
-    exp_dir = None
-    if not os.path.exists(tensorboard_dir):
-        os.mkdir(tensorboard_dir)
-
-    exp_dir = os.path.join(tensorboard_dir, datetime.datetime.now().strftime("%F-%k%M%S"))
+def setup_tensorboard_log(opt):
+    exp_dir = os.path.join(opt.tensorboard_dir, opt.dataset, opt.model, opt.experiment_var, opt.trial_number)
     if not os.path.exists(exp_dir):
-        os.mkdir(exp_dir)
+        os.makedirs(exp_dir)
+    else:
+        pass  # TODO: this should be the checkpoint, load in old state
 
-    if opt.log == 'tensorboard':
-        from logger import Logger
-        pickle.dump(opt, open(os.path.join(exp_dir, 'options.pkl'), 'wb'))
-        writer = Logger(exp_dir)
-        print "We will log everything in ", exp_dir
-
+    pickle.dump(opt, open(os.path.join(exp_dir, 'options.pkl'), 'wb'))
+    writer = Logger(exp_dir)
+    print "We will log everything in ", exp_dir
     return writer, exp_dir
 
 
