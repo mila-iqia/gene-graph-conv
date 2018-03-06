@@ -105,7 +105,7 @@ def record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch,
         auc_dict[set_name] = auc(my_set, my_model, on_cuda=opt.cuda)
 
         writer.scalar_summary('acc_{}'.format(set_name), acc[set_name], t)
-        writer.scalar_summary('auc_{}'.format(set_name), auc[set_name], t)
+        writer.scalar_summary('auc_{}'.format(set_name), auc_dict[set_name], t)
         # accuracy for a different class
         metric_per_class = compute_metrics_per_class(my_set, my_model, dataset.nb_class, lambda x: dataset.labels_name(x), on_cuda=opt.cuda)
 
