@@ -21,7 +21,6 @@ def build_parser():
     parser.add_argument('--weight-decay', default=0., type=float, help='weight decay (L2 loss).')
     parser.add_argument('--l1-loss-lambda', default=0., type=float, help='L1 loss lambda.')
     parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
-    parser.add_argument('--data-dir', default='/data/milatmp1/dutilfra/transcriptome/graph/', help='The folder contening the dataset.')
     parser.add_argument('--dataset', choices=['random', 'tcga-tissue', 'tcga-brca', 'tcga-label', 'tcga-gbm', 'percolate', 'nslr-syn', 'percolate-plus'],
                         default='random', help='Which dataset to use.')
     parser.add_argument('--clinical-file', type=str, default='PANCAN_clinicalMatrix.gz', help='File to read labels from')
@@ -38,7 +37,7 @@ def build_parser():
     parser.add_argument('--model', default='cgn', choices=['cgn', 'mlp', 'lcg', 'sgc', 'slr', 'cnn', 'random'], help='Number of channel in the CGN.')
     parser.add_argument('--num-layer', default=1, type=int, help='Number of convolution layer in the CGN.')
     parser.add_argument('--nb-class', default=None, type=int, help="Number of class for the dataset (won't work with random graph).")
-    parser.add_argument('--nb-examples', default=None, type=int, help="Number of samples to train on.")
+    parser.add_argument('--nb-examples', default=10000, type=int, help="Number of samples to train on.")
     parser.add_argument('--nb-per-class', default=None, type=int, help="Number of samples per class.")
     parser.add_argument('--train-ratio', default=0.6, type=float, help="The ratio of data to be used in the training set.")
     parser.add_argument('--percentile', default=100, type=float, help="How many edges to keep.")
@@ -52,7 +51,7 @@ def build_parser():
     parser.add_argument('--extra-cn', default=0, type=int, help="The number of extra nodes with edges in the percolate-plus dataset.")
     parser.add_argument('--extra-ucn', default=0, type=int, help="The number of extra nodes without edges in the percolate-plus dataset")
     parser.add_argument('--disconnected', default=0, type=int, help="The number of disconnected nodes from the perc subgraph without edges in percolate-plus")
-    parser.add_argument('--perc-examples', default=1000, type=int, help="The total number of percolate examples")
+    parser.add_argument('--center', default=False, type=bool, help="center the data (subtract mean from each element)?")
     return parser
 
 
