@@ -95,7 +95,7 @@ class GraphDataset(Dataset):
         self.graph = graph
         self.adj = graph.adj
         self.nb_nodes = graph.nb_nodes
-
+        import pdb; pdb.set_trace()
         self.seed = opt.seed
         self.nb_class = 2 if opt.nb_class is None else opt.nb_class
         self.nb_examples = 1000 if opt.nb_examples is None else opt.nb_examples
@@ -124,13 +124,12 @@ class GraphDataset(Dataset):
 class GraphGeneDataset(GraphDataset):
     """General Dataset to load different graph gene dataset."""
 
-    def __init__(self, data_dir=None, data_file=None, nb_class=None, sub_class=None, name=None, graph=None, opt=None):
+    def __init__(self, data_dir=None, data_file=None, sub_class=None, name=None, graph=None, opt=None):
         """
         Args:
             data_file (string): Path to the h5df file.
         """
 
-        self.nb_class = nb_class
         self.sub_class = sub_class
         self.data_dir = data_dir
         self.data_file = data_file
@@ -425,8 +424,8 @@ class GBMDataset(GraphGeneDataset):
 
     " Glioblastoma Multiforme dataset with coexpression graph"
 
-    def __init__(self, data_dir="/data/lisa/data/genomics/TCGA/", data_file="gbm.hdf5", nb_class=2, graph=None, opt=None):
-        super(GBMDataset, self).__init__(data_dir=data_dir, data_file=data_file, nb_class=nb_class, name='GBMDataset', graph=graph, opt=opt)
+    def __init__(self, data_dir="/data/lisa/data/genomics/TCGA/", data_file="gbm.hdf5", graph=None, opt=None):
+        super(GBMDataset, self).__init__(data_dir=data_dir, data_file=data_file, name='GBMDataset', graph=graph, opt=opt)
 
 
 class NSLRSyntheticDataset(GraphGeneDataset):

@@ -36,7 +36,7 @@ def accuracy(data, model, no_class=None, on_cuda=False):
 
 def auc(data, model, no_class=None, on_cuda=False):
     all_preds, all_targets = [], []
-
+    import pdb; pdb.set_trace()
     for mini in data:
         preds, targets = format_mini(mini, model, on_cuda)
         preds = [x[1] for x in preds.data.cpu().numpy()]
