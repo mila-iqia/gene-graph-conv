@@ -55,10 +55,7 @@ def build_parser():
     parser.add_argument('--extra-ucn', default=0, type=int, help="The number of extra nodes without edges in the percolate-plus dataset")
     parser.add_argument('--disconnected', default=0, type=int, help="The number of disconnected nodes from the perc subgraph without edges in percolate-plus")
     parser.add_argument('--center', default=False, type=bool, help="center the data (subtract mean from each element)?")
-<<<<<<< HEAD
     parser.add_argument('--graph-path', default="", type=str, help="path to the graph")
-=======
->>>>>>> 192442c5e09ead352c87cce530890c163ab4ca55
     return parser
 
 
