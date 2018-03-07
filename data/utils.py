@@ -2,7 +2,7 @@ import logging
 import numpy as np
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
-from graph import Graph
+from graph import Graph, add_noise
 from gene_datasets import BRCACoexpr, GBMDataset, TCGATissue, NSLRSyntheticDataset
 from datasets import RandomDataset, PercolateDataset
 
@@ -106,7 +106,7 @@ def get_dataset(opt):
     elif opt.dataset == 'percolate-plus':
         logging.info("Getting percolate-plus Dataset")
         pdata = PercolateDataset(graph, opt)
-        dataset = Graph.add_noise(dataset=pdata, num_added_nodes=opt.extra_ucn)
+        dataset = add_noise(dataset=pdata, num_added_nodes=opt.extra_ucn)
 
     else:
         raise ValueError

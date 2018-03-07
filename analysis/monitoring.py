@@ -1,6 +1,6 @@
 import datetime
 import torch
-import models
+from models.models import GraphNetwork
 import pickle
 import os
 import logging
@@ -54,7 +54,7 @@ def get_graph(model):
 
     retn = []
 
-    if not issubclass(model.__class__, models.GraphNetwork):
+    if not issubclass(model.__class__, GraphNetwork):
         print "The model is not a graph convolution."
         return retn
 
@@ -77,7 +77,7 @@ def get_representation(model, dataset, opt):
 
     retn = []
 
-    if not issubclass(model.__class__, models.GraphNetwork):
+    if not issubclass(model.__class__, GraphNetwork):
         print "The model is not a graph convolution."
         return retn
 

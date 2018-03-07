@@ -6,10 +6,10 @@ import networkx
 
 class Graph(object):
     def __init__(self, opt):
+        if opt.graph is not None:
+            self.load_graph(get_path(opt))
         if opt.scale_free:
             self.load_random_adjacency(nb_nodes=100, approx_nb_edges=100, scale_free=opt.scale_free)
-        else:
-            self.load_graph(opt.graph_path)
         self.nb_nodes = self.adj.shape[0]
 
     def load_random_adjacency(self, nb_nodes, approx_nb_edges, scale_free=True):
@@ -39,42 +39,49 @@ class Graph(object):
         self.adj = np.array(f['graph_data']).astype('float32')
         self.node_names = np.array(f['gene_names'])
 
-    @classmethod
-    def add_noise(self, dataset, num_added_nodes=10):
-        """
-        Will add random features and add these nodes as not connected
 
-        Usage:
-        pdataset = datasets.PercolateDataset()
-        dataset = Graph.add_noise(dataset=pdataset, num_added_nodes=100)
-        """
+def get_path(opt):
+    if opt.graph == "kegg":
+        return "/data/lisa/data/genomics/graph/kegg.hdf5"
+    elif opt.graph == "pathway":
+        return "/data/lisa/data/genomics/graph/pathway_commons.hdf5"
 
-        num_samples = dataset.data.shape[0]
-        num_features = dataset.data.shape[1]
 
-        newdata = np.random.random((num_samples, num_features+num_added_nodes))
-        newdata = (newdata*2)-1  # normalize; maybe adapt to data?
-        newdata[:num_samples, :num_features] = dataset.data  # set to 0 to see it in an image
-        dataset.data = newdata
+def add_noise(self, dataset, num_added_nodes=10):
+    """
+    Will add random features and add these nodes as not connected
 
-        oldadj = dataset.get_adj()
+    Usage:
+    pdataset = datasets.PercolateDataset()
+    dataset = add_noise(dataset=pdataset, num_added_nodes=100)
+    """
 
-        newadj = np.zeros((num_features+num_added_nodes, num_features+num_added_nodes))
-        newadj[:num_features, :num_features] = oldadj  # set to 0 to see it in an image
-        dataset.adj = newadj
-        dataset.nb_nodes = dataset.adj.shape[0]
-        return dataset
+    num_samples = dataset.data.shape[0]
+    num_features = dataset.data.shape[1]
 
-    @classmethod
-    def subsample_graph(adj, percentile=100):
-        # if we want to sub-sample the edges, based on the edges value
-        if percentile < 100:
-            # small trick to ignore the 0.
-            nan_adj = np.ma.masked_where(adj == 0., adj)
-            nan_adj = np.ma.filled(nan_adj, np.nan)
+    newdata = np.random.random((num_samples, num_features+num_added_nodes))
+    newdata = (newdata*2)-1  # normalize; maybe adapt to data?
+    newdata[:num_samples, :num_features] = dataset.data  # set to 0 to see it in an image
+    dataset.data = newdata
 
-            threshold = np.nanpercentile(nan_adj, 100 - percentile)
-            logging.info("We will remove all the adges that has a value smaller than {}".format(threshold))
+    oldadj = dataset.get_adj()
 
-            to_keep = adj >= threshold  # throw away all the edges that are bigger than what we have.
-            return adj * to_keep
+    newadj = np.zeros((num_features+num_added_nodes, num_features+num_added_nodes))
+    newadj[:num_features, :num_features] = oldadj  # set to 0 to see it in an image
+    dataset.adj = newadj
+    dataset.nb_nodes = dataset.adj.shape[0]
+    return dataset
+
+
+def subsample_graph(adj, percentile=100):
+    # if we want to sub-sample the edges, based on the edges value
+    if percentile < 100:
+        # small trick to ignore the 0.
+        nan_adj = np.ma.masked_where(adj == 0., adj)
+        nan_adj = np.ma.filled(nan_adj, np.nan)
+
+        threshold = np.nanpercentile(nan_adj, 100 - percentile)
+        logging.info("We will remove all the adges that has a value smaller than {}".format(threshold))
+
+        to_keep = adj >= threshold  # throw away all the edges that are bigger than what we have.
+        return adj * to_keep

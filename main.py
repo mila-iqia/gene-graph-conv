@@ -1,13 +1,13 @@
 import argparse
 import logging
 import tensorflow as tf  # necessary to import here to avoid segfault
-from dataset_utilities import get_dataset, split_dataset
-import models
+from data.utils import get_dataset, split_dataset
+from models.models import get_model, setup_l1_loss
 import torch
 import time
 from torch.autograd import Variable
-import monitoring
-from metrics import record_metrics_for_epoch, summarize
+from analysis import monitoring
+from analysis.metrics import record_metrics_for_epoch, summarize
 
 
 def build_parser():
@@ -17,7 +17,7 @@ def build_parser():
     parser.add_argument('--epoch', default=10, type=int, help='The number of epochs we want ot train the network.')
     parser.add_argument('--seed', default=1993, type=int, help='Seed for random initialization and stuff.')
     parser.add_argument('--batch-size', default=100, type=int, help="The batch size.")
-    parser.add_argument('--tensorboard-dir', default='./experiments/', help='The folder where to store the experiments. Will be created if not already exists.')
+    parser.add_argument('--tensorboard-dir', default='./experiments/experiments/', help='The folder where to store the experiments. Will be created if not already exists.')
     parser.add_argument('--lr', default=1e-3, type=float, help='learning rate')
     parser.add_argument('--weight-decay', default=0., type=float, help='weight decay (L2 loss).')
     parser.add_argument('--l1-loss-lambda', default=0., type=float, help='L1 loss lambda.')
@@ -55,7 +55,7 @@ def build_parser():
     parser.add_argument('--extra-ucn', default=0, type=int, help="The number of extra nodes without edges in the percolate-plus dataset")
     parser.add_argument('--disconnected', default=0, type=int, help="The number of disconnected nodes from the perc subgraph without edges in percolate-plus")
     parser.add_argument('--center', default=False, type=bool, help="center the data (subtract mean from each element)?")
-    parser.add_argument('--graph-path', default="", type=str, help="path to the graph")
+    parser.add_argument('--graph', default=None, choices=['kegg', 'pathway'], help="Which graph with which to prior")
     return parser
 
 
@@ -90,7 +90,7 @@ def main(argv=None):
                                                    nb_samples=opt.nb_examples, train_ratio=opt.train_ratio, nb_per_class=opt.nb_per_class)
 
     logging.info("Getting the model...")
-    my_model = models.get_model(opt, dataset)
+    my_model = get_model(opt, dataset)
 
     logging.info("Our model:")
     logging.info(my_model)
@@ -132,7 +132,7 @@ def main(argv=None):
             # Compute and print loss
             cross_loss = criterion(y_pred, targets)
             model_regularization_loss = my_model.regularization(opt.model_reg_lambda)
-            l1_loss = models.setup_l1_loss(my_model, opt.l1_loss_lambda, l1_criterion, opt.cuda)
+            l1_loss = setup_l1_loss(my_model, opt.l1_loss_lambda, l1_criterion, opt.cuda)
             total_loss = cross_loss + model_regularization_loss + l1_loss
 
             # Zero gradients, perform a backward pass, and update the weights.
