@@ -76,7 +76,7 @@ class PercolateDataset(Dataset):
         self.nb_class = 2
         self.size_x = opt.size_perc
         self.size_y = opt.size_perc
-        self.num_samples = opt.nb_examples
+        self.num_samples = 100 if opt.nb_examples is None else opt.nb_examples
         self.extra_cn = opt.extra_cn  # uninformative connected layers of nodes
         self.disconnected = opt.disconnected  # number of nodes to disconnect
 
