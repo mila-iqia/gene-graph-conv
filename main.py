@@ -1,7 +1,7 @@
 import argparse
 import logging
 import tensorflow as tf  # necessary to import here to avoid segfault
-import datasets
+from dataset_utilities import get_dataset, split_dataset
 import models
 import torch
 import time
@@ -40,7 +40,7 @@ def build_parser():
     parser.add_argument('--trial-number', type=str, default='1', help='the trial number of the experiment.')
     parser.add_argument('--num-layer', default=1, type=int, help='Number of convolution layer in the CGN.')
     parser.add_argument('--nb-class', default=None, type=int, help="Number of class for the dataset (won't work with random graph).")
-    parser.add_argument('--nb-examples', default=10000, type=int, help="Number of samples to train on.")
+    parser.add_argument('--nb-examples', default=None, type=int, help="Number of samples to train on.")
     parser.add_argument('--nb-per-class', default=None, type=int, help="Number of samples per class.")
     parser.add_argument('--train-ratio', default=0.6, type=float, help="The ratio of data to be used in the training set.")
     parser.add_argument('--percentile', default=100, type=float, help="How many edges to keep.")
@@ -84,10 +84,10 @@ def main(argv=None):
     torch.manual_seed(opt.seed)
 
     logging.info("Getting the dataset...")
-    dataset = datasets.get_dataset(opt)
+    dataset = get_dataset(opt)
 
-    train_set, valid_set, test_set = datasets.split_dataset(dataset, batch_size=opt.batch_size, seed=opt.seed,
-                                                            nb_samples=opt.nb_examples, train_ratio=opt.train_ratio, nb_per_class=opt.nb_per_class)
+    train_set, valid_set, test_set = split_dataset(dataset, batch_size=opt.batch_size, seed=opt.seed,
+                                                   nb_samples=opt.nb_examples, train_ratio=opt.train_ratio, nb_per_class=opt.nb_per_class)
 
     logging.info("Getting the model...")
     my_model = models.get_model(opt, dataset)

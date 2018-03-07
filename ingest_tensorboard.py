@@ -5,8 +5,6 @@ import numpy as np
 from collections import defaultdict
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 
-
-
 # walk the experiment directory
 experiments = {}
 for root, dirs, files in os.walk('experiments'):
@@ -41,18 +39,7 @@ for path, experiment in experiments.iteritems():
             df.loc[:, tag] = [trial['opts'][tag]]
         exp_df = exp_df.append(df)
 print exp_df
-import pdb; pdb.set_trace()
 
 for path, experiment in experiments.iteritems():
     for number, trial in experiment.iteritems():
         print trial
-event_acc.Reload()
-
-# Show all tags in the log file
-print(event_acc.Tags())
-
-# E. g. get wall clock, number of steps and value for a scalar 'Accuracy'
-w_times, step_nums, vals = zip(*event_acc.Scalars('accuracy_test'))
-
-# Get the accuracy from the first epochs
-event_acc.Scalars('accuracy_test')[0][2]
