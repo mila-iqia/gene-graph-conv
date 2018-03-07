@@ -1,0 +1,42 @@
+{
+ "num_trials": 10,
+ "epoch": 500,
+ "batch_size": 10,
+ "train_ratio": 0.6,
+ "param_to_vary": {
+    "name": "disconnected",
+    "min": 0,
+    "max": 12,
+    "step": 13
+ },
+ "model_map":
+  {
+    "lr_no_l1": "mlp",
+    "lr_with_l1": "mlp",
+    "slr_no_l1": "slr",
+    "slr_with_l1": "slr",
+    "mlp": "mlp",
+    "cnn": "cnn",
+    "cgn_pool": "cgn",
+    "cgn_no_pool": "cgn",
+    "cgn_dropout": "cgn",
+    "random": "random",
+    "sgc": "sgc",
+    "lcg": "lcg"
+  },
+  "model_vars":
+    {
+      "lr_no_l1": {"num_layer": 0},
+      "lr_with_l1": {"num_layer": 0, "l1_loss_lambda": 0.01},
+      "slr_no_l1": {"lambdas": 0.25},
+      "slr_with_l1": {"lambdas": 0.3, "l1_loss_lambda": 0.01},
+      "mlp": {"num_layer": 3, "num_channel": 64, "use_emb": 32, "l1_loss_lambda": 0.0001},
+      "cnn": {},
+      "random": {},
+      "cgn_pool": {"num_layer": 3, "num_channel": 16, "use_emb": 16, "pool_graph": "hierarchy"},
+      "cgn_no_pool": {"num_layer": 3, "num_channel": 16, "use_emb": 16},
+      "cgn_dropout": {"num_layer": 3, "num_channel": 16, "use_emb": 16, "dropout": true},
+      "sgc": {"num_layer": 3, "num_channel": 32, "use_emb": 32},
+      "lcg": {"num_layer": 3, "num_channel": 32, "use_emb": 32}
+    }
+}
