@@ -10,7 +10,7 @@ from datasets import Dataset
 class GeneDataset(Dataset):
     """Gene Expression Dataset."""
 
-    def __init__(self, data_dir=None, data_file=None, sub_class=None, name=None, graph=None, opt=None):
+    def __init__(self, data_dir=None, data_file=None, sub_class=None, name=None, opt=None):
         """
         Args:
             data_file (string): Path to the h5df file.
@@ -20,7 +20,7 @@ class GeneDataset(Dataset):
         self.data_dir = data_dir
         self.data_file = data_file
 
-        super(GeneDataset, self).__init__(name=name, graph=graph, opt=opt)
+        super(GeneDataset, self).__init__(name=name, opt=opt)
 
     def load_data(self):
         data_file = os.path.join(self.data_dir, self.data_file)
@@ -121,8 +121,8 @@ class BRCACoexpr(GeneDataset):
 
 class GBMDataset(GeneDataset):
     " Glioblastoma Multiforme dataset"
-    def __init__(self, data_dir="/data/lisa/data/genomics/TCGA/", data_file="gbm.hdf5", graph=None, opt=None):
-        super(GBMDataset, self).__init__(data_dir=data_dir, data_file=data_file, name='GBMDataset', graph=graph, opt=opt)
+    def __init__(self, data_dir="/data/lisa/data/genomics/TCGA/", data_file="gbm.hdf5", opt=None):
+        super(GBMDataset, self).__init__(data_dir=data_dir, data_file=data_file, name='GBMDataset', opt=opt)
 
 
 class NSLRSyntheticDataset(GeneDataset):

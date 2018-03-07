@@ -78,36 +78,33 @@ def get_dataset(opt):
     :param opt:
     :return:
     """
-    graph = Graph(opt)
-
     if opt.dataset == 'random':
-        logging.info("Getting a random graph")
-        dataset = RandomDataset(graph, opt)
+        logging.info("Getting a random dataset")
+        dataset = RandomDataset(opt=opt)
 
     elif opt.dataset == 'tcga-tissue':
         logging.info("Getting TCGA tissue type")
-        dataset = TCGATissue(graph, opt)
+        dataset = TCGATissue(opt=opt)
 
     elif opt.dataset == 'tcga-brca':
         logging.info("Getting TCGA BRCA type")
-        dataset = BRCACoexpr(graph, opt)
+        dataset = BRCACoexpr(opt=opt)
 
     elif opt.dataset == 'percolate':
-        dataset = PercolateDataset(graph, opt)
+        dataset = PercolateDataset(opt=opt)
 
     elif opt.dataset == 'tcga-gbm':
         logging.info("Getting TCGA GBM Dataset")
-        dataset = GBMDataset(graph=graph, opt=opt)
+        dataset = GBMDataset(opt=opt)
 
     elif opt.dataset == 'nslr-syn':
         logging.info("Getting NSLR Synthetic Dataset")
-        dataset = NSLRSyntheticDataset(graph, opt)
+        dataset = NSLRSyntheticDataset(opt=opt)
 
     elif opt.dataset == 'percolate-plus':
         logging.info("Getting percolate-plus Dataset")
-        pdata = PercolateDataset(graph, opt)
+        pdata = PercolateDataset(opt=opt)
         dataset = add_noise(dataset=pdata, num_added_nodes=opt.extra_ucn)
-
     else:
         raise ValueError
     return dataset

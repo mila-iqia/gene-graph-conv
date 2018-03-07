@@ -7,9 +7,9 @@ import networkx
 class Graph(object):
     def __init__(self, opt):
         if opt.graph is not None:
-            self.load_graph(get_path(opt))
-        if opt.scale_free:
-            self.load_random_adjacency(nb_nodes=100, approx_nb_edges=100, scale_free=opt.scale_free)
+            self.load_graph(get_path(opt.graph))
+        else:
+            self.load_random_adjacency(nb_nodes=opt.nb_nodes, approx_nb_edges=opt.approx_nb_edges, scale_free=opt.scale_free)
         self.nb_nodes = self.adj.shape[0]
 
     def load_random_adjacency(self, nb_nodes, approx_nb_edges, scale_free=True):
@@ -40,10 +40,10 @@ class Graph(object):
         self.node_names = np.array(f['gene_names'])
 
 
-def get_path(opt):
-    if opt.graph == "kegg":
+def get_path(graph):
+    if graph == "kegg":
         return "/data/lisa/data/genomics/graph/kegg.hdf5"
-    elif opt.graph == "pathway":
+    elif graph == "pathway":
         return "/data/lisa/data/genomics/graph/pathway_commons.hdf5"
 
 

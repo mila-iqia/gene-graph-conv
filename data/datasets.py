@@ -4,22 +4,20 @@ from torch.utils.data import Dataset
 import random
 import percolate
 import networkx as nx
+from graph import Graph
 
 
 class Dataset(Dataset):
-    def __init__(self, name, graph, opt):
+    def __init__(self, name, opt):
 
         self.name = name
-        self.graph = graph
-        self.adj = graph.adj
-        self.nb_nodes = graph.nb_nodes
-        self.node_names = graph.node_names
-
         self.seed = opt.seed
         self.nb_class = 2 if opt.nb_class is None else opt.nb_class
         self.nb_examples = 1000 if opt.nb_examples is None else opt.nb_examples
-
+        self.set_graph(opt)
+        self.nb_nodes = self.adj.shape[0]
         self.load_data()
+
         self.adj = (self.adj > 0.).astype(float)  # Don't care about the weights, for now.
         if opt.center:
             self.data = self.data - self.data.mean(axis=0)  # Ugly, to redo.
@@ -29,6 +27,11 @@ class Dataset(Dataset):
 
     def labels_name(self, l):
         raise NotImplementedError()
+
+    def set_graph(self, opt):
+        self.graph = Graph(opt)
+        self.adj = self.graph.adj
+        self.node_names = self.graph.node_names
 
     def __getitem__(self, idx):
         raise NotImplementedError()
@@ -46,8 +49,8 @@ class RandomDataset(Dataset):
     A random dataset for debugging purposes
     """
 
-    def __init__(self, graph, opt):
-        super(RandomDataset, self).__init__(name='RandomDataset', graph=graph, opt=opt)
+    def __init__(self, opt):
+        super(RandomDataset, self).__init__(name='RandomDataset', opt=opt)
 
     def load_data(self):
         np.random.seed(self.seed)
@@ -72,7 +75,7 @@ class PercolateDataset(Dataset):
     A random dataset where the goal if to find if we can percolate from one side of the graph to the other.
     """
 
-    def __init__(self, graph, opt):
+    def __init__(self, opt):
         self.nb_class = 2
         self.size_x = opt.size_perc
         self.size_y = opt.size_perc
@@ -80,7 +83,7 @@ class PercolateDataset(Dataset):
         self.extra_cn = opt.extra_cn  # uninformative connected layers of nodes
         self.disconnected = opt.disconnected  # number of nodes to disconnect
 
-        super(PercolateDataset, self).__init__(name='PercolateDataset', graph=graph, opt=opt)
+        super(PercolateDataset, self).__init__(name='PercolateDataset', opt=opt)
 
     def load_data(self):
         size_x = self.size_x
@@ -136,7 +139,6 @@ class PercolateDataset(Dataset):
         self.labels = labels_data
 
         self.nb_class = 2
-        self.nb_nodes = self.data.shape[1]
 
     def __getitem__(self, idx):
         sample = self.data[idx]
