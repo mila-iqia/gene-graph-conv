@@ -129,11 +129,10 @@ class GraphNetwork(nn.Module):
 
         if transform_adj is None:
             transform_adj = []
-
         self.my_layers = []
         self.out_dim = out_dim
         self.on_cuda = on_cuda
-        self.nb_nodes = nb_nodes
+        self.nb_nodes = adj.shape[0]
         self.nb_channels = channels
         self.add_emb = add_emb
         self.graphLayerType = graphLayerType
@@ -161,7 +160,7 @@ class GraphNetwork(nn.Module):
 
         # The logistic layer
         logistic_layer = []
-        logistic_in_dim = [nb_nodes * dims[-1]]
+        logistic_in_dim = [self.nb_nodes * dims[-1]]
         for d in logistic_in_dim:
             layer = nn.Linear(d, out_dim)
             layer.register_forward_hook(save_computations)  # For monitoring
@@ -219,7 +218,6 @@ class GraphNetwork(nn.Module):
                     id_to_keep = id_to_keep.cuda()
 
                 x = x * id_to_keep
-
         x = self.my_logistic_layers[-1](x.view(nb_examples, -1))
         return x
 

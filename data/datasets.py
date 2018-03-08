@@ -1,9 +1,5 @@
-import logging
 import numpy as np
 from torch.utils.data import Dataset
-import random
-import percolate
-import networkx as nx
 from graph import Graph
 
 
@@ -14,9 +10,9 @@ class Dataset(Dataset):
         self.seed = opt.seed
         self.nb_class = 2 if opt.nb_class is None else opt.nb_class
         self.nb_examples = 1000 if opt.nb_examples is None else opt.nb_examples
-        self.set_graph(opt)
-        self.nb_nodes = self.adj.shape[0]
+        self.nb_nodes = opt.nb_nodes
         self.load_data()
+        self.set_graph(opt)
 
         self.adj = (self.adj > 0.).astype(float)  # Don't care about the weights, for now.
         if opt.center:
@@ -29,9 +25,14 @@ class Dataset(Dataset):
         raise NotImplementedError()
 
     def set_graph(self, opt):
-        self.graph = Graph(opt)
+        self.graph = Graph(opt, self)
         self.adj = self.graph.adj
         self.node_names = self.graph.node_names
+        try:
+            self.labels = self.graph.labels
+            self.data = self.graph.data
+        except Exception as e:
+            print e
 
     def __getitem__(self, idx):
         raise NotImplementedError()
@@ -76,74 +77,14 @@ class PercolateDataset(Dataset):
     """
 
     def __init__(self, opt):
-        self.nb_class = 2
-        self.size_x = opt.size_perc
-        self.size_y = opt.size_perc
-        self.num_samples = 100 if opt.nb_examples is None else opt.nb_examples
-        self.extra_cn = opt.extra_cn  # uninformative connected layers of nodes
-        self.disconnected = opt.disconnected  # number of nodes to disconnect
-
         super(PercolateDataset, self).__init__(name='PercolateDataset', opt=opt)
 
     def load_data(self):
-        size_x = self.size_x
-        size_y = self.size_y
-        prob = 0.562
-        num_samples = self.num_samples
-        extra_cn = self.extra_cn
-        disconnected = self.disconnected
-
-        if self.extra_cn != 0:
-            if self.size_x != self.size_y:
-                print "Not designed to add extra nodes with non-square graphs"
-
-        np.random.seed(0)
-        random.seed(0)
-
-        expression_data = []
-        labels_data = []
-        for i in range(num_samples):
-            if i % 10 == 0:
-                logging.info("."),
-            perc = False
-            if i % 2 == 0:  # generate positive example
-                perc = False
-                while perc is False:
-                    G, T, perc, dens, nio = percolate.sq2d_lattice_percolation_simple(size_x, size_y, prob=prob,
-                                                                                      extra_cn=extra_cn, disconnected=disconnected)
-                attrs = nx.get_node_attributes(G, 'value')
-                features = np.zeros((len(attrs),), dtype='float32')
-                for j, node in enumerate(nio):
-                    features[j] = attrs[node]
-                expression_data.append(features)
-                labels_data.append(1)
-
-            else:  # generate negative example
-                perc = True
-                while perc is True:
-                    G, T, perc, dens, nio = percolate.sq2d_lattice_percolation_simple(size_x, size_y, prob=prob,
-                                                                                      extra_cn=extra_cn, disconnected=disconnected)
-                attrs = nx.get_node_attributes(G, 'value')
-                features = np.zeros((len(attrs),), dtype='float32')
-                for j, node in enumerate(nio):
-                    features[j] = attrs[node]
-                expression_data.append(features)
-                labels_data.append(0)
-        adj = nx.adjacency_matrix(G, nodelist=nio).todense()
-        expression_data = np.asarray(expression_data)
-        labels_data = np.asarray(labels_data)
-
-        self.nio = nio
-        self.adj = adj
-        self.data = expression_data
-        self.labels = labels_data
-
-        self.nb_class = 2
+        return
 
     def __getitem__(self, idx):
         sample = self.data[idx]
-        sample = np.expand_dims(sample, -1)  # Addin a dim for the channels
-
+        sample = np.expand_dims(sample, -1)  # Addin a dim for the channels\
         sample = {'sample': sample, 'labels': self.labels[idx]}
         return sample
 

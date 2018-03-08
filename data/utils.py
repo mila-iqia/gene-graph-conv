@@ -2,7 +2,6 @@ import logging
 import numpy as np
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
-from graph import Graph, add_noise
 from gene_datasets import BRCACoexpr, GBMDataset, TCGATissue, NSLRSyntheticDataset
 from datasets import RandomDataset, PercolateDataset
 
@@ -108,3 +107,43 @@ def get_dataset(opt):
     else:
         raise ValueError
     return dataset
+
+
+def add_noise(dataset, num_added_nodes=10):
+    """
+    Will add random features and add these nodes as not connected
+
+    Usage:
+    pdataset = datasets.PercolateDataset()
+    dataset = add_noise(dataset=pdataset, num_added_nodes=100)
+    """
+
+    num_samples = dataset.data.shape[0]
+    num_features = dataset.data.shape[1]
+
+    newdata = np.random.random((num_samples, num_features+num_added_nodes))
+    newdata = (newdata*2)-1  # normalize; maybe adapt to data?
+    newdata[:num_samples, :num_features] = dataset.data  # set to 0 to see it in an image
+    dataset.data = newdata
+
+    oldadj = dataset.get_adj()
+
+    newadj = np.zeros((num_features+num_added_nodes, num_features+num_added_nodes))
+    newadj[:num_features, :num_features] = oldadj  # set to 0 to see it in an image
+    dataset.adj = newadj
+    dataset.nb_nodes = dataset.adj.shape[0]
+    return dataset
+
+
+def subsample_graph(adj, percentile=100):
+    # if we want to sub-sample the edges, based on the edges value
+    if percentile < 100:
+        # small trick to ignore the 0.
+        nan_adj = np.ma.masked_where(adj == 0., adj)
+        nan_adj = np.ma.filled(nan_adj, np.nan)
+
+        threshold = np.nanpercentile(nan_adj, 100 - percentile)
+        logging.info("We will remove all the adges that has a value smaller than {}".format(threshold))
+
+        to_keep = adj >= threshold  # throw away all the edges that are bigger than what we have.
+        return adj * to_keep

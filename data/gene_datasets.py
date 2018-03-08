@@ -29,6 +29,9 @@ class GeneDataset(Dataset):
         self.nb_nodes = self.data.shape[1]
         self.labels = self.file['labels_data']
         self.sample_names = self.file['sample_names']
+        self.node_names = self.file['gene_names']
+        self.df = pd.DataFrame(np.array(self.file['expression_data']))
+        self.df.columns = self.node_names
         self.nb_class = self.nb_class if self.nb_class is not None else len(self.labels[0])
         self.label_name = self.labels.attrs
 

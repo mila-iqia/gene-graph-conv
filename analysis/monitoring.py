@@ -29,7 +29,6 @@ def feature_selection(model, dataset, opt, top=100):
             weight = layer.weight.data
 
             top_features.append({})
-
             for no_class in range(weight.size(0)):
                 nb_channel = 1 if weight[no_class].size(0) == model.nb_nodes else model.nb_channels[0]
                 this_layer_feature = torch.abs(weight[no_class].view(nb_channel, model.nb_nodes)).sum(0)  # It's a logistic regression, so lets do that.
