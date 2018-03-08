@@ -1,4 +1,4 @@
-experiments/
+experiments/experiments/
 *.pyc
 *.Rhistory
 *.RData
@@ -7,4 +7,3 @@ slurm-*
 cache/
 slurm/
 testing123/
-data/*/*
