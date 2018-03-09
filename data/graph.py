@@ -16,10 +16,16 @@ class Graph(object):
             self.load_random_adjacency(nb_nodes=opt.nb_nodes, approx_nb_edges=opt.approx_nb_edges, scale_free=opt.scale_free)
         elif opt.dataset == "percolate" or opt.dataset == "percolate-plus":
             self.generate_percolate(opt)
-        try:
-            print dataset.node_names
-            print self.node_names
+        self.merge_data_and_graph(dataset)
 
+    def merge_data_and_graph(self, dataset):
+
+        try:
+            intersection = np.intersect1d(self.node_names, dataset.node_names)
+            dataset.df = dataset.df[intersection]
+            dataset.data = dataset.df.as_matrix()
+            self.df = self.df[intersection].filter(items=intersection, axis='index')
+            self.adj = self.df.as_matrix()
         except Exception as e:
             print e
 
@@ -51,6 +57,7 @@ class Graph(object):
         self.node_names = np.array(f['gene_names'])
         self.df = pd.DataFrame(np.array(self.adj))
         self.df.columns = self.node_names
+        self.df.index = self.node_names
 
     def generate_percolate(self, opt):
         self.nb_class = 2
@@ -112,7 +119,6 @@ class Graph(object):
         self.labels = labels_data
         self.node_names = range(0, self.data.shape[1])
         self.nb_class = 2
-
 
 
 def get_path(graph):
