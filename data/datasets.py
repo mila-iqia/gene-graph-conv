@@ -15,6 +15,7 @@ class Dataset(Dataset):
         self.set_graph(opt)
 
         self.adj = (self.adj > 0.).astype(float)  # Don't care about the weights, for now.
+        self.nb_nodes = self.adj.shape[0]
         if opt.center:
             self.data = self.data - self.data.mean(axis=0)  # Ugly, to redo.
 
