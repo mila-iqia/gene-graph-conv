@@ -129,6 +129,7 @@ def main(argv=None):
                 targets = targets.cuda()
 
             # Forward pass: Compute predicted y by passing x to the model
+            my_model.train()
             y_pred = my_model(inputs).float()
 
             # Compute and print loss
@@ -141,6 +142,7 @@ def main(argv=None):
             optimizer.zero_grad()
             total_loss.backward()
             optimizer.step()
+            my_model.eval()
 
         time_this_epoch = time.time() - start_timer
 
@@ -149,7 +151,6 @@ def main(argv=None):
         summary = [
             t,
             cross_loss.data[0],
-            total_loss.data[0],
             acc['train'],
             acc['valid'],
             auc['train'],
@@ -165,7 +166,7 @@ def main(argv=None):
         if max_valid < auc['valid'] and t > 5:
             max_valid = auc['valid']
             best_summary = summarize(t, cross_loss.data[0], total_loss.data[0], acc, auc)
-            patience = 100
+            patience = 1000
 
     logging.info("Done!")
     monitoring.monitor_everything(my_model, valid_set, opt, exp_dir)

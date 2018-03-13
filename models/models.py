@@ -18,10 +18,15 @@ class EmbeddingLayer(nn.Module):
         # The embeddings
         self.emb_size = emb_size
         self.emb = nn.Parameter(torch.rand(nb_emb, emb_size))
+        self.reset_parameters()
 
     def forward(self, x):
         emb = x * self.emb
         return emb
+
+    def reset_parameters(self):
+        stdv = 1. / np.sqrt(self.emb.size(1))
+        self.emb.data.uniform_(-stdv, stdv)
 
 
 class AttentionLayer(nn.Module):
@@ -105,6 +110,7 @@ class SparseLogisticRegression(nn.Module):
         logistic_layer = nn.Linear(logistic_in_dim, out_dim)
         logistic_layer.register_forward_hook(save_computations)  # For monitoring
 
+
         self.my_logistic_layers = nn.ModuleList([logistic_layer])  # A lsit to be consistant with the other layer.
 
     def forward(self, x):
@@ -187,30 +193,34 @@ class GraphNetwork(nn.Module):
         logging.info("Done!")
         # TODO: add all the funky bells and stuff that the old CGN has.
 
+        # register grads
+        self.grads = {}
+        def save_grad(name):
+            def hook(grad):
+                self.grads[name] = grad.data.cpu().numpy()
+            return hook
+        self.save_grad = save_grad
+
     def forward(self, x):
 
         nb_examples, nb_nodes, nb_channels = x.size()
+
         if self.add_emb:
             x = self.emb(x)
+            x.register_hook(self.save_grad('emb'))
 
         last_g = None
         for i, [layer, gate, dropout] in enumerate(zip(self.my_convs, self.gates, self.my_dropouts)):
 
-            old_x = x
             if self.use_gate > 0.:
                 x = layer(x)
                 g = gate(x)
-
-                if last_g is None:
-                    last_g = g
-                else:
-                    last_g = last_g * g
-
                 x = g * x
             else:
                 x = layer(x)
 
             x = F.relu(x)  # + old_x
+            x.register_hook(self.save_grad('layer_{}'.format(i)))
 
             if dropout is not None:
                 id_to_keep = dropout(torch.FloatTensor(np.ones((x.size(0), x.size(1))))).unsqueeze(2)
@@ -218,7 +228,9 @@ class GraphNetwork(nn.Module):
                     id_to_keep = id_to_keep.cuda()
 
                 x = x * id_to_keep
+
         x = self.my_logistic_layers[-1](x.view(nb_examples, -1))
+        x.register_hook(self.save_grad('logistic'))
         return x
 
     def regularization(self, reg_lambda):

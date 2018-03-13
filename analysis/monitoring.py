@@ -37,8 +37,8 @@ def feature_selection(model, dataset, opt, top=100):
                 top_k_names = dataset.node_names[top_k.cpu().numpy()]
 
                 top_features[i][dataset.labels_name(no_class)] = (top_k_names, top_k.cpu().numpy())
-    except AttributeError:
-        print "{} doesn't have any logistic layers.".format(model)
+    except AttributeError as e:
+        print e
 
     return top_features
 
@@ -88,9 +88,13 @@ def get_representation(model, dataset, opt):
         if opt.cuda:
             inputs = inputs.cuda()
 
+        model.eval()
+        pred = model(inputs)
+
         # Forward pass: Compute predicted y by passing x to the model
         retn = model.get_representation()
         retn['example'] = {'input': inputs.cpu().data.numpy(), 'output': targets.cpu().numpy()}
+
         break
 
     return retn
@@ -108,12 +112,29 @@ def setup_tensorboard_log(opt):
     print "We will log everything in ", exp_dir
     return writer, exp_dir
 
+def get_state_dict(model):
+
+    state = model.state_dict().copy()
+    to_del = []
+
+    for name, obj in state.iteritems():
+        if "sparse" in name:
+            to_del.append(name)
+        else:
+            state[name] = state[name].cpu().numpy()
+
+    for name in to_del:
+        del state[name]
+
+    return state
 
 def monitor_everything(model, dataset, opt, exp_dir):
     print "Saving everything in:", exp_dir
-    print "Extracting the important features..."
-    features = feature_selection(model, dataset, opt)
-    pickle.dump(features, open(os.path.join(exp_dir, 'features.pkl'), 'wb'))
+    #print "Extracting the important features..."
+    #features = feature_selection(model, dataset.dataset, opt)
+    #pickle.dump(features, open(os.path.join(exp_dir, 'features.pkl'), 'wb'))
+    print "Saving the weights..."
+    pickle.dump(get_state_dict(model), open(os.path.join(exp_dir, 'weights.pkl'), 'wb'))
 
     print "Extracting the graphs..."
     graphs = get_graph(model)
@@ -121,14 +142,21 @@ def monitor_everything(model, dataset, opt, exp_dir):
 
     print "Saving a representation..."
     rep = get_representation(model, dataset, opt)
-    pickle.dump(rep, open(os.path.join(exp_dir, 'representation.pkl'), 'wb'))
+    pickle.dump(rep, open(os.path.join(exp_dir, 'representations.pkl'), 'wb'))
+
+    print "Saving the gradients..."
+    grads = model.grads
+    pickle.dump(grads, open(os.path.join(exp_dir, 'grads.pkl'), 'wb'))
+
+
+    print "Done!"
 
 
 def load_everything(exp_dir):
     print "Loading the data..."
     features = pickle.load(open(os.path.join(exp_dir, 'features.pkl')))
     graphs = pickle.load(open(os.path.join(exp_dir, 'graphs.pkl')))
-    reps = pickle.load(open(os.path.join(exp_dir, 'representation.pkl')))
+    reps = pickle.load(open(os.path.join(exp_dir, 'representations.pkl')))
     logging.info("Done!")
 
     return features, graphs, reps
