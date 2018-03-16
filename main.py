@@ -48,6 +48,7 @@ def build_parser():
     parser.add_argument('--attention-layer', default=0, type=int, help="The number of attention layer to add to the last layer. Only implemented for CGN.")
     parser.add_argument('--pool-graph', default=None, choices=['ignore', 'hierarchy'], help="If we want to pool the graph.")
     parser.add_argument('--use-emb', default=None, type=int, help="If we want to add node embeddings.")
+    parser.add_argument('--nb-attention-head', default=0, type=int, help="The number of attention head to use for graph network.")
     parser.add_argument('--use-gate', default=0., type=float, help="The lambda for the gate pooling/striding. is ignore if = 0.")
     parser.add_argument('--model_reg_lambda', default=0.0, type=float, nargs='*', help="A lambda for the regularization on a specific model.")
     parser.add_argument('--size-perc', default=4, type=int, help="The size of the connected percolate graph in percolate-plus datsaet")

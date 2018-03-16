@@ -31,31 +31,65 @@ class EmbeddingLayer(nn.Module):
 
 class AttentionLayer(nn.Module):
 
-    def __init__(self, in_dim):
+    def __init__(self, in_dim, nb_attention_head=1):
 
         self.in_dim = in_dim
+        self.nb_attention_head = nb_attention_head
         super(AttentionLayer, self).__init__()
 
         # The view vector.
-        self.attn = nn.Linear(self.in_dim, 1)
+        self.attn = nn.Linear(self.in_dim, nb_attention_head)
         self.temperature = 1.
 
     def forward(self, x):
-        nb_examples, nb_channels, nb_nodes = x.size()
-        x = x.permute(0, 2, 1).contiguous()  # from ex, ch, node -> ex, node, ch
+
+        nb_examples, nb_nodes, nb_channels = x.size()
+        #x = x.permute(0, 2, 1).contiguous()  # from ex, ch, node -> ex, node, ch
         x = x.view(-1, nb_channels)
 
         # attn_weights = F.softmax(self.attn(x), dim=1)# Should be able to do that,
         # I have some problem with pytorch right now, so I'm doing i manually. Also between you and me, the pytorch example for attention sucks.
         attn_weights = torch.exp(self.attn(x)*self.temperature)
-        attn_weights = attn_weights.view(nb_examples, nb_nodes, 1)
-        attn_weights = attn_weights / attn_weights.sum(dim=1).unsqueeze(-1)  # normalizing
+        attn_weights = attn_weights.view(nb_examples, nb_nodes, self.nb_attention_head)
+        attn_weights = attn_weights / attn_weights.sum(dim=1).unsqueeze(1)  # normalizing
 
         x = x.view(nb_examples, nb_nodes, nb_channels)
-        attn_applied = x * attn_weights
+        attn_applied = x.unsqueeze(-1) * attn_weights.unsqueeze(-2)
         attn_applied = attn_applied.sum(dim=1)
+        attn_applied = attn_applied.view(nb_examples, -1)
 
-        return attn_applied
+        return attn_applied, attn_weights
+
+
+class SoftPoolingLayer(nn.Module):
+
+    def __init__(self, in_dim, nb_attention_head=1):
+
+        self.in_dim = in_dim
+        self.nb_attention_head = nb_attention_head
+        super(SoftPoolingLayer, self).__init__()
+
+        # The view vector.
+        self.attn = nn.Linear(self.in_dim, self.nb_attention_head)
+        self.temperature = 1.
+
+    def forward(self, x):
+
+        nb_examples, nb_nodes, nb_channels = x.size()
+        #x = x.permute(0, 2, 1).contiguous()  # from ex, ch, node -> ex, node, ch
+        x = x.view(-1, nb_channels)
+
+        # attn_weights = F.softmax(self.attn(x), dim=1)# Should be able to do that,
+        # I have some problem with pytorch right now, so I'm doing i manually. Also between you and me, the pytorch example for attention sucks.
+        attn_weights = torch.exp(self.attn(x)*self.temperature)
+        attn_weights = attn_weights.view(nb_examples, nb_nodes, self.nb_attention_head)
+        attn_weights = attn_weights / attn_weights.sum(dim=1).unsqueeze(1)  # normalizing
+
+        x = x.view(nb_examples, nb_nodes, nb_channels)
+        attn_applied = x.unsqueeze(-1) * attn_weights.unsqueeze(-2)
+        attn_applied = attn_applied.view(nb_examples, -1)
+
+        return attn_applied, attn_weights
 
 
 class ElementwiseGateLayer(nn.Module):
@@ -130,7 +164,7 @@ class SparseLogisticRegression(nn.Module):
 
 class GraphNetwork(nn.Module):
     def __init__(self, nb_nodes, input_dim, channels, adj, out_dim,
-                 on_cuda=True, add_emb=None, transform_adj=None, agregate_adj=None, graphLayerType=graphLayer.CGNLayer, use_gate=0.0001, dropout=False):
+                 on_cuda=True, add_emb=None, transform_adj=None, agregate_adj=None, graphLayerType=graphLayer.CGNLayer, use_gate=0.0001, dropout=False, attention_head=0):
         super(GraphNetwork, self).__init__()
 
         if transform_adj is None:
@@ -144,6 +178,7 @@ class GraphNetwork(nn.Module):
         self.graphLayerType = graphLayerType
         self.agregate_adj = agregate_adj
         self.dropout = dropout
+        self.attention_head = attention_head
 
         if add_emb:
             logging.info("Adding node embeddings.")
@@ -158,7 +193,7 @@ class GraphNetwork(nn.Module):
         for i, [c_in, c_out] in enumerate(zip(dims[:-1], dims[1:])):
             # transformation to apply at each layer.
             layer = graphLayerType(adj, c_in, c_out, on_cuda, i, transform_adj=transform_adj, agregate_adj=agregate_adj)
-            layer.register_forward_hook(save_computations)  # For monitoring
+            layer.register_forward_hook(save_computations)  # For monitoringv
             convs.append(layer)
             adj = convs[-1].adj
 
@@ -166,13 +201,19 @@ class GraphNetwork(nn.Module):
 
         # The logistic layer
         logistic_layer = []
-        logistic_in_dim = [self.nb_nodes * dims[-1]]
+        if self.attention_head > 0:
+            logistic_in_dim = [self.attention_head * dims[-1]]
+        else:
+            logistic_in_dim = [self.nb_nodes * dims[-1]]
+
         for d in logistic_in_dim:
             layer = nn.Linear(d, out_dim)
             layer.register_forward_hook(save_computations)  # For monitoring
             logistic_layer.append(layer)
 
         self.my_logistic_layers = nn.ModuleList(logistic_layer)
+
+        # The gating
         self.use_gate = use_gate
 
         if use_gate > 0.:
@@ -185,10 +226,17 @@ class GraphNetwork(nn.Module):
         else:
             self.gates = [None] * (len(dims) - 1)
 
+        # Drop out
         self.my_dropouts = [None] * (len(dims) - 1)
         if dropout:
             print "Doing drop-out"
             self.my_dropouts = nn.ModuleList([torch.nn.Dropout(int(dropout)*min((id_layer+1) / 10., 0.4)) for id_layer in range(len(dims)-1)])
+
+        # Attention
+        if self.attention_head:
+            self.attentionLayer = AttentionLayer(dims[-1], attention_head)
+            self.attentionLayer.register_forward_hook(save_computations)  # For monitoringv
+
 
         logging.info("Done!")
         # TODO: add all the funky bells and stuff that the old CGN has.
@@ -209,7 +257,6 @@ class GraphNetwork(nn.Module):
             x = self.emb(x)
             x.register_hook(self.save_grad('emb'))
 
-        last_g = None
         for i, [layer, gate, dropout] in enumerate(zip(self.my_convs, self.gates, self.my_dropouts)):
 
             if self.use_gate > 0.:
@@ -222,12 +269,17 @@ class GraphNetwork(nn.Module):
             x = F.relu(x)  # + old_x
             x.register_hook(self.save_grad('layer_{}'.format(i)))
 
+
             if dropout is not None:
                 id_to_keep = dropout(torch.FloatTensor(np.ones((x.size(0), x.size(1))))).unsqueeze(2)
                 if self.on_cuda:
                     id_to_keep = id_to_keep.cuda()
 
                 x = x * id_to_keep
+
+        # Do attention pooling here
+        if self.attention_head:
+            x, attn = self.attentionLayer(x)
 
         x = self.my_logistic_layers[-1](x.view(nb_examples, -1))
         x.register_hook(self.save_grad('logistic'))
@@ -259,6 +311,11 @@ class GraphNetwork(nn.Module):
                 add_rep(layer, 'layer_{}'.format(i), representation)
 
         add_rep(self.my_logistic_layers[-1], 'logistic', representation)
+
+        if self.attention_head:
+            representation['attention'] = {'input': self.attentionLayer.input[0].cpu().data.numpy(),
+                         'output': [self.attentionLayer.output[0].cpu().data.numpy(), self.attentionLayer.output[1].cpu().data.numpy()]}
+
         return representation
 
 
@@ -427,15 +484,18 @@ def get_model(opt, dataset):
     # TODO: add a bunch of the options
     if model == 'cgn':
         my_model = CGN(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=dataset.nb_class,
-                       on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=adj_transform, agregate_adj=agregate_function, use_gate=opt.use_gate, dropout=opt.dropout)
+                       on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=adj_transform, agregate_adj=agregate_function, use_gate=opt.use_gate, dropout=opt.dropout,
+                       attention_head=opt.nb_attention_head)
 
     elif model == 'lcg':
         my_model = LCG(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=dataset.nb_class,
-                       on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=adj_transform, agregate_adj=agregate_function, use_gate=opt.use_gate, dropout=opt.dropout)
+                       on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=adj_transform, agregate_adj=agregate_function, use_gate=opt.use_gate, dropout=opt.dropout,
+                       attention_head=opt.nb_attention_head)
 
     elif model == 'sgc':
         my_model = SGC(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=dataset.nb_class,
-                       on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=adj_transform, agregate_adj=agregate_function, use_gate=opt.use_gate, dropout=opt.dropout)
+                       on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=adj_transform, agregate_adj=agregate_function, use_gate=opt.use_gate, dropout=opt.dropout,
+                       attention_head=opt.nb_attention_head)
 
     elif model == 'slr':
         my_model = SparseLogisticRegression(nb_nodes=dataset.nb_nodes, input_dim=1, adj=dataset.get_adj(), out_dim=dataset.nb_class, on_cuda=on_cuda)
