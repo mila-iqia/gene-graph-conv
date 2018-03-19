@@ -63,7 +63,7 @@ class AttentionLayer(nn.Module):
 
 class SoftPoolingLayer(nn.Module):
 
-    def __init__(self, in_dim, nb_attention_head=1):
+    def __init__(self, in_dim, nb_attention_head=10):
 
         self.in_dim = in_dim
         self.nb_attention_head = nb_attention_head
@@ -84,12 +84,13 @@ class SoftPoolingLayer(nn.Module):
         attn_weights = torch.exp(self.attn(x)*self.temperature)
         attn_weights = attn_weights.view(nb_examples, nb_nodes, self.nb_attention_head)
         attn_weights = attn_weights / attn_weights.sum(dim=1).unsqueeze(1)  # normalizing
+        attn_weights = attn_weights.sum(dim=-1)
 
-        x = x.view(nb_examples, nb_nodes, nb_channels)
-        attn_applied = x.unsqueeze(-1) * attn_weights.unsqueeze(-2)
-        attn_applied = attn_applied.view(nb_examples, -1)
+        #x = x.view(nb_examples, nb_nodes, nb_channels)
+        #attn_applied = x * attn_weights.unsqueeze(-1)
+        #attn_applied = attn_applied.view(nb_examples, -1)
 
-        return attn_applied, attn_weights
+        return attn_weights.unsqueeze(-1)
 
 
 class ElementwiseGateLayer(nn.Module):
@@ -219,7 +220,7 @@ class GraphNetwork(nn.Module):
         if use_gate > 0.:
             gates = []
             for c_in in dims[1:]:
-                gate = ElementwiseGateLayer(c_in)
+                gate = ElementwiseGateLayer(c_in)#SoftPoolingLayer(c_in)
                 gate.register_forward_hook(save_computations)  # For monitoring
                 gates.append(gate)
             self.gates = nn.ModuleList(gates)
@@ -317,6 +318,21 @@ class GraphNetwork(nn.Module):
                          'output': [self.attentionLayer.output[0].cpu().data.numpy(), self.attentionLayer.output[1].cpu().data.numpy()]}
 
         return representation
+
+    # because of fucking sparse matrices.
+    def load_state_dict(self, state_dict):
+
+        own_state = self.state_dict()
+        for name, param in state_dict.items():
+            if name not in own_state:
+                continue
+            if isinstance(param, nn.Parameter):
+                # backwards compatibility for serialized parameters
+                param = param.data
+            try:
+                own_state[name].copy_(param)
+            except AttributeError as e:
+                pass # because of fucking sparse matrices.
 
 
 class CGN(GraphNetwork):
@@ -465,7 +481,7 @@ class CNN(nn.Module):
         return 0.0
 
 
-def get_model(opt, dataset):
+def get_model(opt, dataset, model_state=None):
     """
     Return a model based on the options.
     :param opt:
@@ -515,6 +531,25 @@ def get_model(opt, dataset):
 
     else:
         raise ValueError
+
+    #import ipdb; ipdb.set_trace()
+
+    # If we load stuff
+
+
+
+    if model_state is not None:
+
+        # In case we didn't save everything (i.e. sparse matrices).
+        init_state_dict = my_model.state_dict()
+        init_state_dict.update(model_state)
+        #for key, value in init_state_dict.iteritems():
+        #    if key not in model_state:
+        #        model_state[key] = value
+
+        my_model.load_state_dict(init_state_dict)
+        #my_model.update(model_state)
+
     return my_model
 
 

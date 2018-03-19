@@ -31,10 +31,12 @@ def build_parser():
     parser.add_argument('--norm-adj', default=True, type=bool, help="If we want to normalize the adjancy matrix.")
     parser.add_argument('--log', choices=['console', 'silent'], default='console', help="Determines what kind of logging you get")
     parser.add_argument('--name', type=str, default=None, help="If we want to add a random str to the folder.")
+    parser.add_argument('--load-folder', type=str, default=None, help="Folder where to load the network and resume training.")
 
     # Model specific options
     parser.add_argument('--num-channel', default=32, type=int, help='Number of channel in the model.')
     parser.add_argument('--dropout', default=False, type=bool, help='If we want to perform dropout in the model..')
+    parser.add_argument('--add-connectivity', default=False, type=bool, help='If we want to augment the connectivity after each convolution layer after the first one.')
     parser.add_argument('--model', default='cgn', choices=['cgn', 'mlp', 'lcg', 'sgc', 'slr', 'cnn', 'random'], help='Number of channel in the CGN.')
     parser.add_argument('--experiment-var', type=str, default='na', help='var that we are experimenting on, used for dir name.')
     parser.add_argument('--trial-number', type=str, default='1', help='the trial number of the experiment.')
@@ -88,12 +90,13 @@ def main(argv=None):
 
     logging.info("Getting the dataset...")
     dataset = get_dataset(opt)
+    writer, exp_dir = monitoring.setup_tensorboard_log(opt)
 
     train_set, valid_set, test_set = split_dataset(dataset, batch_size=opt.batch_size, seed=opt.seed,
                                                    nb_samples=opt.nb_examples, train_ratio=opt.train_ratio, nb_per_class=opt.nb_per_class)
 
     logging.info("Getting the model...")
-    my_model = get_model(opt, dataset)
+    my_model, optimizer, epoch, opt = monitoring.load_checkpoint(exp_dir, opt, dataset)
 
     logging.info("Our model:")
     logging.info(my_model)
@@ -101,20 +104,17 @@ def main(argv=None):
     # Setup the loss
     criterion = torch.nn.CrossEntropyLoss(size_average=True)
     l1_criterion = torch.nn.L1Loss(size_average=False)
-    optimizer = torch.optim.Adam(my_model.parameters(), lr=opt.lr, weight_decay=opt.weight_decay)
 
     if opt.cuda:
         logging.info("Putting the model on gpu...")
         my_model.cuda()
-
-    writer, exp_dir = monitoring.setup_tensorboard_log(opt)
 
     max_valid = 0
     best_summary = {}
     patience = 20
 
     # The training.
-    for t in range(opt.epoch):
+    for t in range(epoch, opt.epoch):
 
         start_timer = time.time()
 
@@ -168,6 +168,9 @@ def main(argv=None):
             max_valid = auc['valid']
             best_summary = summarize(t, cross_loss.data[0], total_loss.data[0], acc, auc)
             patience = 1000
+
+        # Saving the checkpoint
+        monitoring.save_checkpoint(my_model, optimizer, t, opt, exp_dir)
 
     logging.info("Done!")
     monitoring.monitor_everything(my_model, valid_set, opt, exp_dir)

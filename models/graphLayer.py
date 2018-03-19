@@ -95,7 +95,7 @@ class AggregationGraph(object):
         for no_layer in range(self.nb_layer):
 
             if self.adj_transform:  # Transform the adj if necessary.
-                current_adj = self.adj_transform(current_adj)
+                current_adj = self.adj_transform(no_layer)(current_adj)
 
             all_transformed_adj.append(current_adj)
 
@@ -469,11 +469,15 @@ def get_transform(opt, adj):
 
     if opt.add_self:
         logging.info("Adding self connection to the graph...")
-        adj_transform += [SelfConnection(opt.add_self, please_ignore=False)]  # Add a self connection.
+        adj_transform += [lambda layer_id: SelfConnection(opt.add_self, please_ignore=False)]  # Add a self connection.
+
+    if opt.add_connectivity:
+        logging.info("Adding the connectivity after each layer...")
+        adj_transform += [lambda layer_id: AugmentGraphConnectivity(please_ignore=layer_id == 0)]  # Augmenting the connectivity of each layer.
 
     if opt.norm_adj:
         logging.info("Normalizing the graph...")
-        adj_transform += [ApprNormalizeLaplacian()]  # Normalize the graph
+        adj_transform += [lambda layer_id: ApprNormalizeLaplacian()]  # Normalize the graph
 
     # Our adj transform method.
     adj_transform = transforms.Compose(adj_transform)
