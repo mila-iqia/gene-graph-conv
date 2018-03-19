@@ -6,6 +6,7 @@ import os
 import logging
 from logger import Logger
 from torch.autograd import Variable
+from models.models import get_model
 
 
 def feature_selection(model, dataset, opt, top=100):
@@ -101,18 +102,26 @@ def get_representation(model, dataset, opt):
 
 
 def setup_tensorboard_log(opt):
-    exp_dir = os.path.join(opt.tensorboard_dir, opt.dataset, opt.model, opt.experiment_var, opt.trial_number)
+
+    if opt.load_folder is None:
+        exp_dir = os.path.join(opt.tensorboard_dir, opt.dataset, opt.model, opt.experiment_var, opt.trial_number)
+    else:
+        exp_dir = opt.load_folder
+
     if not os.path.exists(exp_dir):
         os.makedirs(exp_dir)
+        pickle.dump(opt, open(os.path.join(exp_dir, 'options.pkl'), 'wb'))
+
     else:
+        print "We will load the model"
+        opt.load_folder = exp_dir
         pass  # TODO: this should be the checkpoint, load in old state
 
-    pickle.dump(opt, open(os.path.join(exp_dir, 'options.pkl'), 'wb'))
     writer = Logger(exp_dir)
     print "We will log everything in ", exp_dir
     return writer, exp_dir
 
-def get_state_dict(model):
+def get_state_dict(model, convert_to_numpy=True):
 
     state = model.state_dict().copy()
     to_del = []
@@ -121,7 +130,8 @@ def get_state_dict(model):
         if "sparse" in name:
             to_del.append(name)
         else:
-            state[name] = state[name].cpu().numpy()
+            if convert_to_numpy:
+                state[name] = state[name].cpu().numpy()
 
     for name in to_del:
         del state[name]
@@ -130,12 +140,6 @@ def get_state_dict(model):
 
 def monitor_everything(model, dataset, opt, exp_dir):
     print "Saving everything in:", exp_dir
-    #print "Extracting the important features..."
-    #features = feature_selection(model, dataset.dataset, opt)
-    #pickle.dump(features, open(os.path.join(exp_dir, 'features.pkl'), 'wb'))
-    print "Saving the weights..."
-    pickle.dump(get_state_dict(model), open(os.path.join(exp_dir, 'weights.pkl'), 'wb'))
-
     print "Extracting the graphs..."
     graphs = get_graph(model)
     pickle.dump(graphs, open(os.path.join(exp_dir, 'graphs.pkl'), 'wb'))
@@ -144,9 +148,9 @@ def monitor_everything(model, dataset, opt, exp_dir):
     rep = get_representation(model, dataset, opt)
     pickle.dump(rep, open(os.path.join(exp_dir, 'representations.pkl'), 'wb'))
 
-    print "Saving the gradients..."
-    grads = model.grads
-    pickle.dump(grads, open(os.path.join(exp_dir, 'grads.pkl'), 'wb'))
+    #print "Saving the gradients..."
+    #grads = model.grads
+    #pickle.dump(grads, open(os.path.join(exp_dir, 'grads.pkl'), 'wb'))
 
 
     print "Done!"
@@ -160,3 +164,72 @@ def load_everything(exp_dir):
     logging.info("Done!")
 
     return features, graphs, reps
+
+def save_checkpoint(model, optimizer, epoch, opt, exp_dir, filename='checkpoint.pth.tar'):
+
+    state = {
+            'epoch': epoch + 1,
+            'state_dict': get_state_dict(model, convert_to_numpy=False),
+            'optimizer' : optimizer.state_dict(),
+            'opt' : opt
+        }
+
+    #import ipdb; ipdb.set_trace()
+
+    filename = os.path.join(exp_dir, filename)
+    torch.save(state, filename)
+
+def load_checkpoint(load_folder, opt, dataset, filename='checkpoint.pth.tar'):
+
+    # Model
+    model_state = None
+
+    # Epoch
+    epoch = 0
+
+    # Optimizser
+    optimizer_state = None
+
+    # Options
+    new_opt = opt
+
+    # Load the states if we saved them.
+    if opt.load_folder:
+
+        # Loading all the state
+        filename = os.path.join(load_folder, filename)
+        if os.path.isfile(filename):
+            print "=> loading checkpoint '{}'".format(filename)
+            checkpoint = torch.load(filename)
+            start_epoch = checkpoint['epoch']
+
+            # Loading the options
+            new_opt = checkpoint['opt']
+            print "Loading the model with these parameters: {}".format(new_opt)
+
+            # Loading the state
+            model_state = checkpoint['state_dict']
+            optimizer_state = checkpoint['optimizer']
+            epoch = checkpoint['epoch']
+
+            # We override some of the options between the runs, otherwise it might be a pain.
+            new_opt.epoch = opt.epoch
+
+            print"=> loaded checkpoint '{}' (epoch {})".format(filename, epoch)
+        else:
+            print("=> no checkpoint found at '{}'".format(filename))
+
+    # Get the network
+
+
+    my_model = get_model(new_opt, dataset, model_state)
+
+    # Get the optimizer
+    optimizer = torch.optim.Adam(my_model.parameters(), lr=opt.lr, weight_decay=opt.weight_decay)
+    if optimizer_state is not None:
+        optimizer.load_state_dict(optimizer_state)
+
+    print "Our model:"
+    print my_model
+
+    return my_model, optimizer, epoch, new_opt
