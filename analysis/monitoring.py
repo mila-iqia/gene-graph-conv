@@ -7,7 +7,7 @@ import logging
 from logger import Logger
 from torch.autograd import Variable
 from models.models import get_model
-
+import hashlib
 
 def feature_selection(model, dataset, opt, top=100):
 
@@ -103,8 +103,13 @@ def get_representation(model, dataset, opt):
 
 def setup_tensorboard_log(opt):
 
+    params = vars(opt).copy()
+    del params['seed']
+    params = str(params)
+    this_hash = hashlib.md5(params).hexdigest()
+
     if opt.load_folder is None:
-        exp_dir = os.path.join(opt.tensorboard_dir, opt.dataset, opt.model, opt.experiment_var, opt.trial_number)
+        exp_dir = os.path.join(opt.tensorboard_dir, opt.dataset, opt.model, opt.name, this_hash, str(opt.seed))
     else:
         exp_dir = opt.load_folder
 

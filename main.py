@@ -30,7 +30,7 @@ def build_parser():
     parser.add_argument('--cuda', action='store_true', help='If we want to run on gpu.')
     parser.add_argument('--norm-adj', default=True, type=bool, help="If we want to normalize the adjancy matrix.")
     parser.add_argument('--log', choices=['console', 'silent'], default='console', help="Determines what kind of logging you get")
-    parser.add_argument('--name', type=str, default=None, help="If we want to add a random str to the folder.")
+    parser.add_argument('--name', type=str, default='testing123', help="If we want to add a random str to the folder.")
     parser.add_argument('--load-folder', type=str, default=None, help="Folder where to load the network and resume training.")
 
     # Model specific options
@@ -38,7 +38,6 @@ def build_parser():
     parser.add_argument('--dropout', default=False, type=bool, help='If we want to perform dropout in the model..')
     parser.add_argument('--add-connectivity', default=False, type=bool, help='If we want to augment the connectivity after each convolution layer after the first one.')
     parser.add_argument('--model', default='cgn', choices=['cgn', 'mlp', 'lcg', 'sgc', 'slr', 'cnn', 'random'], help='Number of channel in the CGN.')
-    parser.add_argument('--experiment-var', type=str, default='na', help='var that we are experimenting on, used for dir name.')
     parser.add_argument('--trial-number', type=str, default='1', help='the trial number of the experiment.')
     parser.add_argument('--num-layer', default=1, type=int, help='Number of convolution layer in the CGN.')
     parser.add_argument('--nb-class', default=None, type=int, help="Number of class for the dataset (won't work with random graph).")
