@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 
 # Get the inputs
+export HOME=`getent passwd $USER | cut -d':' -f6`
+source ~/venv/bin/activate
+
 args=$1
 trials=$2
 exp_dir=$3

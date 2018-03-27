@@ -110,6 +110,7 @@ def setup_tensorboard_log(opt):
 
     if opt.load_folder is None:
         exp_dir = os.path.join(opt.tensorboard_dir, opt.dataset, opt.model, opt.name, this_hash, str(opt.seed))
+        print exp_dir
     else:
         exp_dir = opt.load_folder
 

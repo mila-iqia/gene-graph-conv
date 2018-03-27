@@ -2,7 +2,7 @@
 
 
 # Launch one thing. Depends on local stuff. change this file if needed.
-source activate pytorch0.2
+source ~/venv/bin/activate
 command=$@
 #python -W ignore ../../../baseline.py --log=silent --cuda --baseline-model=$model --baseline-dataset=$dataset
 
