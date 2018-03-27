@@ -25,7 +25,11 @@ class EmbeddingLayer(nn.Module):
         return emb
 
     def reset_parameters(self):
-        stdv = 1. / np.sqrt(self.emb.size(1))
+        stdv = 1. / np.sqrt(self.emb.size(1))        # also, reduce the gene dataset to just the first degree neighbors of the target gene
+        if self.labels.shape != self.labels[:].reshape(-1).shape:
+            print "Converting one-hot labels to integers"
+            self.labels = np.argmax(self.labels[:], axis=1)
+
         self.emb.data.uniform_(-stdv, stdv)
 
 
@@ -161,6 +165,32 @@ class SparseLogisticRegression(nn.Module):
         weight = self.my_logistic_layers[-1].weight
         reg = torch.abs(weight).mm(laplacian) * torch.abs(weight)
         return reg.sum() * reg_lambda
+
+
+class LogisticRegression(nn.Module):
+    def __init__(self, nb_nodes, input_dim, out_dim, on_cuda=True):
+        super(LogisticRegression, self).__init__()
+
+        self.nb_nodes = nb_nodes
+        self.input_dim = input_dim
+
+        self.out_dim = out_dim
+        self.on_cuda = on_cuda
+
+        # The logistic layer.
+        logistic_in_dim = nb_nodes * input_dim
+        logistic_layer = nn.Linear(logistic_in_dim, out_dim)
+        logistic_layer.register_forward_hook(save_computations)  # For monitoring
+        self.my_logistic_layers = nn.ModuleList([logistic_layer])  # A list to be consistant with the other layer.
+
+    def forward(self, x):
+        nb_examples, nb_nodes, nb_channels = x.size()
+        x = x.view(nb_examples, -1)
+        x = self.my_logistic_layers[-1](x)
+        return x
+
+    def regularization(self, reg_lambda):
+        return 0.0
 
 
 class GraphNetwork(nn.Module):
@@ -495,26 +525,31 @@ def get_model(opt, dataset, model_state=None):
     num_layer = opt.num_layer
     on_cuda = opt.cuda
 
-    adj_transform, agregate_function = graphLayer.get_transform(opt, dataset.get_adj())
 
     # TODO: add a bunch of the options
     if model == 'cgn':
+        adj_transform, agregate_function = graphLayer.get_transform(opt, dataset.get_adj())
         my_model = CGN(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=dataset.nb_class,
                        on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=adj_transform, agregate_adj=agregate_function, use_gate=opt.use_gate, dropout=opt.dropout,
                        attention_head=opt.nb_attention_head)
 
     elif model == 'lcg':
+        adj_transform, agregate_function = graphLayer.get_transform(opt, dataset.get_adj())
         my_model = LCG(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=dataset.nb_class,
                        on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=adj_transform, agregate_adj=agregate_function, use_gate=opt.use_gate, dropout=opt.dropout,
                        attention_head=opt.nb_attention_head)
 
     elif model == 'sgc':
+        adj_transform, agregate_function = graphLayer.get_transform(opt, dataset.get_adj())
         my_model = SGC(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=dataset.nb_class,
                        on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=adj_transform, agregate_adj=agregate_function, use_gate=opt.use_gate, dropout=opt.dropout,
                        attention_head=opt.nb_attention_head)
 
     elif model == 'slr':
         my_model = SparseLogisticRegression(nb_nodes=dataset.nb_nodes, input_dim=1, adj=dataset.get_adj(), out_dim=dataset.nb_class, on_cuda=on_cuda)
+
+    elif model == 'lr':
+        my_model = LogisticRegression(nb_nodes=dataset.nb_nodes, input_dim=1, out_dim=dataset.nb_class, on_cuda=on_cuda)
 
     elif model == 'mlp':
         my_model = MLP(dataset.nb_nodes, [num_channel] * num_layer, dataset.nb_class, on_cuda=on_cuda, dropout=opt.dropout)
@@ -532,23 +567,10 @@ def get_model(opt, dataset, model_state=None):
     else:
         raise ValueError
 
-    #import ipdb; ipdb.set_trace()
-
-    # If we load stuff
-
-
-
     if model_state is not None:
-
-        # In case we didn't save everything (i.e. sparse matrices).
         init_state_dict = my_model.state_dict()
         init_state_dict.update(model_state)
-        #for key, value in init_state_dict.iteritems():
-        #    if key not in model_state:
-        #        model_state[key] = value
-
         my_model.load_state_dict(init_state_dict)
-        #my_model.update(model_state)
 
     return my_model
 

@@ -2,7 +2,7 @@ import logging
 import numpy as np
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
-from gene_datasets import BRCACoexpr, GBMDataset, TCGATissue, NSLRSyntheticDataset
+from gene_datasets import BRCACoexpr, GBMDataset, TCGATissue, NSLRSyntheticDataset, TCGAInference
 from datasets import RandomDataset, PercolateDataset
 
 
@@ -84,6 +84,10 @@ def get_dataset(opt):
     elif opt.dataset == 'tcga-tissue':
         logging.info("Getting TCGA tissue type")
         dataset = TCGATissue(opt=opt)
+
+    elif opt.dataset == 'tcga-inference':
+        logging.info("Getting TCGA data for inference")
+        dataset = TCGAInference(opt=opt)
 
     elif opt.dataset == 'tcga-brca':
         logging.info("Getting TCGA BRCA type")
