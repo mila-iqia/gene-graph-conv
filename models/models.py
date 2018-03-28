@@ -259,11 +259,12 @@ class GraphNetwork(nn.Module):
     # Depending on the training mode, we will call different functions.
         #import ipdb;
         #ipdb.set_trace()
+        nb_examples, nb_nodes, nb_channels = x.size()
         if self.training_mode is None:
             return self.supervised(x)
         elif self.training_mode == 'semi':
-            supervised = self.supervised(x)
-            semi = self.semi_supervised(x)
+            supervised = self.supervised(x[:, :, :nb_channels/2])
+            semi = self.semi_supervised(x[:, :, nb_channels/2:])
 
             return [supervised, semi]
 

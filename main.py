@@ -35,6 +35,7 @@ def build_parser():
 
     # Model specific options
     parser.add_argument('--num-channel', default=32, type=int, help='Number of channel in the model.')
+    parser.add_argument('--semi-mse-lambda', default=100., type=float, help='The lambda to use when using the semi supervised loss.')
     parser.add_argument('--dropout', default=False, type=bool, help='If we want to perform dropout in the model..')
     parser.add_argument('--add-connectivity', default=False, type=bool, help='If we want to augment the connectivity after each convolution layer after the first one.')
     parser.add_argument('--model', default='cgn', choices=['cgn', 'mlp', 'lcg', 'sgc', 'slr', 'cnn', 'random'], help='Number of channel in the CGN.')

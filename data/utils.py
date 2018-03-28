@@ -168,8 +168,13 @@ class semiGraph(object):
         to_predict[to_predict_idx] = inputs[to_predict_idx] + self.epsilon
 
         #TODO: set an input to 0.
+        inputs_supervised = inputs
+        inputs_semi_supervised = inputs.copy()
+        inputs_semi_supervised[to_predict_idx] = 0.
 
-        return inputs, [labels, to_predict]
+        #import ipdb; ipdb.set_trace()
+
+        return np.concatenate([inputs_supervised, inputs_semi_supervised], -1), [labels, to_predict]
 
 
 
