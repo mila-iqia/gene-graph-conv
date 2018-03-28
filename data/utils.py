@@ -1,5 +1,6 @@
 import logging
 import numpy as np
+import torch
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 from gene_datasets import BRCACoexpr, GBMDataset, TCGATissue, NSLRSyntheticDataset
@@ -143,7 +144,35 @@ def subsample_graph(adj, percentile=100):
         nan_adj = np.ma.filled(nan_adj, np.nan)
 
         threshold = np.nanpercentile(nan_adj, 100 - percentile)
-        logging.info("We will remove all the adges that has a value smaller than {}".format(threshold))
+        logging.info("We will remove all the edges that has a value smaller than {}".format(threshold))
 
         to_keep = adj >= threshold  # throw away all the edges that are bigger than what we have.
         return adj * to_keep
+
+class semiGraph(object):
+
+    def __init__(self, graph, ):
+        self.graph = graph
+        self.epsilon = 1e-8
+
+    def __call__(self, sample):
+
+        # Could do node2vec or something here.
+        inputs, labels = sample
+        #import ipdb; ipdb.set_trace()
+        nb_nodes = inputs.shape[0]
+
+        to_predict_idx = np.random.randint(nb_nodes)
+
+        to_predict = np.zeros(inputs.shape)
+        to_predict[to_predict_idx] = inputs[to_predict_idx] + self.epsilon
+
+        #TODO: set an input to 0.
+
+        return inputs, [labels, to_predict]
+
+
+
+
+
+

@@ -83,7 +83,7 @@ def get_representation(model, dataset, opt):
 
     # Get one representation.
     for no_b, mini in enumerate(dataset):
-        inputs, targets = mini['sample'], mini['labels']
+        inputs, targets = mini[0], mini[1]
         inputs = Variable(inputs, requires_grad=False).float()
 
         if opt.cuda:
@@ -94,6 +94,9 @@ def get_representation(model, dataset, opt):
 
         # Forward pass: Compute predicted y by passing x to the model
         retn = model.get_representation()
+
+        if type(targets) == list:
+            targets = targets[0]
         retn['example'] = {'input': inputs.cpu().data.numpy(), 'output': targets.cpu().numpy()}
 
         break

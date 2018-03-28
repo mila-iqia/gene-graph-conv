@@ -8,7 +8,7 @@ import time
 from torch.autograd import Variable
 from analysis import monitoring
 from analysis.metrics import record_metrics_for_epoch, summarize
-
+import optimization as otim
 
 def build_parser():
     parser = argparse.ArgumentParser(
@@ -60,6 +60,7 @@ def build_parser():
     parser.add_argument('--graph', default=None, choices=['kegg', 'pathway', 'random'], help="Which graph with which to prior")
     parser.add_argument('--approx-nb-edges', default=100, type=int, help="If we have a randomly generated graph, this is the approx nb of edges")
     parser.add_argument('--nb-nodes', default=None, type=int, help="If we have a randomly generated graph, this is the nb of nodes")
+    parser.add_argument('--training-mode', default=None, choices=['semi'], help="which training mode we want to use.")
     return parser
 
 
@@ -101,7 +102,8 @@ def main(argv=None):
     logging.info(my_model)
 
     # Setup the loss
-    criterion = torch.nn.CrossEntropyLoss(size_average=True)
+    #criterion = torch.nn.CrossEntropyLoss(size_average=True)
+    criterions = otim.get_criterion(opt, dataset)
     l1_criterion = torch.nn.L1Loss(size_average=False)
 
     if opt.cuda:
@@ -119,10 +121,10 @@ def main(argv=None):
 
         for no_b, mini in enumerate(train_set):
 
-            inputs, targets = mini['sample'], mini['labels']
+            inputs, targets = mini[0], mini[1]
 
             inputs = Variable(inputs, requires_grad=False).float()
-            targets = Variable(targets, requires_grad=False).long()
+            #targets = Variable(targets, requires_grad=False).long()
 
             if opt.cuda:
                 inputs = inputs.cuda()
@@ -130,13 +132,13 @@ def main(argv=None):
 
             # Forward pass: Compute predicted y by passing x to the model
             my_model.train()
-            y_pred = my_model(inputs).float()
+            y_pred = my_model(inputs)
 
             # Compute and print loss
-            cross_loss = criterion(y_pred, targets)
+            crit_loss = otim.compute_loss(opt, criterions, y_pred, targets)
             model_regularization_loss = my_model.regularization(opt.model_reg_lambda)
             l1_loss = setup_l1_loss(my_model, opt.l1_loss_lambda, l1_criterion, opt.cuda)
-            total_loss = cross_loss + model_regularization_loss + l1_loss
+            total_loss = crit_loss + model_regularization_loss + l1_loss
 
             # Zero gradients, perform a backward pass, and update the weights.
             optimizer.zero_grad()
@@ -146,11 +148,11 @@ def main(argv=None):
 
         time_this_epoch = time.time() - start_timer
 
-        acc, auc = record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, dataset, opt)
+        acc, auc = record_metrics_for_epoch(writer, crit_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, dataset, opt)
 
         summary = [
             t,
-            cross_loss.data[0],
+            crit_loss.data[0],
             acc['train'],
             acc['valid'],
             auc['train'],
@@ -165,7 +167,7 @@ def main(argv=None):
             break
         if max_valid < auc['valid'] and t > 5:
             max_valid = auc['valid']
-            best_summary = summarize(t, cross_loss.data[0], total_loss.data[0], acc, auc)
+            best_summary = summarize(t, crit_loss.data[0], total_loss.data[0], acc, auc)
             patience = 1000
 
         # Saving the checkpoint

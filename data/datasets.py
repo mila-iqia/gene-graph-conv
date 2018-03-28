@@ -4,7 +4,7 @@ from graph import Graph
 
 
 class Dataset(Dataset):
-    def __init__(self, name, opt):
+    def __init__(self, name, opt, transform=None):
 
         self.name = name
         self.seed = opt.seed
@@ -13,6 +13,7 @@ class Dataset(Dataset):
         self.nb_nodes = opt.nb_nodes
         self.load_data()
         self.set_graph(opt)
+        self.transform = transform
 
         self.adj = (self.adj > 0.).astype(float)  # Don't care about the weights, for now.
         self.nb_nodes = self.adj.shape[0]
@@ -63,7 +64,11 @@ class RandomDataset(Dataset):
 
     def __getitem__(self, idx):
         sample = self.data[idx]
-        sample = {'sample': sample, 'labels': self.labels[idx]}
+        sample = [sample, self.labels[idx]]
+
+        if self.transform is not None:
+            sample = self.transform(sample)
+
         return sample
 
     def labels_name(self, l):
@@ -86,7 +91,11 @@ class PercolateDataset(Dataset):
     def __getitem__(self, idx):
         sample = self.data[idx]
         sample = np.expand_dims(sample, -1)  # Addin a dim for the channels\
-        sample = {'sample': sample, 'labels': self.labels[idx]}
+        sample = [sample, self.labels[idx]]
+
+        if self.transform is not None:
+            sample = self.transform(sample)
+
         return sample
 
     def labels_name(self, l):
