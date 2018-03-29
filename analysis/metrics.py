@@ -4,14 +4,25 @@ from sklearn import metrics
 
 
 def format_mini(mini, model, on_cuda):
-    inputs = Variable(mini['sample'], requires_grad=False).float()
-    targets = Variable(mini['labels'], requires_grad=False).float()
+    inputs = Variable(mini[0], requires_grad=False).float()
+
+    targets = mini[1]
+    # For semi supervised
+    if type(targets) == list:
+        targets = targets[0]
+    targets = Variable(targets, requires_grad=False).float()
 
     if on_cuda:
         inputs = inputs.cuda()
         targets = targets.cuda()
     targets = targets.data.cpu().numpy()
     preds = model(inputs)
+
+    # For semi supervised
+    if type(preds) == list:
+        preds = preds[0]
+
+
     return preds, targets
 
 

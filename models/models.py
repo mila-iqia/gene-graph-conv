@@ -195,7 +195,8 @@ class LogisticRegression(nn.Module):
 
 class GraphNetwork(nn.Module):
     def __init__(self, nb_nodes, input_dim, channels, adj, out_dim,
-                 on_cuda=True, add_emb=None, transform_adj=None, agregate_adj=None, graphLayerType=graphLayer.CGNLayer, use_gate=0.0001, dropout=False, attention_head=0):
+                 on_cuda=True, add_emb=None, transform_adj=None, agregate_adj=None, graphLayerType=graphLayer.CGNLayer, use_gate=0.0001, dropout=False, attention_head=0,
+                 training_mode=None):
         super(GraphNetwork, self).__init__()
 
         if transform_adj is None:
@@ -210,6 +211,7 @@ class GraphNetwork(nn.Module):
         self.agregate_adj = agregate_adj
         self.dropout = dropout
         self.attention_head = attention_head
+        self.training_mode=training_mode
 
         if add_emb:
             logging.info("Adding node embeddings.")
@@ -268,6 +270,8 @@ class GraphNetwork(nn.Module):
             self.attentionLayer = AttentionLayer(dims[-1], attention_head)
             self.attentionLayer.register_forward_hook(save_computations)  # For monitoringv
 
+        if self.training_mode == 'semi':
+            self.last_semi_layer = nn.Conv1d(dims[-1], 1, 1, bias=True)
 
         logging.info("Done!")
         # TODO: add all the funky bells and stuff that the old CGN has.
@@ -280,7 +284,36 @@ class GraphNetwork(nn.Module):
             return hook
         self.save_grad = save_grad
 
+
     def forward(self, x):
+    # Depending on the training mode, we will call different functions.
+        #import ipdb;
+        #ipdb.set_trace()
+        nb_examples, nb_nodes, nb_channels = x.size()
+        if self.training_mode is None:
+            return self.supervised(x)
+        elif self.training_mode == 'semi':
+            supervised = self.supervised(x[:, :, :nb_channels/2])
+            semi = self.semi_supervised(x[:, :, nb_channels/2:])
+
+            return [supervised, semi]
+
+    def semi_supervised(self, x):
+
+        nb_examples, nb_nodes, nb_channels = x.size()
+        if self.add_emb:
+            x = self.emb(x)
+
+        for i, layer in enumerate(self.my_convs):
+            x = layer(x)
+            x = F.relu(x)
+
+        x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
+        x = self.last_semi_layer(x)
+        x = x.permute(0, 2, 1).contiguous()  # from ex, ch, node -> ex, node, ch
+        return x
+
+    def supervised(self, x):
 
         nb_examples, nb_nodes, nb_channels = x.size()
 
@@ -531,19 +564,19 @@ def get_model(opt, dataset, model_state=None):
         adj_transform, agregate_function = graphLayer.get_transform(opt, dataset.get_adj())
         my_model = CGN(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=dataset.nb_class,
                        on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=adj_transform, agregate_adj=agregate_function, use_gate=opt.use_gate, dropout=opt.dropout,
-                       attention_head=opt.nb_attention_head)
+                       attention_head=opt.nb_attention_head, training_mode=opt.training_mode)
 
     elif model == 'lcg':
         adj_transform, agregate_function = graphLayer.get_transform(opt, dataset.get_adj())
         my_model = LCG(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=dataset.nb_class,
                        on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=adj_transform, agregate_adj=agregate_function, use_gate=opt.use_gate, dropout=opt.dropout,
-                       attention_head=opt.nb_attention_head)
+                       attention_head=opt.nb_attention_head, training_mode=opt.training_mode)
 
     elif model == 'sgc':
         adj_transform, agregate_function = graphLayer.get_transform(opt, dataset.get_adj())
         my_model = SGC(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=dataset.nb_class,
                        on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=adj_transform, agregate_adj=agregate_function, use_gate=opt.use_gate, dropout=opt.dropout,
-                       attention_head=opt.nb_attention_head)
+                       attention_head=opt.nb_attention_head, training_mode=opt.training_mode)
 
     elif model == 'slr':
         my_model = SparseLogisticRegression(nb_nodes=dataset.nb_nodes, input_dim=1, adj=dataset.get_adj(), out_dim=dataset.nb_class, on_cuda=on_cuda)

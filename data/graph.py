@@ -124,5 +124,7 @@ class Graph(object):
 def get_path(graph):
     if graph == "kegg":
         return "/data/lisa/data/genomics/graph/kegg.hdf5"
+    elif graph == "trust":
+        return "/data/lisa/data/genomics/graph/trust.hdf5"
     elif graph == "pathway":
         return "/data/lisa/data/genomics/graph/pathway_commons.hdf5"

@@ -8,7 +8,7 @@ import time
 from torch.autograd import Variable
 from analysis import monitoring
 from analysis.metrics import record_metrics_for_epoch, summarize
-
+import optimization as otim
 
 def build_parser():
     parser = argparse.ArgumentParser(
@@ -32,11 +32,12 @@ def build_parser():
     parser.add_argument('--log', choices=['console', 'silent'], default='console', help="Determines what kind of logging you get")
     parser.add_argument('--name', type=str, default='testing123', help="If we want to add a random str to the folder.")
     parser.add_argument('--load-folder', type=str, default=None, help="Folder where to load the network and resume training.")
-    parser.add_argument('--load-checkpoint', type=bool, default=True, help="Should we load the checkpoint?")
+    parser.add_argument('--load-checkpoint', type=bool, default=False, help="Should we load the checkpoint?")
     parser.add_argument('--neighborhood', choices=['all', 'first', 'second'], default='all', help="Should we look at the full dataset, or neighborhood for the gene to infer?")
 
     # Model specific options
     parser.add_argument('--num-channel', default=32, type=int, help='Number of channel in the model.')
+    parser.add_argument('--semi-mse-lambda', default=100., type=float, help='The lambda to use when using the semi supervised loss.')
     parser.add_argument('--dropout', default=False, type=bool, help='If we want to perform dropout in the model..')
     parser.add_argument('--add-connectivity', default=False, type=bool, help='If we want to augment the connectivity after each convolution layer after the first one.')
     parser.add_argument('--model', default='cgn', choices=['cgn', 'mlp', 'lcg', 'sgc', 'slr', 'cnn', 'random', 'lr'], help='Which model to use.')
@@ -59,13 +60,15 @@ def build_parser():
     parser.add_argument('--extra-ucn', default=0, type=int, help="The number of extra nodes without edges in the percolate-plus dataset")
     parser.add_argument('--disconnected', default=0, type=int, help="The number of disconnected nodes from the perc subgraph without edges in percolate-plus")
     parser.add_argument('--center', default=False, type=bool, help="center the data (subtract mean from each element)?")
-    parser.add_argument('--graph', default=None, choices=['kegg', 'pathway', 'random'], help="Which graph with which to prior")
+    parser.add_argument('--graph', default=None, choices=['kegg', 'pathway', 'trust', 'random'], help="Which graph with which to prior")
     parser.add_argument('--approx-nb-edges', default=100, type=int, help="If we have a randomly generated graph, this is the approx nb of edges")
     parser.add_argument('--nb-nodes', default=None, type=int, help="If we have a randomly generated graph, this is the nb of nodes")
+    parser.add_argument('--training-mode', default=None, choices=['semi', 'unsupervised'], help="which training mode we want to use.")
     return parser
 
 
 def parse_args(argv):
+    print argv
     if type(argv) == list or argv is None:
         opt = build_parser().parse_args(argv)
     else:
@@ -103,7 +106,8 @@ def main(argv=None):
     logging.info(my_model)
 
     # Setup the loss
-    criterion = torch.nn.CrossEntropyLoss(size_average=True)
+    #criterion = torch.nn.CrossEntropyLoss(size_average=True)
+    criterions = otim.get_criterion(opt, dataset)
     l1_criterion = torch.nn.L1Loss(size_average=False)
 
     if opt.cuda:
@@ -121,10 +125,10 @@ def main(argv=None):
 
         for no_b, mini in enumerate(train_set):
 
-            inputs, targets = mini['sample'], mini['labels']
+            inputs, targets = mini[0], mini[1]
 
             inputs = Variable(inputs, requires_grad=False).float()
-            targets = Variable(targets, requires_grad=False).long()
+            #targets = Variable(targets, requires_grad=False).long()
 
             if opt.cuda:
                 inputs = inputs.cuda()
@@ -132,14 +136,18 @@ def main(argv=None):
 
             # Forward pass: Compute predicted y by passing x to the model
             my_model.train()
+<<<<<<< HEAD
 
             y_pred = my_model(inputs).float()
+=======
+            y_pred = my_model(inputs)
+>>>>>>> master
 
             # Compute and print loss
-            cross_loss = criterion(y_pred, targets)
+            crit_loss = otim.compute_loss(opt, criterions, y_pred, targets)
             model_regularization_loss = my_model.regularization(opt.model_reg_lambda)
             l1_loss = setup_l1_loss(my_model, opt.l1_loss_lambda, l1_criterion, opt.cuda)
-            total_loss = cross_loss + model_regularization_loss + l1_loss
+            total_loss = crit_loss + model_regularization_loss + l1_loss
 
             # Zero gradients, perform a backward pass, and update the weights.
             optimizer.zero_grad()
@@ -149,27 +157,36 @@ def main(argv=None):
 
         time_this_epoch = time.time() - start_timer
 
-        acc, auc = record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, dataset, opt)
+        if opt.training_mode != 'unsupervised':
+            acc, auc = record_metrics_for_epoch(writer, crit_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, dataset, opt)
+            summary = [
+                t,
+                crit_loss.data[0],
+                acc['train'],
+                acc['valid'],
+                auc['train'],
+                auc['valid'],
+                time_this_epoch
+            ]
+            summary = "epoch {}, cross_loss: {:.03f}, acc_train: {:0.3f}, acc_valid: {:0.3f}, auc_train: {:0.3f}, auc_valid:{:0.3f}, time: {:.02f} sec".format(*summary)
+            logging.info(summary)
 
-        summary = [
-            t,
-            cross_loss.data[0],
-            acc['train'],
-            acc['valid'],
-            auc['train'],
-            auc['valid'],
-            time_this_epoch
-        ]
-        summary = "epoch {}, cross_loss: {:.03f}, acc_train: {:0.3f}, acc_valid: {:0.3f}, auc_train: {:0.3f}, auc_valid:{:0.3f}, time: {:.02f} sec".format(*summary)
-        logging.info(summary)
+            patience = patience - 1
+            if patience == 0:
+                break
+            if max_valid < auc['valid'] and t > 5:
+                max_valid = auc['valid']
+                best_summary = summarize(t, crit_loss.data[0], total_loss.data[0], acc, auc)
+                patience = 1000
 
-        patience = patience - 1
-        if patience == 0:
-            break
-        if max_valid < auc['valid'] and t > 5:
-            max_valid = auc['valid']
-            best_summary = summarize(t, cross_loss.data[0], total_loss.data[0], acc, auc)
-            patience = 1000
+        else:
+            summary = [
+                t,
+                crit_loss.data[0],
+                time_this_epoch
+            ]
+            summary = "epoch {}, cross_loss: {:.03f}, time: {:.02f} sec".format(*summary)
+            logging.info(summary)
 
         # Saving the checkpoint
         monitoring.save_checkpoint(my_model, optimizer, t, opt, exp_dir)
