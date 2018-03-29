@@ -32,6 +32,8 @@ def build_parser():
     parser.add_argument('--log', choices=['console', 'silent'], default='console', help="Determines what kind of logging you get")
     parser.add_argument('--name', type=str, default='testing123', help="If we want to add a random str to the folder.")
     parser.add_argument('--load-folder', type=str, default=None, help="Folder where to load the network and resume training.")
+    parser.add_argument('--load-checkpoint', type=bool, default=False, help="Should we load the checkpoint?")
+    parser.add_argument('--neighborhood', choices=['all', 'first', 'second'], default='all', help="Should we look at the full dataset, or neighborhood for the gene to infer?")
 
     # Model specific options
     parser.add_argument('--num-channel', default=32, type=int, help='Number of channel in the model.')
@@ -58,7 +60,7 @@ def build_parser():
     parser.add_argument('--extra-ucn', default=0, type=int, help="The number of extra nodes without edges in the percolate-plus dataset")
     parser.add_argument('--disconnected', default=0, type=int, help="The number of disconnected nodes from the perc subgraph without edges in percolate-plus")
     parser.add_argument('--center', default=False, type=bool, help="center the data (subtract mean from each element)?")
-    parser.add_argument('--graph', default=None, choices=['kegg', 'pathway', 'random'], help="Which graph with which to prior")
+    parser.add_argument('--graph', default=None, choices=['kegg', 'pathway', 'trust', 'random'], help="Which graph with which to prior")
     parser.add_argument('--approx-nb-edges', default=100, type=int, help="If we have a randomly generated graph, this is the approx nb of edges")
     parser.add_argument('--nb-nodes', default=None, type=int, help="If we have a randomly generated graph, this is the nb of nodes")
     parser.add_argument('--training-mode', default=None, choices=['semi', 'unsupervised'], help="which training mode we want to use.")
@@ -66,6 +68,7 @@ def build_parser():
 
 
 def parse_args(argv):
+    print argv
     if type(argv) == list or argv is None:
         opt = build_parser().parse_args(argv)
     else:
