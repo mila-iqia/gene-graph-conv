@@ -19,7 +19,6 @@ class GeneDataset(Dataset):
         self.sub_class = sub_class
         self.data_dir = data_dir
         self.data_file = data_file
-
         super(GeneDataset, self).__init__(name=name, opt=opt)
 
     def load_data(self):
@@ -51,7 +50,11 @@ class GeneDataset(Dataset):
         sample = self.data[idx]
         sample = np.expand_dims(sample, axis=-1)
         label = self.labels[idx]
-        sample = {'sample': sample, 'labels': label}
+        sample = [sample, label]
+
+        if self.transform is not None:
+            sample = self.transform(sample)
+
         return sample
 
     def labels_name(self, l):
