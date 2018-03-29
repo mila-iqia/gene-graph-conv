@@ -136,12 +136,7 @@ def main(argv=None):
 
             # Forward pass: Compute predicted y by passing x to the model
             my_model.train()
-<<<<<<< HEAD
-
-            y_pred = my_model(inputs).float()
-=======
             y_pred = my_model(inputs)
->>>>>>> master
 
             # Compute and print loss
             crit_loss = otim.compute_loss(opt, criterions, y_pred, targets)

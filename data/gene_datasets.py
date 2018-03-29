@@ -50,11 +50,7 @@ class GeneDataset(Dataset):
         sample = self.data[idx]
         sample = np.expand_dims(sample, axis=-1)
         label = self.labels[idx]
-        sample = [sample, label]
-
-        if self.transform is not None:
-            sample = self.transform(sample)
-
+        sample = {'sample': sample, 'labels': label}
         return sample
 
     def labels_name(self, l):
@@ -72,8 +68,10 @@ class TCGATissue(GeneDataset):
 def get_high_var_genes(df):
     return df.var().sort_values()[-5000:]
 
+
 def get_neighbors(df):
     import pdb; pdb.set_trace()
+
 
 class TCGAInference(GeneDataset):
     """TCGA Dataset. We predict tissue."""
@@ -97,7 +95,7 @@ class TCGAInference(GeneDataset):
 
         # Make there be one set of labels which is the expression value of the target gene
         self.candidate_names = candidates.index.values.tolist()
-        self.gene_to_infer = self.candidate_names[-4800]
+        self.gene_to_infer = self.candidate_names[-1 * self.seed]
 
         self.labels = [1 if x > self.df[self.gene_to_infer].mean() else 0 for x in self.df[self.gene_to_infer]]
         self.df = self.df.drop(self.gene_to_infer, axis=1)

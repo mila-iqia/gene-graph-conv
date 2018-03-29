@@ -83,7 +83,7 @@ def get_representation(model, dataset, opt):
 
     # Get one representation.
     for no_b, mini in enumerate(dataset):
-        inputs, targets = mini[0], mini[1]
+        inputs, targets = mini['sample'], mini['labels']
         inputs = Variable(inputs, requires_grad=False).float()
 
         if opt.cuda:
@@ -94,9 +94,6 @@ def get_representation(model, dataset, opt):
 
         # Forward pass: Compute predicted y by passing x to the model
         retn = model.get_representation()
-
-        if type(targets) == list:
-            targets = targets[0]
         retn['example'] = {'input': inputs.cpu().data.numpy(), 'output': targets.cpu().numpy()}
 
         break
@@ -222,10 +219,7 @@ def load_checkpoint(load_folder, opt, dataset, filename='checkpoint.pth.tar'):
 
             # We override some of the options between the runs, otherwise it might be a pain.
             new_opt.epoch = opt.epoch
-            if str(new_opt.training_mode) != str(opt.training_mode):
-                optimizer_state = None
 
-            new_opt.training_mode = opt.training_mode
             print"=> loaded checkpoint '{}' (epoch {})".format(filename, epoch)
         else:
             print("=> no checkpoint found at '{}'".format(filename))

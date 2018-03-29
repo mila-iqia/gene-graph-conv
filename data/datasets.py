@@ -4,7 +4,7 @@ from graph import Graph
 
 
 class Dataset(Dataset):
-    def __init__(self, name, opt, transform=None):
+    def __init__(self, name, opt):
 
         self.name = name
         self.seed = opt.seed
@@ -12,12 +12,9 @@ class Dataset(Dataset):
         self.nb_examples = 1000 if opt.nb_examples is None else opt.nb_examples
         self.nb_nodes = opt.nb_nodes
         self.load_data()
-        self.set_graph(opt)
-        self.transform = transform
 
         if opt.graph is not None and opt.neighborhood is not 'all':
             self.set_graph(opt)
-            import pdb; pdb.set_trace()
             self.adj = (self.adj > 0.).astype(float)
             self.nb_nodes = self.adj.shape[0]
         elif opt.graph is not None:
@@ -71,11 +68,7 @@ class RandomDataset(Dataset):
 
     def __getitem__(self, idx):
         sample = self.data[idx]
-        sample = [sample, self.labels[idx]]
-
-        if self.transform is not None:
-            sample = self.transform(sample)
-
+        sample = {'sample': sample, 'labels': self.labels[idx]}
         return sample
 
     def labels_name(self, l):
@@ -98,11 +91,7 @@ class PercolateDataset(Dataset):
     def __getitem__(self, idx):
         sample = self.data[idx]
         sample = np.expand_dims(sample, -1)  # Addin a dim for the channels\
-        sample = [sample, self.labels[idx]]
-
-        if self.transform is not None:
-            sample = self.transform(sample)
-
+        sample = {'sample': sample, 'labels': self.labels[idx]}
         return sample
 
     def labels_name(self, l):
