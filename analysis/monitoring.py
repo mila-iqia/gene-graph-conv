@@ -222,7 +222,10 @@ def load_checkpoint(load_folder, opt, dataset, filename='checkpoint.pth.tar'):
 
             # We override some of the options between the runs, otherwise it might be a pain.
             new_opt.epoch = opt.epoch
+            if str(new_opt.training_mode) != str(opt.training_mode):
+                optimizer_state = None
 
+            new_opt.training_mode = opt.training_mode
             print"=> loaded checkpoint '{}' (epoch {})".format(filename, epoch)
         else:
             print("=> no checkpoint found at '{}'".format(filename))

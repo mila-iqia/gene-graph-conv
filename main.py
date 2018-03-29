@@ -61,7 +61,7 @@ def build_parser():
     parser.add_argument('--graph', default=None, choices=['kegg', 'pathway', 'random'], help="Which graph with which to prior")
     parser.add_argument('--approx-nb-edges', default=100, type=int, help="If we have a randomly generated graph, this is the approx nb of edges")
     parser.add_argument('--nb-nodes', default=None, type=int, help="If we have a randomly generated graph, this is the nb of nodes")
-    parser.add_argument('--training-mode', default=None, choices=['semi'], help="which training mode we want to use.")
+    parser.add_argument('--training-mode', default=None, choices=['semi', 'unsupervised'], help="which training mode we want to use.")
     return parser
 
 
@@ -149,27 +149,36 @@ def main(argv=None):
 
         time_this_epoch = time.time() - start_timer
 
-        acc, auc = record_metrics_for_epoch(writer, crit_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, dataset, opt)
+        if opt.training_mode != 'unsupervised':
+            acc, auc = record_metrics_for_epoch(writer, crit_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, dataset, opt)
+            summary = [
+                t,
+                crit_loss.data[0],
+                acc['train'],
+                acc['valid'],
+                auc['train'],
+                auc['valid'],
+                time_this_epoch
+            ]
+            summary = "epoch {}, cross_loss: {:.03f}, acc_train: {:0.3f}, acc_valid: {:0.3f}, auc_train: {:0.3f}, auc_valid:{:0.3f}, time: {:.02f} sec".format(*summary)
+            logging.info(summary)
 
-        summary = [
-            t,
-            crit_loss.data[0],
-            acc['train'],
-            acc['valid'],
-            auc['train'],
-            auc['valid'],
-            time_this_epoch
-        ]
-        summary = "epoch {}, cross_loss: {:.03f}, acc_train: {:0.3f}, acc_valid: {:0.3f}, auc_train: {:0.3f}, auc_valid:{:0.3f}, time: {:.02f} sec".format(*summary)
-        logging.info(summary)
+            patience = patience - 1
+            if patience == 0:
+                break
+            if max_valid < auc['valid'] and t > 5:
+                max_valid = auc['valid']
+                best_summary = summarize(t, crit_loss.data[0], total_loss.data[0], acc, auc)
+                patience = 1000
 
-        patience = patience - 1
-        if patience == 0:
-            break
-        if max_valid < auc['valid'] and t > 5:
-            max_valid = auc['valid']
-            best_summary = summarize(t, crit_loss.data[0], total_loss.data[0], acc, auc)
-            patience = 1000
+        else:
+            summary = [
+                t,
+                crit_loss.data[0],
+                time_this_epoch
+            ]
+            summary = "epoch {}, cross_loss: {:.03f}, time: {:.02f} sec".format(*summary)
+            logging.info(summary)
 
         # Saving the checkpoint
         monitoring.save_checkpoint(my_model, optimizer, t, opt, exp_dir)

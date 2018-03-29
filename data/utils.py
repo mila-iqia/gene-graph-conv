@@ -149,11 +149,12 @@ def subsample_graph(adj, percentile=100):
         to_keep = adj >= threshold  # throw away all the edges that are bigger than what we have.
         return adj * to_keep
 
-class semiGraph(object):
+class InpaintingGraph(object):
 
-    def __init__(self, graph, ):
+    def __init__(self, graph, keep_original=True):
         self.graph = graph
         self.epsilon = 1e-8
+        self.keep_original = keep_original
 
     def __call__(self, sample):
 
@@ -167,15 +168,15 @@ class semiGraph(object):
         to_predict = np.zeros(inputs.shape)
         to_predict[to_predict_idx] = inputs[to_predict_idx] + self.epsilon
 
-        #TODO: set an input to 0.
         inputs_supervised = inputs
-        inputs_semi_supervised = inputs.copy()
-        inputs_semi_supervised[to_predict_idx] = 0.
+        inputs_unsupervised = inputs.copy()
+        inputs_unsupervised[to_predict_idx] = 0.
 
         #import ipdb; ipdb.set_trace()
-
-        return np.concatenate([inputs_supervised, inputs_semi_supervised], -1), [labels, to_predict]
-
+        if self.keep_original:
+            return np.concatenate([inputs_supervised, inputs_unsupervised], -1), [labels, to_predict]
+        else:
+            return inputs_unsupervised, to_predict
 
 
 
