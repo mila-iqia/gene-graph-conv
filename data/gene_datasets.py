@@ -69,6 +69,56 @@ class TCGATissue(GeneDataset):
         super(TCGATissue, self).__init__(data_dir=data_dir, data_file=data_file, name='TCGATissue', **kwargs)
 
 
+def get_high_var_genes(df):
+    return df.var().sort_values()[-5000:]
+
+def get_neighbors(df):
+    import pdb; pdb.set_trace()
+
+class TCGAInference(GeneDataset):
+    """TCGA Dataset. We predict tissue."""
+    def __init__(self, data_dir='/data/lisa/data/genomics/TCGA/', data_file='TCGA_tissue_ppi.hdf5', **kwargs):
+        super(TCGAInference, self).__init__(data_dir=data_dir, data_file=data_file, name='TCGAInference', **kwargs)
+
+    def load_data(self):
+        data_file = os.path.join(self.data_dir, self.data_file)
+        self.file = h5py.File(data_file, 'r')
+        self.data = np.array(self.file['expression_data'])
+        self.labels = self.file['labels_data']
+        self.sample_names = self.file['sample_names']
+        self.node_names = self.file['gene_names']
+        self.df = pd.DataFrame(np.array(self.file['expression_data']))
+        self.df.columns = self.node_names
+        self.nb_class = self.nb_class if self.nb_class is not None else len(self.labels[0])
+        self.label_name = self.labels.attrs
+
+        # determine the variance in gene expression for each gene
+        candidates = get_high_var_genes(self.df)
+
+        # Make there be one set of labels which is the expression value of the target gene
+        self.candidate_names = candidates.index.values.tolist()
+        self.gene_to_infer = self.candidate_names[-4800]
+
+        self.labels = [1 if x > self.df[self.gene_to_infer].mean() else 0 for x in self.df[self.gene_to_infer]]
+        self.df = self.df.drop(self.gene_to_infer, axis=1)
+        self.data = self.df.values
+        self.nb_nodes = self.data.shape[1]
+
+        # Do LR
+        # also, reduce the gene dataset to just the first degree neighbors of the target gene
+        # if self.labels.shape != self.labels[:].reshape(-1).shape:
+        #    print "Converting one-hot labels to integers"
+        #    self.labels = np.argmax(self.labels[:], axis=1)
+
+        # Take a number of subclasses
+        if self.sub_class is not None:
+            self.data = self.data[[i in self.sub_class for i in self.labels]]
+            self.labels = self.labels[[i in self.sub_class for i in self.labels]]
+            self.nb_class = len(self.sub_class)
+            for i, c in enumerate(np.sort(self.sub_class)):
+                self.labels[self.labels == c] = i
+
+
 class TCGAForLabel(GeneDataset):
     """TCGA Dataset."""
     def __init__(self,

@@ -12,11 +12,15 @@ class Dataset(Dataset):
         self.nb_examples = 1000 if opt.nb_examples is None else opt.nb_examples
         self.nb_nodes = opt.nb_nodes
         self.load_data()
-        self.set_graph(opt)
-        self.transform = transform
 
-        self.adj = (self.adj > 0.).astype(float)  # Don't care about the weights, for now.
-        self.nb_nodes = self.adj.shape[0]
+        if opt.graph is not None and opt.neighborhood is not 'all':
+            self.set_graph(opt)
+            self.adj = (self.adj > 0.).astype(float)
+            self.nb_nodes = self.adj.shape[0]
+        elif opt.graph is not None:
+            self.set_graph(opt)
+            self.adj = (self.adj > 0.).astype(float)
+            self.nb_nodes = self.adj.shape[0]
         if opt.center:
             self.data = self.data - self.data.mean(axis=0)  # Ugly, to redo.
 

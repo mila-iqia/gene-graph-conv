@@ -203,8 +203,7 @@ def load_checkpoint(load_folder, opt, dataset, filename='checkpoint.pth.tar'):
     new_opt = opt
 
     # Load the states if we saved them.
-    if opt.load_folder:
-
+    if opt.load_folder and opt.load_checkpoint:
         # Loading all the state
         filename = os.path.join(load_folder, filename)
         if os.path.isfile(filename):
