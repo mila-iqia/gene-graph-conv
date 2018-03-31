@@ -10,24 +10,25 @@ import pandas as pd
 
 class Graph(object):
     def __init__(self, opt, dataset):
-        if opt.graph is not None:
-            self.load_graph(get_path(opt.graph))
-        elif opt.graph == "random":
-            self.load_random_adjacency(nb_nodes=opt.nb_nodes, approx_nb_edges=opt.approx_nb_edges, scale_free=opt.scale_free)
+
+        if opt.graph == "random":
+            self.load_random_adjacency(nb_nodes=dataset.nb_nodes, approx_nb_edges=opt.approx_nb_edges, scale_free=opt.scale_free)
         elif opt.dataset == "percolate" or opt.dataset == "percolate-plus":
             self.generate_percolate(opt)
-        self.merge_data_and_graph(dataset)
+        elif opt.graph is not None:
+            self.load_graph(get_path(opt.graph))
+        self.merge_data_and_graph(dataset, is_random_graph=opt.graph == "random")
 
-    def merge_data_and_graph(self, dataset):
-
-        try:
+    def merge_data_and_graph(self, dataset, is_random_graph):
+        if not is_random_graph:
             intersection = np.intersect1d(self.node_names, dataset.node_names)
             dataset.df = dataset.df[intersection]
             dataset.data = dataset.df.as_matrix()
             self.df = self.df[intersection].filter(items=intersection, axis='index')
             self.adj = self.df.as_matrix()
-        except Exception as e:
-            print e
+        else:
+            dataset.data = dataset.df.as_matrix()
+            self.adj = self.df.as_matrix()
 
     def load_random_adjacency(self, nb_nodes, approx_nb_edges, scale_free=True):
         nodes = np.arange(nb_nodes)
@@ -49,6 +50,7 @@ class Graph(object):
         A[edges[:, 0], edges[:, 1]] = 1.
         A[edges[:, 1], edges[:, 0]] = 1.
         self.adj = A
+        self.df = pd.DataFrame(np.array(self.adj))
         self.node_names = list(range(nb_nodes))
 
     def load_graph(self, path):
