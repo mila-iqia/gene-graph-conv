@@ -69,10 +69,6 @@ class RandomDataset(Dataset):
     def __getitem__(self, idx):
         sample = self.data[idx]
         sample = [sample, self.labels[idx]]
-
-        if self.transform is not None:
-            sample = self.transform(sample)
-
         return sample
 
     def labels_name(self, l):
