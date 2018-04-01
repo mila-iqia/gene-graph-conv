@@ -27,7 +27,6 @@ class Graph(object):
             self.df = self.df[intersection].filter(items=intersection, axis='index')
             self.adj = self.df.as_matrix()
         else:
-            dataset.data = dataset.df.as_matrix()
             self.adj = self.df.as_matrix()
 
     def load_random_adjacency(self, nb_nodes, approx_nb_edges, scale_free=True):
