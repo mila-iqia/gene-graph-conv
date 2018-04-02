@@ -21,7 +21,7 @@ class Graph(object):
 
     def merge_data_and_graph(self, dataset):
         try:
-            intersection = np.intersect1d(self.node_names, dataset.node_names)
+            intersection = np.intersect1d(self.df.columns, dataset.df.columns)
             dataset.df = dataset.df[intersection]
             dataset.data = dataset.df.as_matrix()
             self.df = self.df[intersection].filter(items=intersection, axis='index')

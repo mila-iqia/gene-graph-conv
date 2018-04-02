@@ -10,7 +10,7 @@ from datasets import Dataset
 class GeneDataset(Dataset):
     """Gene Expression Dataset."""
 
-    def __init__(self, data_dir=None, data_file=None, sub_class=None, name=None, opt=None):
+    def __init__(self, data_dir=None, data_file=None, sub_class=None, name=None):
         """
         Args:
             data_file (string): Path to the h5df file.
@@ -19,7 +19,8 @@ class GeneDataset(Dataset):
         self.sub_class = sub_class
         self.data_dir = data_dir
         self.data_file = data_file
-        super(GeneDataset, self).__init__(name=name, opt=opt)
+        self.nb_class = None
+        super(GeneDataset, self).__init__(name=name)
 
     def load_data(self):
         data_file = os.path.join(self.data_dir, self.data_file)
@@ -50,11 +51,7 @@ class GeneDataset(Dataset):
         sample = self.data[idx]
         sample = np.expand_dims(sample, axis=-1)
         label = self.labels[idx]
-        sample = [sample, label]
-
-        if self.transform is not None:
-            sample = self.transform(sample)
-
+        sample = {'sample': sample, 'labels': label}
         return sample
 
     def labels_name(self, l):
@@ -72,12 +69,15 @@ class TCGATissue(GeneDataset):
 def get_high_var_genes(df):
     return df.var().sort_values()[-5000:]
 
+
 def get_neighbors(df):
     import pdb; pdb.set_trace()
 
+
 class TCGAInference(GeneDataset):
     """TCGA Dataset. We predict tissue."""
-    def __init__(self, data_dir='/data/lisa/data/genomics/TCGA/', data_file='TCGA_tissue_ppi.hdf5', **kwargs):
+    def __init__(self, data_dir='/data/lisa/data/genomics/TCGA/', data_file='TCGA_tissue_ppi.hdf5', gene_to_infer=None, **kwargs):
+        self.gene_to_infer = gene_to_infer
         super(TCGAInference, self).__init__(data_dir=data_dir, data_file=data_file, name='TCGAInference', **kwargs)
 
     def load_data(self):
@@ -91,13 +91,6 @@ class TCGAInference(GeneDataset):
         self.df.columns = self.node_names
         self.nb_class = self.nb_class if self.nb_class is not None else len(self.labels[0])
         self.label_name = self.labels.attrs
-
-        # determine the variance in gene expression for each gene
-        candidates = get_high_var_genes(self.df)
-
-        # Make there be one set of labels which is the expression value of the target gene
-        self.candidate_names = candidates.index.values.tolist()
-        self.gene_to_infer = self.candidate_names[-4800]
 
         self.labels = [1 if x > self.df[self.gene_to_infer].mean() else 0 for x in self.df[self.gene_to_infer]]
         self.df = self.df.drop(self.gene_to_infer, axis=1)
