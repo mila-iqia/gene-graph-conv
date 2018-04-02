@@ -4,25 +4,25 @@ from graph import Graph
 
 
 class Dataset(Dataset):
-    def __init__(self, name, opt, transform=None):
+    def __init__(self, name, seed, nb_class, nb_examples, nb_nodes):
 
         self.name = name
-        self.seed = opt.seed
-        self.nb_class = 2 if opt.nb_class is None else opt.nb_class
-        self.nb_examples = 1000 if opt.nb_examples is None else opt.nb_examples
-        self.nb_nodes = opt.nb_nodes
+        self.seed = seed
+        self.nb_class = nb_class
+        self.nb_examples = nb_examples
+        self.nb_nodes = nb_nodes
         self.load_data()
-
-        if opt.graph is not None and opt.neighborhood is not 'all':
-            self.set_graph(opt)
-            self.adj = (self.adj > 0.).astype(float)
-            self.nb_nodes = self.adj.shape[0]
-        elif opt.graph is not None:
-            self.set_graph(opt)
-            self.adj = (self.adj > 0.).astype(float)
-            self.nb_nodes = self.adj.shape[0]
-        if opt.center:
-            self.data = self.data - self.data.mean(axis=0)  # Ugly, to redo.
+        #
+        # if opt.graph is not None and opt.neighborhood is not 'all':
+        #     self.set_graph(opt)
+        #     self.adj = (self.adj > 0.).astype(float)
+        #     self.nb_nodes = self.adj.shape[0]
+        # elif opt.graph is not None:
+        #     self.set_graph(opt)
+        #     self.adj = (self.adj > 0.).astype(float)
+        #     self.nb_nodes = self.adj.shape[0]
+        # if opt.center:
+        #     self.data = self.data - self.data.mean(axis=0)  # Ugly, to redo.
 
     def load_data(self):
         raise NotImplementedError()
@@ -56,8 +56,11 @@ class RandomDataset(Dataset):
     A random dataset for debugging purposes
     """
 
-    def __init__(self, opt):
-        super(RandomDataset, self).__init__(name='RandomDataset', opt=opt)
+    def __init__(self, seed, nb_class=None, nb_examples=None, nb_nodes=None):
+        nb_class = nb_class if nb_class is not None else 2
+        nb_examples = nb_examples if nb_examples is not None else 100
+        nb_nodes = nb_nodes if nb_nodes is not None else 100
+        super(RandomDataset, self).__init__(name='RandomDataset', seed=seed, nb_class=nb_class, nb_examples=nb_examples, nb_nodes=nb_nodes)
 
     def load_data(self):
         np.random.seed(self.seed)

@@ -9,6 +9,7 @@ from torch.autograd import Variable
 from analysis import monitoring
 from analysis.metrics import record_metrics_for_epoch, summarize
 import optimization as otim
+from graph import generate_percolate
 
 def build_parser():
     parser = argparse.ArgumentParser(
@@ -91,8 +92,20 @@ def main(argv=None):
         torch.cuda.manual_seed_all(opt.seed)
     torch.manual_seed(opt.seed)
 
+    graph = Graph(opt)
+    if opt.dataset == "percolate" or opt.dataset == "percolate-plus":
+        graph = Graph(opt).generate_percolate(opt)
+    elif opt.dataset == "random":
+        graph.load_random_adjacency(nb_nodes=nb_nodes, approx_nb_edges=approx_nb_edges, scale_free=scale_free)
+    elif opt.dataset is not None:
+        graph.load_graph(get_path(name))
+
+    #graph.merge_data_and_graph(dataset)
+
+    adj = graph.adj
+
     logging.info("Getting the dataset...")
-    dataset = get_dataset(opt)
+    dataset = get_dataset(opt.seed, opt.nb_class, opt.nb_examples, opt.nb_nodes, opt.dataset)
     writer, exp_dir = monitoring.setup_tensorboard_log(opt)
 
     train_set, valid_set, test_set = split_dataset(dataset, batch_size=opt.batch_size, seed=opt.seed,
@@ -135,6 +148,8 @@ def main(argv=None):
 
             # Forward pass: Compute predicted y by passing x to the model
             my_model.train()
+            import pdb; pdb.set_trace()
+
             y_pred = my_model(inputs)
 
             # Compute and print loss

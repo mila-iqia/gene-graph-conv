@@ -9,16 +9,9 @@ import pandas as pd
 
 
 class Graph(object):
-    def __init__(self, opt, dataset):
-
-        if opt.graph == "random":
-            self.load_random_adjacency(nb_nodes=dataset.nb_nodes, approx_nb_edges=opt.approx_nb_edges, scale_free=opt.scale_free)
-        elif opt.dataset == "percolate" or opt.dataset == "percolate-plus":
-            self.generate_percolate(opt)
-        elif opt.graph is not None:
-            self.load_graph(get_path(opt.graph))
-        self.merge_data_and_graph(dataset, is_random_graph=opt.graph == "random")
-
+    def __init__(self):
+        pass
+        
     def merge_data_and_graph(self, dataset, is_random_graph):
         if not is_random_graph:
             intersection = np.intersect1d(self.node_names, dataset.node_names)
