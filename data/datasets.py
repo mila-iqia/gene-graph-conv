@@ -1,5 +1,6 @@
 import numpy as np
 from torch.utils.data import Dataset
+import graph
 from graph import Graph
 
 
@@ -29,7 +30,20 @@ class Dataset(Dataset):
         raise NotImplementedError()
 
     def set_graph(self, opt):
-        self.graph = Graph(opt, self)
+        
+        if opt.graph == "random":
+            self.load_random_adjacency(nb_nodes=dataset.nb_nodes, approx_nb_edges=opt.approx_nb_edges, scale_free=opt.scale_free)
+            self.graph = Graph(opt, self)
+        elif opt.dataset == "percolate" or opt.dataset == "percolate-plus":
+            self.generate_percolate(opt)
+            self.graph = Graph(opt, self)
+        elif opt.graph is not None:
+            self.load_graph(get_path(opt.graph))
+            self.graph = Graph(opt, self)
+        elif opt.graph == "ecoli":
+            self.graph = graph.EcoliEcocycGraph()
+        
+        #self.graph = Graph(opt, self)
         self.adj = self.graph.adj
         self.node_names = self.graph.node_names
         try:

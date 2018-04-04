@@ -22,7 +22,7 @@ class EcoliDataset(Dataset):
         
 
         data =  colombos_load_data.load("ecoli", False)
-        
+        self.raw_data = data
         self.data = data[0]
         self.nb_nodes = self.data.shape[1]
         #self.labels = self.file['labels_data']
