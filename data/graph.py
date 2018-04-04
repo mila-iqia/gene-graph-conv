@@ -127,4 +127,4 @@ def get_path(graph):
     elif graph == "trust":
         return "/data/lisa/data/genomics/graph/trust.hdf5"
     elif graph == "pathway":
-        return "/data/lisa/data/genomics/graph/pathway_commons.hdf5"
+        return "genomics/graph/pathway_commons.hdf5"
