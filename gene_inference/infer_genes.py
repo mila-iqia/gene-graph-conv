@@ -64,3 +64,22 @@ def infer_all_genes(method, genes, g):
         sys.stdout.write(str(index) + ", ")
     results.to_csv('results.csv')
     return results
+
+def sample_neighbors(g, gene, num_neighbors):
+    results = set([gene])
+    all_nodes = set(g.nodes)
+    first_degree = set(g.neighbors(gene))
+    second_degree = set()
+    for x in g.neighbors(gene):
+        second_degree = second_degree.union(set(g.neighbors(x)))
+    while len(results) < num_neighbors:
+        if len(first_degree - results) > 0:
+            unique = first_degree - results
+            results.add(unique.pop())
+        elif len(second_degree - results) > 0:
+            unique = second_degree - results
+            results.add(unique.pop())
+        else:
+            unique = all_nodes - results
+            results.add(unique.pop())
+    return results
