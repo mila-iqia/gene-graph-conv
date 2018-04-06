@@ -74,11 +74,11 @@ class AggregationGraph(object):
         # Build the hierarchy of clusters.
         self.init_cluster()  # Compute all the adjs and to_keep variables.
 
-        # Build the agregate function
-        self.agregates = []
-        for adj, to_keep in zip(self.agregate_adjs, self.to_keeps):
-            agregate_adj = PoolGraph(adj=adj, to_keep=to_keep, on_cuda=on_cuda)
-            self.agregates.append(agregate_adj)
+        # Build the aggregate function
+        self.aggregates = []
+        for adj, to_keep in zip(self.aggregate_adjs, self.to_keeps):
+            aggregate_adj = PoolGraph(adj=adj, to_keep=to_keep, on_cuda=on_cuda)
+            self.aggregates.append(aggregate_adj)
 
     def init_cluster(self):
         # Cluster multi-scale everything
@@ -86,7 +86,7 @@ class AggregationGraph(object):
         to_keep = np.ones((nb_nodes,))
 
         all_to_keep = []  # At each agregation, which node to keep.
-        all_agregate_adjs = []  # At each agregation, which node are connected to whom.
+        all_aggregate_adjs = []  # At each agregation, which node are connected to whom.
         all_transformed_adj = []  # At each layer, the transformed adj (normalized, etc.
 
         current_adj = self.adj.copy()
@@ -101,12 +101,12 @@ class AggregationGraph(object):
 
             to_keep, adj = self.cluster_specific_layer(to_keep, no_layer, np.array(current_adj))
             all_to_keep.append(to_keep)
-            all_agregate_adjs.append(adj)
+            all_aggregate_adjs.append(adj)
 
             current_adj = adj
 
         self.to_keeps = all_to_keep
-        self.agregate_adjs = all_agregate_adjs
+        self.aggregate_adjs = all_aggregate_adjs
         self.adjs = all_transformed_adj
 
     def get_nodes_cluster(self, last_to_keep, layer_id, adj):
@@ -155,8 +155,8 @@ class AggregationGraph(object):
 
         return to_keep, new_adj
 
-    def get_agregate(self, layer_id):
-        return self.agregates[layer_id]
+    def get_aggregate(self, layer_id):
+        return self.aggregates[layer_id]
 
     def get_adj(self, adj, layer_id):
 
@@ -282,7 +282,7 @@ class AugmentGraphConnectivity(object):
 
 class GraphLayer(nn.Module):
     def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, id_layer=None,
-                 transform_adj=None, agregate_adj=None):
+                 transform_adj=None, aggregate_adj=None):
         super(GraphLayer, self).__init__()
         self.my_layers = []
         self.on_cuda = on_cuda
@@ -291,16 +291,16 @@ class GraphLayer(nn.Module):
         self.channels = channels
         self.id_layer = id_layer
         self.transform_adj = transform_adj  # How to transform the adj matrix.
-        self.agregate_adj = agregate_adj
+        self.aggregate_adj = aggregate_adj
 
         if self.transform_adj is not None:
             logging.info("Transforming the adj matrix")
             adj = self.transform_adj(adj, id_layer)
         self.adj = adj
 
-        if self.agregate_adj is not None:
-            self.agregate_adj = self.agregate_adj(id_layer)
-            self.to_keep = self.agregate_adj.to_keep
+        if self.aggregate_adj is not None:
+            self.aggregate_adj = self.aggregate_adj(id_layer)
+        self.to_keep = self.aggregate_adj.to_keep
 
         self.init_params()
 
@@ -341,7 +341,7 @@ class CGNLayer(GraphLayer):
         adj = Variable(self.sparse_adj, requires_grad=False)
 
         eye_x = self.eye_linear(x)
-        import pdb; pdb.set_trace()
+
         x = self._adj_mul(x, adj)  # + old_x# local average
 
         x = torch.cat([self.linear(x), eye_x], dim=1)  # + old_x# conv
@@ -349,8 +349,8 @@ class CGNLayer(GraphLayer):
         x = x.permute(0, 2, 1).contiguous()  # from ex, ch, node -> ex, node, ch
 
         # We can do max pooling and stuff, if we want.
-        if self.agregate_adj:
-            x = self.agregate_adj(x)
+        if self.aggregate_adj:
+            x = self.aggregate_adj(x)
 
         return x
 
@@ -416,8 +416,8 @@ class LCGLayer(GraphLayer):
         x = sum([self.GraphConv(x[:, :, i].unsqueeze(-1), edges.data, nb_examples, self.my_weights[i]) for i in range(self.in_dim)])
 
         # We can do max pooling and stuff, if we want.
-        if self.agregate_adj:
-            x = self.agregate_adj(x)
+        if self.aggregate_adj:
+            x = self.aggregate_adj(x)
 
         return x
 
@@ -449,8 +449,8 @@ class SGCLayer(GraphLayer):
         x = VFVx
 
         # We can do max pooling and stuff, if we want.
-        if self.agregate_adj:
-            x = self.agregate_adj(x)
+        if self.aggregate_adj:
+            x = self.aggregate_adj(x)
 
         return x
 
@@ -486,5 +486,5 @@ def get_transform(opt, adj):
     # 2. A agregation fonction.
     # For now The only parameter if takes in is the layer id.
     get_adj = lambda adj, layer_id: agregator.get_adj(adj, layer_id)
-    get_agregate = lambda layer_id: agregator.get_agregate(layer_id)
-    return get_adj, get_agregate
+    get_aggregate = lambda layer_id: agregator.get_aggregate(layer_id)
+    return get_adj, get_aggregate

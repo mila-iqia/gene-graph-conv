@@ -50,22 +50,22 @@ def get_graph(model):
     """
     Get the graph of a model.
     :param model:
-    :return:
+    :result:
     """
 
-    retn = []
+    result = []
 
     if not issubclass(model.__class__, GraphNetwork):
         print "The model is not a graph convolution."
-        return retn
+        return result
 
     # Go over all convolution
     for conv_layer in model.my_convs:
         adj = conv_layer.adj
         to_keep = conv_layer.to_keep
-        retn.append([adj, to_keep])
+        result.append([adj, to_keep])
 
-    return retn
+    return result
 
 
 def get_representation(model, dataset, opt):

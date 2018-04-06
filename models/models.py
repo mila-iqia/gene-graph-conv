@@ -195,7 +195,7 @@ class LogisticRegression(nn.Module):
 
 class GraphNetwork(nn.Module):
     def __init__(self, nb_nodes, input_dim, channels, adj, out_dim,
-                 on_cuda=True, add_emb=None, transform_adj=None, agregate_adj=None, graphLayerType=graphLayer.CGNLayer, use_gate=0.0001, dropout=False, attention_head=0,
+                 on_cuda=True, add_emb=None, transform_adj=None, aggregate_adj=None, graphLayerType=graphLayer.CGNLayer, use_gate=0.0001, dropout=False, attention_head=0,
                  training_mode=None):
         super(GraphNetwork, self).__init__()
 
@@ -208,10 +208,10 @@ class GraphNetwork(nn.Module):
         self.nb_channels = channels
         self.add_emb = add_emb
         self.graphLayerType = graphLayerType
-        self.agregate_adj = agregate_adj
+        self.aggregate_adj = aggregate_adj
         self.dropout = dropout
         self.attention_head = attention_head
-        self.training_mode=training_mode
+        self.training_mode = training_mode
 
         if add_emb:
             logging.info("Adding node embeddings.")
@@ -225,7 +225,7 @@ class GraphNetwork(nn.Module):
         self.dims = dims
         for i, [c_in, c_out] in enumerate(zip(dims[:-1], dims[1:])):
             # transformation to apply at each layer.
-            layer = graphLayerType(adj, c_in, c_out, on_cuda, i, transform_adj=transform_adj, agregate_adj=agregate_adj)
+            layer = graphLayerType(adj, c_in, c_out, on_cuda, i, transform_adj=transform_adj, aggregate_adj=aggregate_adj)
             layer.register_forward_hook(save_computations)  # For monitoringv
             convs.append(layer)
             adj = convs[-1].adj
@@ -556,7 +556,7 @@ def get_model(seed, nb_class, nb_examples, nb_nodes, model, on_cuda, num_channel
     # TODO: add a bunch of the options
     if model == 'cgn':
         my_model = CGN(nb_nodes=nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=adj, out_dim=nb_class,
-                       on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, use_gate=use_gate, dropout=dropout,
+                       on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
                        attention_head=nb_attention_head, training_mode=training_mode)
 
     elif model == 'lcg':
