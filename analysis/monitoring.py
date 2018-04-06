@@ -189,7 +189,7 @@ def save_checkpoint(model, optimizer, epoch, opt, exp_dir, filename='checkpoint.
     filename = os.path.join(exp_dir, filename)
     torch.save(state, filename)
 
-def load_checkpoint(load_folder, opt, dataset, filename='checkpoint.pth.tar'):
+def load_checkpoint(load_folder, opt, dataset, adj, filename='checkpoint.pth.tar'):
 
     # Model
     model_state = None
@@ -246,6 +246,7 @@ def load_checkpoint(load_folder, opt, dataset, filename='checkpoint.pth.tar'):
                          opt.nb_attention_head,
                          aggregate_function,
                          adj_transform,
+                         adj,
                          dataset,
                          model_state)
 

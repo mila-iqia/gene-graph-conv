@@ -282,8 +282,7 @@ class AugmentGraphConnectivity(object):
 
 class GraphLayer(nn.Module):
     def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, id_layer=None,
-                 transform_adj=None,
-                 agregate_adj=None):
+                 transform_adj=None, agregate_adj=None):
         super(GraphLayer, self).__init__()
         self.my_layers = []
         self.on_cuda = on_cuda
@@ -301,8 +300,7 @@ class GraphLayer(nn.Module):
 
         if self.agregate_adj is not None:
             self.agregate_adj = self.agregate_adj(id_layer)
-
-        self.to_keep = self.agregate_adj.to_keep
+            self.to_keep = self.agregate_adj.to_keep
 
         self.init_params()
 
@@ -343,7 +341,7 @@ class CGNLayer(GraphLayer):
         adj = Variable(self.sparse_adj, requires_grad=False)
 
         eye_x = self.eye_linear(x)
-
+        import pdb; pdb.set_trace()
         x = self._adj_mul(x, adj)  # + old_x# local average
 
         x = torch.cat([self.linear(x), eye_x], dim=1)  # + old_x# conv

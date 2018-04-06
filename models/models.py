@@ -202,7 +202,7 @@ class GraphNetwork(nn.Module):
         if transform_adj is None:
             transform_adj = []
         self.my_layers = []
-        self.out_dim = out_dim
+        self.out_dim = out_dim if out_dim is not None else 2
         self.on_cuda = on_cuda
         self.nb_nodes = adj.shape[0]
         self.nb_channels = channels
@@ -240,7 +240,7 @@ class GraphNetwork(nn.Module):
             logistic_in_dim = [self.nb_nodes * dims[-1]]
 
         for d in logistic_in_dim:
-            layer = nn.Linear(d, out_dim)
+            layer = nn.Linear(d, self.out_dim)
             layer.register_forward_hook(save_computations)  # For monitoring
             logistic_layer.append(layer)
 
@@ -416,6 +416,7 @@ class LCG(GraphNetwork):
 class MLP(nn.Module):
     def __init__(self, input_dim, channels, out_dim=None, on_cuda=True, dropout=False):
         super(MLP, self).__init__()
+        out_dim = out_dim if out_dim is not None else 2
 
         self.my_layers = []
         self.out_dim = out_dim
@@ -445,7 +446,6 @@ class MLP(nn.Module):
 
     def forward(self, x):
         nb_examples, nb_nodes, nb_channels = x.size()
-
         x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
         for layer in self.my_layers:
             x = F.relu(layer(x.view(nb_examples, -1)))  # or relu, sigmoid...
@@ -544,7 +544,7 @@ class CNN(nn.Module):
         return 0.0
 
 
-def get_model(seed, nb_class, nb_examples, nb_nodes, model, on_cuda, num_channel, num_layer, use_emb, training_mode, use_gate, nb_attention_head, dropout, adj, dataset, aggregate_function, adj_transform, model_state=None):
+def get_model(seed, nb_class, nb_examples, nb_nodes, model, on_cuda, num_channel, num_layer, use_emb, dropout, training_mode, use_gate, nb_attention_head, aggregate_function, adj_transform, adj, dataset, model_state=None):
     """
     Return a model based on the options.
     :param opt:
@@ -556,7 +556,7 @@ def get_model(seed, nb_class, nb_examples, nb_nodes, model, on_cuda, num_channel
     # TODO: add a bunch of the options
     if model == 'cgn':
         my_model = CGN(nb_nodes=nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=adj, out_dim=nb_class,
-                       on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
+                       on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, use_gate=use_gate, dropout=dropout,
                        attention_head=nb_attention_head, training_mode=training_mode)
 
     elif model == 'lcg':

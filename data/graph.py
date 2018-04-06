@@ -11,7 +11,7 @@ import pandas as pd
 class Graph(object):
     def __init__(self):
         pass
-        
+
     def merge_data_and_graph(self, dataset, is_random_graph):
         if not is_random_graph:
             intersection = np.intersect1d(self.node_names, dataset.node_names)

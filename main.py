@@ -2,6 +2,7 @@ import argparse
 import logging
 import tensorflow as tf  # necessary to import here to avoid segfault
 from data.utils import get_dataset, split_dataset
+from data.graph import Graph
 from models.models import get_model, setup_l1_loss
 import torch
 import time
@@ -9,7 +10,6 @@ from torch.autograd import Variable
 from analysis import monitoring
 from analysis.metrics import record_metrics_for_epoch, summarize
 import optimization as otim
-from graph import generate_percolate
 
 def build_parser():
     parser = argparse.ArgumentParser(
@@ -92,16 +92,15 @@ def main(argv=None):
         torch.cuda.manual_seed_all(opt.seed)
     torch.manual_seed(opt.seed)
 
-    graph = Graph(opt)
+    graph = Graph()
     if opt.dataset == "percolate" or opt.dataset == "percolate-plus":
-        graph = Graph(opt).generate_percolate(opt)
+        graph.generate_percolate(opt)
     elif opt.dataset == "random":
-        graph.load_random_adjacency(nb_nodes=nb_nodes, approx_nb_edges=approx_nb_edges, scale_free=scale_free)
+        graph.load_random_adjacency(nb_nodes=opt.nb_nodes, approx_nb_edges=opt.approx_nb_edges, scale_free=opt.scale_free)
     elif opt.dataset is not None:
         graph.load_graph(get_path(name))
 
     #graph.merge_data_and_graph(dataset)
-
     adj = graph.adj
 
     logging.info("Getting the dataset...")
@@ -112,7 +111,7 @@ def main(argv=None):
                                                    nb_samples=opt.nb_examples, train_ratio=opt.train_ratio, nb_per_class=opt.nb_per_class)
 
     logging.info("Getting the model...")
-    my_model, optimizer, epoch, opt = monitoring.load_checkpoint(exp_dir, opt, dataset)
+    my_model, optimizer, epoch, opt = monitoring.load_checkpoint(exp_dir, opt, dataset, adj)
 
     logging.info("Our model:")
     logging.info(my_model)
@@ -148,7 +147,6 @@ def main(argv=None):
 
             # Forward pass: Compute predicted y by passing x to the model
             my_model.train()
-            import pdb; pdb.set_trace()
 
             y_pred = my_model(inputs)
 
