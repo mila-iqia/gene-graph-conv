@@ -6,9 +6,10 @@ import logging
 import networkx as nx
 import gene_datasets
 import pandas as pd
-
+import itertools
 
 class Graph(object):
+<<<<<<< HEAD
     def __init__(self, opt, dataset):
         if opt.graph == "random":
             nb_nodes = dataset.nb_nodes if dataset.nb_nodes is not None else opt.nb_nodes
@@ -22,12 +23,20 @@ class Graph(object):
     def merge_data_and_graph(self, dataset):
         try:
             intersection = np.intersect1d(self.df.columns, dataset.df.columns)
+=======
+    def __init__(self):
+        pass
+
+    def merge_data_and_graph(self, dataset, is_random_graph):
+        if not is_random_graph:
+            intersection = np.intersect1d(self.node_names, dataset.node_names)
+>>>>>>> master
             dataset.df = dataset.df[intersection]
             dataset.data = dataset.df.as_matrix()
             self.df = self.df[intersection].filter(items=intersection, axis='index')
             self.adj = self.df.as_matrix()
-        except Exception as e:
-            print e
+        else:
+            self.adj = self.df.as_matrix()
 
     def load_random_adjacency(self, nb_nodes, approx_nb_edges, scale_free=True):
         nodes = np.arange(nb_nodes)
@@ -49,6 +58,7 @@ class Graph(object):
         A[edges[:, 0], edges[:, 1]] = 1.
         A[edges[:, 1], edges[:, 0]] = 1.
         self.adj = A
+        self.df = pd.DataFrame(np.array(self.adj))
         self.node_names = list(range(nb_nodes))
 
     def load_graph(self, path):
@@ -127,4 +137,44 @@ def get_path(graph):
     elif graph == "trust":
         return "/data/lisa/data/genomics/graph/trust.hdf5"
     elif graph == "pathway":
+<<<<<<< HEAD
         return "genomics/graph/pathway_commons.hdf5"
+=======
+        return "/data/lisa/data/genomics/graph/pathway_commons.hdf5"
+
+
+class EcoliEcocycGraph():
+
+    def __init__(self, opt=None):
+
+        d = pd.read_csv("data/ecocyc-21.5-pathways.col", sep="\t", skiprows=40,header=None)
+        d = d.set_index(0)
+        del d[1]
+        d = d.loc[:,:110] # filter gene ids
+
+        # collect global names for nodes so all adj are aligned
+        node_names = d.as_matrix().reshape(-1).astype(str)
+        node_names = np.unique(node_names[node_names!= "nan"]) # nan removal
+
+        #stores all subgraphs and their pathway names
+        adjs = []
+        adjs_name = []
+        # for each pathway create a graph, add the edges and create a matrix
+        for i, name in enumerate(d.index):
+            G=nx.Graph()
+            G.add_nodes_from(node_names)
+            pathway_genes = np.unique(d.iloc[i].dropna().astype(str).as_matrix())
+            for e1, e2 in itertools.product(pathway_genes, pathway_genes):
+                G.add_edge(e1, e2)
+            adj = nx.to_numpy_matrix(G)
+            adjs.append(adj)
+            adjs_name.append(name)
+
+        #collapse all graphs to one graph
+        adj = np.sum(adjs,axis=0)
+        adj = np.clip(adj,0,1)
+
+        self.adj = adj
+        self.adjs = adjs
+        self.adjs_name = adjs_name
+>>>>>>> master

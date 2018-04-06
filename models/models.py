@@ -135,6 +135,7 @@ class SparseLogisticRegression(nn.Module):
 
         self.nb_nodes = nb_nodes
         self.input_dim = input_dim
+        out_dim = out_dim if out_dim is not None else 2
 
         np.fill_diagonal(adj, 0.)
         D = adj.sum(0) + 1e-5
@@ -173,6 +174,7 @@ class LogisticRegression(nn.Module):
 
         self.nb_nodes = nb_nodes
         self.input_dim = input_dim
+        out_dim = out_dim if out_dim is not None else 2
 
         self.out_dim = out_dim
         self.on_cuda = on_cuda
@@ -195,23 +197,23 @@ class LogisticRegression(nn.Module):
 
 class GraphNetwork(nn.Module):
     def __init__(self, nb_nodes, input_dim, channels, adj, out_dim,
-                 on_cuda=True, add_emb=None, transform_adj=None, agregate_adj=None, graphLayerType=graphLayer.CGNLayer, use_gate=0.0001, dropout=False, attention_head=0,
+                 on_cuda=True, add_emb=None, transform_adj=None, aggregate_adj=None, graphLayerType=graphLayer.CGNLayer, use_gate=0.0001, dropout=False, attention_head=0,
                  training_mode=None):
         super(GraphNetwork, self).__init__()
 
         if transform_adj is None:
             transform_adj = []
         self.my_layers = []
-        self.out_dim = out_dim
+        self.out_dim = out_dim if out_dim is not None else 2
         self.on_cuda = on_cuda
         self.nb_nodes = adj.shape[0]
         self.nb_channels = channels
         self.add_emb = add_emb
         self.graphLayerType = graphLayerType
-        self.agregate_adj = agregate_adj
+        self.aggregate_adj = aggregate_adj
         self.dropout = dropout
         self.attention_head = attention_head
-        self.training_mode=training_mode
+        self.training_mode = training_mode
 
         if add_emb:
             logging.info("Adding node embeddings.")
@@ -225,7 +227,7 @@ class GraphNetwork(nn.Module):
         self.dims = dims
         for i, [c_in, c_out] in enumerate(zip(dims[:-1], dims[1:])):
             # transformation to apply at each layer.
-            layer = graphLayerType(adj, c_in, c_out, on_cuda, i, transform_adj=transform_adj, agregate_adj=agregate_adj)
+            layer = graphLayerType(adj, c_in, c_out, on_cuda, i, transform_adj=transform_adj, aggregate_adj=aggregate_adj)
             layer.register_forward_hook(save_computations)  # For monitoringv
             convs.append(layer)
             adj = convs[-1].adj
@@ -240,7 +242,7 @@ class GraphNetwork(nn.Module):
             logistic_in_dim = [self.nb_nodes * dims[-1]]
 
         for d in logistic_in_dim:
-            layer = nn.Linear(d, out_dim)
+            layer = nn.Linear(d, self.out_dim)
             layer.register_forward_hook(save_computations)  # For monitoring
             logistic_layer.append(layer)
 
@@ -416,6 +418,8 @@ class LCG(GraphNetwork):
 class MLP(nn.Module):
     def __init__(self, input_dim, channels, out_dim=None, on_cuda=True, dropout=False):
         super(MLP, self).__init__()
+        out_dim = out_dim if out_dim is not None else 2
+        input_dim = input_dim if input_dim is not None else 2
 
         self.my_layers = []
         self.out_dim = out_dim
@@ -445,7 +449,6 @@ class MLP(nn.Module):
 
     def forward(self, x):
         nb_examples, nb_nodes, nb_channels = x.size()
-
         x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
         for layer in self.my_layers:
             x = F.relu(layer(x.view(nb_examples, -1)))  # or relu, sigmoid...
@@ -461,39 +464,39 @@ class MLP(nn.Module):
         return 0.0
 
 
-class Random(nn.Module):
-    def __init__(self, input_dim, channels, out_dim=None, on_cuda=True):
-        super(Random, self).__init__()
-
-        self.my_layers = []
-        self.out_dim = out_dim
-        self.on_cuda = on_cuda
-
-        dims = [input_dim] + channels
-
-        logging.info("Constructing the network...")
-        layers = []
-        for c_in, c_out in zip(dims[:-1], dims[1:]):
-            layer = nn.Linear(c_in, c_out)
-            layers.append(layer)
-        self.my_layers = nn.ModuleList(layers)
-
-        if channels:
-            self.last_layer = nn.Linear(channels[-1], out_dim)
-        else:
-            self.last_layer = nn.Linear(input_dim, out_dim)
-
-        logging.info("Done!")
-
-    def forward(self, x):
-        nb_examples, nb_nodes, nb_channels = x.size()
-        guesses = [np.random.permutation(x) for y in repeat(range(self.out_dim), nb_examples)]
-        x = Variable(torch.cuda.FloatTensor(guesses))
-        return x
-
-    def regularization(self, reg_lambda):
-        return 0.0
-
+# class Random(nn.Module):
+#     def __init__(self, input_dim, channels, out_dim=None, on_cuda=True):
+#         super(Random, self).__init__()
+#
+#         self.my_layers = []
+#         self.out_dim = out_dim
+#         self.on_cuda = on_cuda
+#
+#         dims = [input_dim] + channels
+#
+#         logging.info("Constructing the network...")
+#         layers = []
+#         for c_in, c_out in zip(dims[:-1], dims[1:]):
+#             layer = nn.Linear(c_in, c_out)
+#             layers.append(layer)
+#         self.my_layers = nn.ModuleList(layers)
+#
+#         if channels:
+#             self.last_layer = nn.Linear(channels[-1], out_dim)
+#         else:
+#             self.last_layer = nn.Linear(input_dim, out_dim)
+#
+#         logging.info("Done!")
+#
+#     def forward(self, x):
+#         nb_examples, nb_nodes, nb_channels = x.size()
+#         guesses = np.random.permutation(x[0].data.numpy())
+#         x = Variable(torch.FloatTensor(guesses))
+#         return x
+#
+#     def regularization(self, reg_lambda):
+#         return 0.0
+#
 
 class CNN(nn.Module):
     def __init__(self, input_dim, channels, grid_shape, out_dim=None, on_cuda=True):
@@ -544,7 +547,7 @@ class CNN(nn.Module):
         return 0.0
 
 
-def get_model(opt, dataset, model_state=None):
+def get_model(seed, nb_class, nb_examples, nb_nodes, model, on_cuda, num_channel, num_layer, use_emb, dropout, training_mode, use_gate, nb_attention_head, graph, dataset, model_state=None, opt=None):
     """
     Return a model based on the options.
     :param opt:
@@ -553,49 +556,48 @@ def get_model(opt, dataset, model_state=None):
     :return:
     """
 
-    model = opt.model
-    num_channel = opt.num_channel
-    num_layer = opt.num_layer
-    on_cuda = opt.cuda
-
-
     # TODO: add a bunch of the options
     if model == 'cgn':
-        adj_transform, agregate_function = graphLayer.get_transform(opt, dataset.get_adj())
-        my_model = CGN(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=dataset.nb_class,
-                       on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=adj_transform, agregate_adj=agregate_function, use_gate=opt.use_gate, dropout=opt.dropout,
-                       attention_head=opt.nb_attention_head, training_mode=opt.training_mode)
+        assert graph is not None
+        adj_transform, aggregate_function = graphLayer.get_transform(opt, graph.adj)
+        my_model = CGN(nb_nodes=nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
+                       on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
+                       attention_head=nb_attention_head, training_mode=training_mode)
 
     elif model == 'lcg':
-        adj_transform, agregate_function = graphLayer.get_transform(opt, dataset.get_adj())
-        my_model = LCG(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=dataset.nb_class,
-                       on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=adj_transform, agregate_adj=agregate_function, use_gate=opt.use_gate, dropout=opt.dropout,
-                       attention_head=opt.nb_attention_head, training_mode=opt.training_mode)
+        assert graph is not None
+        adj_transform, aggregate_function = graphLayer.get_transform(opt, graph.adj)
+        my_model = LCG(nb_nodes=nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
+                       on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
+                       attention_head=nb_attention_head, training_mode=training_mode)
 
     elif model == 'sgc':
-        adj_transform, agregate_function = graphLayer.get_transform(opt, dataset.get_adj())
-        my_model = SGC(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=dataset.get_adj(), out_dim=dataset.nb_class,
-                       on_cuda=on_cuda, add_emb=opt.use_emb, transform_adj=adj_transform, agregate_adj=agregate_function, use_gate=opt.use_gate, dropout=opt.dropout,
-                       attention_head=opt.nb_attention_head, training_mode=opt.training_mode)
+        assert graph is not None
+        adj_transform, aggregate_function = graphLayer.get_transform(opt, graph.adj)
+        my_model = SGC(nb_nodes=nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
+                       on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
+                       attention_head=nb_attention_head, training_mode=training_mode)
 
     elif model == 'slr':
-        my_model = SparseLogisticRegression(nb_nodes=dataset.nb_nodes, input_dim=1, adj=dataset.get_adj(), out_dim=dataset.nb_class, on_cuda=on_cuda)
+        assert graph is not None
+        my_model = SparseLogisticRegression(nb_nodes=nb_nodes, input_dim=1, adj=graph.adj, out_dim=nb_class, on_cuda=on_cuda)
 
     elif model == 'lr':
-        my_model = LogisticRegression(nb_nodes=dataset.nb_nodes, input_dim=1, out_dim=dataset.nb_class, on_cuda=on_cuda)
+        my_model = LogisticRegression(nb_nodes=nb_nodes, input_dim=1, out_dim=nb_class, on_cuda=on_cuda)
 
     elif model == 'mlp':
-        my_model = MLP(dataset.nb_nodes, [num_channel] * num_layer, dataset.nb_class, on_cuda=on_cuda, dropout=opt.dropout)
+        my_model = MLP(dataset.nb_nodes, [num_channel] * num_layer, nb_class, on_cuda=on_cuda, dropout=dropout)
 
-    elif model == 'random':
-        my_model = Random(dataset.nb_nodes, [num_channel] * num_layer, dataset.nb_class, on_cuda=on_cuda)
+    # elif model == 'random':
+    #     my_model = Random(dataset.nb_nodes, [num_channel] * num_layer, dataset.nb_class, on_cuda=on_cuda)
 
     elif model == 'cnn':
         assert opt.dataset == 'percolate'
+        assert graph is not None
         # TODO: to change the shape.
-        grid_shape = int(np.sqrt(dataset.get_adj().shape[0]))
+        grid_shape = int(np.sqrt(graph.adj.shape[0]))
         grid_shape = [grid_shape, grid_shape]
-        my_model = CNN(input_dim=1, channels=[num_channel] * num_layer, grid_shape=grid_shape, out_dim=dataset.nb_class, on_cuda=on_cuda)
+        my_model = CNN(input_dim=1, channels=[num_channel] * num_layer, grid_shape=grid_shape, out_dim=nb_class, on_cuda=on_cuda)
 
     else:
         raise ValueError

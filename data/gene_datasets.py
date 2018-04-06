@@ -10,7 +10,11 @@ from datasets import Dataset
 class GeneDataset(Dataset):
     """Gene Expression Dataset."""
 
+<<<<<<< HEAD
     def __init__(self, data_dir=None, data_file=None, sub_class=None, name=None):
+=======
+    def __init__(self, data_dir=None, data_file=None, sub_class=None, name=None, seed=None, nb_class=None, nb_examples=None, nb_nodes=None):
+>>>>>>> master
         """
         Args:
             data_file (string): Path to the h5df file.
@@ -19,8 +23,12 @@ class GeneDataset(Dataset):
         self.sub_class = sub_class
         self.data_dir = data_dir
         self.data_file = data_file
+<<<<<<< HEAD
         self.nb_class = None
         super(GeneDataset, self).__init__(name=name)
+=======
+        super(GeneDataset, self).__init__(name=name, seed=seed, nb_class=nb_class, nb_examples=nb_examples, nb_nodes=nb_nodes)
+>>>>>>> master
 
     def load_data(self):
         data_file = os.path.join(self.data_dir, self.data_file)
@@ -32,8 +40,9 @@ class GeneDataset(Dataset):
         self.node_names = self.file['gene_names']
         self.df = pd.DataFrame(np.array(self.file['expression_data']))
         self.df.columns = self.node_names
-        self.nb_class = self.nb_class if self.nb_class is not None else len(self.labels[0])
+        self.nb_class = self.nb_class if self.nb_class is not None else 2
         self.label_name = self.labels.attrs
+        self.transform = None
 
         if self.labels.shape != self.labels[:].reshape(-1).shape:
             print "Converting one-hot labels to integers"
@@ -66,6 +75,7 @@ class TCGATissue(GeneDataset):
         super(TCGATissue, self).__init__(data_dir=data_dir, data_file=data_file, name='TCGATissue', **kwargs)
 
 
+<<<<<<< HEAD
 def get_high_var_genes(df):
     return df.var().sort_values()[-5000:]
 
@@ -112,6 +122,8 @@ class TCGAInference(GeneDataset):
                 self.labels[self.labels == c] = i
 
 
+=======
+>>>>>>> master
 class TCGAForLabel(GeneDataset):
     """TCGA Dataset."""
     def __init__(self,
@@ -170,8 +182,8 @@ class BRCACoexpr(GeneDataset):
 
 class GBMDataset(GeneDataset):
     " Glioblastoma Multiforme dataset"
-    def __init__(self, data_dir="/data/lisa/data/genomics/TCGA/", data_file="gbm.hdf5", opt=None):
-        super(GBMDataset, self).__init__(data_dir=data_dir, data_file=data_file, name='GBMDataset', opt=opt)
+    def __init__(self, data_dir="/data/lisa/data/genomics/TCGA/", data_file="gbm.hdf5", seed=None, nb_class=None, nb_examples=None, nb_nodes=None):
+        super(GBMDataset, self).__init__(data_dir=data_dir, data_file=data_file, name='GBMDataset', seed=seed, nb_class=nb_class, nb_examples=nb_examples, nb_nodes=nb_nodes)
 
 
 class NSLRSyntheticDataset(GeneDataset):

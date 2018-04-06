@@ -2,6 +2,7 @@ import argparse
 import logging
 import tensorflow as tf  # necessary to import here to avoid segfault
 from data.utils import get_dataset, split_dataset
+from data.graph import Graph, get_path
 from models.models import get_model, setup_l1_loss
 import torch
 import time
@@ -22,7 +23,7 @@ def build_parser():
     parser.add_argument('--weight-decay', default=0., type=float, help='weight decay (L2 loss).')
     parser.add_argument('--l1-loss-lambda', default=0., type=float, help='L1 loss lambda.')
     parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
-    parser.add_argument('--dataset', choices=['random', 'tcga-tissue', 'tcga-inference', 'tcga-brca', 'tcga-label', 'tcga-gbm', 'percolate', 'nslr-syn', 'percolate-plus'],
+    parser.add_argument('--dataset', choices=['random', 'ecoli', 'tcga-tissue', 'tcga-brca', 'tcga-label', 'tcga-gbm', 'percolate', 'nslr-syn', 'percolate-plus'],
                         default='random', help='Which dataset to use.')
     parser.add_argument('--clinical-file', type=str, default='PANCAN_clinicalMatrix.gz', help='File to read labels from')
     parser.add_argument('--clinical-label', type=str, default='gender', help='Label to join with data')
@@ -41,7 +42,6 @@ def build_parser():
     parser.add_argument('--dropout', default=False, type=bool, help='If we want to perform dropout in the model..')
     parser.add_argument('--add-connectivity', default=False, type=bool, help='If we want to augment the connectivity after each convolution layer after the first one.')
     parser.add_argument('--model', default='cgn', choices=['cgn', 'mlp', 'lcg', 'sgc', 'slr', 'cnn', 'random', 'lr'], help='Which model to use.')
-    parser.add_argument('--trial-number', type=str, default='1', help='the trial number of the experiment.')
     parser.add_argument('--num-layer', default=1, type=int, help='Number of convolution layer in the CGN.')
     parser.add_argument('--nb-class', default=None, type=int, help="Number of class for the dataset (won't work with random graph).")
     parser.add_argument('--nb-examples', default=None, type=int, help="Number of samples to train on.")
@@ -60,10 +60,12 @@ def build_parser():
     parser.add_argument('--extra-ucn', default=0, type=int, help="The number of extra nodes without edges in the percolate-plus dataset")
     parser.add_argument('--disconnected', default=0, type=int, help="The number of disconnected nodes from the perc subgraph without edges in percolate-plus")
     parser.add_argument('--center', default=False, type=bool, help="center the data (subtract mean from each element)?")
-    parser.add_argument('--graph', default=None, choices=['kegg', 'pathway', 'trust', 'random'], help="Which graph with which to prior")
+    parser.add_argument('--graph', default=None, choices=['kegg', 'pathway', 'trust', 'random', 'ecoli'], help="Which graph with which to prior")
     parser.add_argument('--approx-nb-edges', default=100, type=int, help="If we have a randomly generated graph, this is the approx nb of edges")
     parser.add_argument('--nb-nodes', default=None, type=int, help="If we have a randomly generated graph, this is the nb of nodes")
     parser.add_argument('--training-mode', default=None, choices=['semi', 'unsupervised'], help="which training mode we want to use.")
+    parser.add_argument('--data-dir', default=None, type=str, help="where is your dataset located?")
+    parser.add_argument('--data-file', default=None, type=str, help="where is your dataset located?")
     return parser
 
 
@@ -92,15 +94,26 @@ def main(argv=None):
         torch.cuda.manual_seed_all(opt.seed)
     torch.manual_seed(opt.seed)
 
+    graph = None
+    if opt.graph == "percolate" or opt.graph == "percolate-plus":
+        graph = Graph()
+        graph.generate_percolate(opt)
+    elif opt.graph == "random":
+        graph = Graph()
+        graph.load_random_adjacency(nb_nodes=opt.nb_nodes, approx_nb_edges=opt.approx_nb_edges, scale_free=opt.scale_free)
+    elif opt.graph is not None:
+        graph = Graph()
+        graph.load_graph(get_path(opt.graph))
+
     logging.info("Getting the dataset...")
-    dataset = get_dataset(opt)
+    dataset = get_dataset(opt.data_dir, opt.data_file, opt.seed, opt.nb_class, opt.nb_examples, opt.nb_nodes, opt.dataset)
     writer, exp_dir = monitoring.setup_tensorboard_log(opt)
 
     train_set, valid_set, test_set = split_dataset(dataset, batch_size=opt.batch_size, seed=opt.seed,
                                                    nb_samples=opt.nb_examples, train_ratio=opt.train_ratio, nb_per_class=opt.nb_per_class)
 
     logging.info("Getting the model...")
-    my_model, optimizer, epoch, opt = monitoring.load_checkpoint(exp_dir, opt, dataset)
+    my_model, optimizer, epoch, opt = monitoring.load_checkpoint(exp_dir, opt, dataset, graph)
 
     logging.info("Our model:")
     logging.info(my_model)
@@ -136,6 +149,7 @@ def main(argv=None):
 
             # Forward pass: Compute predicted y by passing x to the model
             my_model.train()
+
             y_pred = my_model(inputs)
 
             # Compute and print loss
