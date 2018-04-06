@@ -5,6 +5,8 @@ from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 from gene_datasets import BRCACoexpr, GBMDataset, TCGATissue, NSLRSyntheticDataset
 from datasets import RandomDataset, PercolateDataset
+import datasets
+import data, data.colombos
 
 
 def split_dataset(dataset, batch_size=100, random=False, train_ratio=0.8, seed=1993, nb_samples=None, nb_per_class=None):
@@ -105,6 +107,10 @@ def get_dataset(data_dir, data_file, seed, nb_class, nb_examples, nb_nodes, data
         logging.info("Getting percolate-plus Dataset")
         pdata = PercolateDataset(opt=opt)
         dataset = add_noise(dataset=pdata, num_added_nodes=opt.extra_ucn)
+        
+    elif opt.dataset == 'ecoli':
+        logging.info("Getting ecoli Dataset")
+        dataset = data.colombos.EcoliDataset(opt=opt)
     else:
         raise ValueError
     return dataset
