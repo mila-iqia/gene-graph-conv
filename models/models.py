@@ -135,6 +135,7 @@ class SparseLogisticRegression(nn.Module):
 
         self.nb_nodes = nb_nodes
         self.input_dim = input_dim
+        out_dim = out_dim if out_dim is not None else 2
 
         np.fill_diagonal(adj, 0.)
         D = adj.sum(0) + 1e-5
@@ -173,6 +174,7 @@ class LogisticRegression(nn.Module):
 
         self.nb_nodes = nb_nodes
         self.input_dim = input_dim
+        out_dim = out_dim if out_dim is not None else 2
 
         self.out_dim = out_dim
         self.on_cuda = on_cuda
