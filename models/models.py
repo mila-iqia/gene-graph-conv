@@ -419,6 +419,7 @@ class MLP(nn.Module):
     def __init__(self, input_dim, channels, out_dim=None, on_cuda=True, dropout=False):
         super(MLP, self).__init__()
         out_dim = out_dim if out_dim is not None else 2
+        input_dim = input_dim if input_dim is not None else 2
 
         self.my_layers = []
         self.out_dim = out_dim
@@ -546,7 +547,7 @@ class CNN(nn.Module):
         return 0.0
 
 
-def get_model(seed, nb_class, nb_examples, nb_nodes, model, on_cuda, num_channel, num_layer, use_emb, dropout, training_mode, use_gate, nb_attention_head, aggregate_function, adj_transform, adj, dataset, model_state=None):
+def get_model(seed, nb_class, nb_examples, nb_nodes, model, on_cuda, num_channel, num_layer, use_emb, dropout, training_mode, use_gate, nb_attention_head, graph, dataset, model_state=None, opt=None):
     """
     Return a model based on the options.
     :param opt:
@@ -557,36 +558,44 @@ def get_model(seed, nb_class, nb_examples, nb_nodes, model, on_cuda, num_channel
 
     # TODO: add a bunch of the options
     if model == 'cgn':
-        my_model = CGN(nb_nodes=nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=adj, out_dim=nb_class,
+        assert graph is not None
+        adj_transform, aggregate_function = graphLayer.get_transform(opt, graph.adj)
+        my_model = CGN(nb_nodes=nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
                        on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
                        attention_head=nb_attention_head, training_mode=training_mode)
 
     elif model == 'lcg':
-        my_model = LCG(nb_nodes=nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=adj, out_dim=nb_class,
+        assert graph is not None
+        adj_transform, aggregate_function = graphLayer.get_transform(opt, graph.adj)
+        my_model = LCG(nb_nodes=nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
                        on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
                        attention_head=nb_attention_head, training_mode=training_mode)
 
     elif model == 'sgc':
-        my_model = SGC(nb_nodes=nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=adj, out_dim=nb_class,
+        assert graph is not None
+        adj_transform, aggregate_function = graphLayer.get_transform(opt, graph.adj)
+        my_model = SGC(nb_nodes=nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
                        on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
                        attention_head=nb_attention_head, training_mode=training_mode)
 
     elif model == 'slr':
-        my_model = SparseLogisticRegression(nb_nodes=nb_nodes, input_dim=1, adj=adj, out_dim=nb_class, on_cuda=on_cuda)
+        assert graph is not None
+        my_model = SparseLogisticRegression(nb_nodes=nb_nodes, input_dim=1, adj=graph.adj, out_dim=nb_class, on_cuda=on_cuda)
 
     elif model == 'lr':
         my_model = LogisticRegression(nb_nodes=nb_nodes, input_dim=1, out_dim=nb_class, on_cuda=on_cuda)
 
     elif model == 'mlp':
-        my_model = MLP(nb_nodes, [num_channel] * num_layer, nb_class, on_cuda=on_cuda, dropout=dropout)
+        my_model = MLP(dataset.nb_nodes, [num_channel] * num_layer, nb_class, on_cuda=on_cuda, dropout=dropout)
 
     # elif model == 'random':
     #     my_model = Random(dataset.nb_nodes, [num_channel] * num_layer, dataset.nb_class, on_cuda=on_cuda)
 
     elif model == 'cnn':
         assert opt.dataset == 'percolate'
+        assert graph is not None
         # TODO: to change the shape.
-        grid_shape = int(np.sqrt(adj.shape[0]))
+        grid_shape = int(np.sqrt(graph.adj.shape[0]))
         grid_shape = [grid_shape, grid_shape]
         my_model = CNN(input_dim=1, channels=[num_channel] * num_layer, grid_shape=grid_shape, out_dim=nb_class, on_cuda=on_cuda)
 

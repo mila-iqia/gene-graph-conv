@@ -12,33 +12,12 @@ class Dataset(Dataset):
         self.nb_examples = nb_examples
         self.nb_nodes = nb_nodes
         self.load_data()
-        #
-        # if opt.graph is not None and opt.neighborhood is not 'all':
-        #     self.set_graph(opt)
-        #     self.adj = (self.adj > 0.).astype(float)
-        #     self.nb_nodes = self.adj.shape[0]
-        # elif opt.graph is not None:
-        #     self.set_graph(opt)
-        #     self.adj = (self.adj > 0.).astype(float)
-        #     self.nb_nodes = self.adj.shape[0]
-        # if opt.center:
-        #     self.data = self.data - self.data.mean(axis=0)  # Ugly, to redo.
 
     def load_data(self):
         raise NotImplementedError()
 
     def labels_name(self, l):
         raise NotImplementedError()
-
-    def set_graph(self, opt):
-        self.graph = Graph(opt, self)
-        self.adj = self.graph.adj
-        self.node_names = self.graph.node_names
-        try:
-            self.labels = self.graph.labels
-            self.data = self.graph.data
-        except Exception as e:
-            print e
 
     def __getitem__(self, idx):
         raise NotImplementedError()

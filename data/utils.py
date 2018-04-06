@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
-from gene_datasets import BRCACoexpr, GBMDataset, TCGATissue, NSLRSyntheticDataset, TCGAInference
+from gene_datasets import BRCACoexpr, GBMDataset, TCGATissue, NSLRSyntheticDataset
 from datasets import RandomDataset, PercolateDataset
 
 
@@ -72,7 +72,7 @@ def split_dataset(dataset, batch_size=100, random=False, train_ratio=0.8, seed=1
     return train_set, valid_set, test_set
 
 
-def get_dataset(seed, nb_class, nb_examples, nb_nodes, dataset):
+def get_dataset(data_dir, data_file, seed, nb_class, nb_examples, nb_nodes, dataset):
     """
     Get a dataset based on the options.
     :param opt:
@@ -86,10 +86,6 @@ def get_dataset(seed, nb_class, nb_examples, nb_nodes, dataset):
         logging.info("Getting TCGA tissue type")
         dataset = TCGATissue(opt=opt)
 
-    elif dataset == 'tcga-inference':
-        logging.info("Getting TCGA data for inference")
-        dataset = TCGAInference(opt=opt)
-
     elif dataset == 'tcga-brca':
         logging.info("Getting TCGA BRCA type")
         dataset = BRCACoexpr(opt=opt)
@@ -99,7 +95,7 @@ def get_dataset(seed, nb_class, nb_examples, nb_nodes, dataset):
 
     elif dataset == 'tcga-gbm':
         logging.info("Getting TCGA GBM Dataset")
-        dataset = GBMDataset(opt=opt)
+        dataset = GBMDataset(data_dir=data_dir, data_file=data_file, seed=seed, nb_class=nb_class, nb_examples=nb_examples, nb_nodes=nb_nodes)
 
     elif dataset == 'nslr-syn':
         logging.info("Getting NSLR Synthetic Dataset")

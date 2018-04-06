@@ -2,7 +2,7 @@ import argparse
 import logging
 import tensorflow as tf  # necessary to import here to avoid segfault
 from data.utils import get_dataset, split_dataset
-from data.graph import Graph
+from data.graph import Graph, get_path
 from models.models import get_model, setup_l1_loss
 import torch
 import time
@@ -64,6 +64,8 @@ def build_parser():
     parser.add_argument('--approx-nb-edges', default=100, type=int, help="If we have a randomly generated graph, this is the approx nb of edges")
     parser.add_argument('--nb-nodes', default=None, type=int, help="If we have a randomly generated graph, this is the nb of nodes")
     parser.add_argument('--training-mode', default=None, choices=['semi', 'unsupervised'], help="which training mode we want to use.")
+    parser.add_argument('--data-dir', default=None, type=str, help="where is your dataset located?")
+    parser.add_argument('--data-file', default=None, type=str, help="where is your dataset located?")
     return parser
 
 
@@ -92,26 +94,26 @@ def main(argv=None):
         torch.cuda.manual_seed_all(opt.seed)
     torch.manual_seed(opt.seed)
 
-    graph = Graph()
-    if opt.dataset == "percolate" or opt.dataset == "percolate-plus":
+    graph = None
+    if opt.graph == "percolate" or opt.graph == "percolate-plus":
+        graph = Graph()
         graph.generate_percolate(opt)
-    elif opt.dataset == "random":
+    elif opt.graph == "random":
+        graph = Graph()
         graph.load_random_adjacency(nb_nodes=opt.nb_nodes, approx_nb_edges=opt.approx_nb_edges, scale_free=opt.scale_free)
-    elif opt.dataset is not None:
-        graph.load_graph(get_path(name))
-
-    #graph.merge_data_and_graph(dataset)
-    adj = graph.adj
+    elif opt.graph is not None:
+        graph = Graph()
+        graph.load_graph(get_path(opt.graph))
 
     logging.info("Getting the dataset...")
-    dataset = get_dataset(opt.seed, opt.nb_class, opt.nb_examples, opt.nb_nodes, opt.dataset)
+    dataset = get_dataset(opt.data_dir, opt.data_file, opt.seed, opt.nb_class, opt.nb_examples, opt.nb_nodes, opt.dataset)
     writer, exp_dir = monitoring.setup_tensorboard_log(opt)
 
     train_set, valid_set, test_set = split_dataset(dataset, batch_size=opt.batch_size, seed=opt.seed,
                                                    nb_samples=opt.nb_examples, train_ratio=opt.train_ratio, nb_per_class=opt.nb_per_class)
 
     logging.info("Getting the model...")
-    my_model, optimizer, epoch, opt = monitoring.load_checkpoint(exp_dir, opt, dataset, adj)
+    my_model, optimizer, epoch, opt = monitoring.load_checkpoint(exp_dir, opt, dataset, graph)
 
     logging.info("Our model:")
     logging.info(my_model)

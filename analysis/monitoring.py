@@ -189,7 +189,7 @@ def save_checkpoint(model, optimizer, epoch, opt, exp_dir, filename='checkpoint.
     filename = os.path.join(exp_dir, filename)
     torch.save(state, filename)
 
-def load_checkpoint(load_folder, opt, dataset, adj, filename='checkpoint.pth.tar'):
+def load_checkpoint(load_folder, opt, dataset, graph, filename='checkpoint.pth.tar'):
 
     # Model
     model_state = None
@@ -228,7 +228,6 @@ def load_checkpoint(load_folder, opt, dataset, adj, filename='checkpoint.pth.tar
         else:
             print("=> no checkpoint found at '{}'".format(filename))
 
-    adj_transform, aggregate_function = graphLayer.get_transform(opt, adj)
 
     # Get the network
     my_model = get_model(opt.seed,
@@ -244,11 +243,10 @@ def load_checkpoint(load_folder, opt, dataset, adj, filename='checkpoint.pth.tar
                          opt.training_mode,
                          opt.use_gate,
                          opt.nb_attention_head,
-                         aggregate_function,
-                         adj_transform,
-                         adj,
+                         graph,
                          dataset,
-                         model_state)
+                         model_state,
+                         opt)
 
     # Get the optimizer
     optimizer = torch.optim.Adam(my_model.parameters(), lr=opt.lr, weight_decay=opt.weight_decay)
