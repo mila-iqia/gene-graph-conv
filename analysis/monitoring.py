@@ -8,7 +8,7 @@ from logger import Logger
 from torch.autograd import Variable
 from models.models import get_model
 import hashlib
-import graphLayer
+
 
 def feature_selection(model, dataset, opt, top=100):
 

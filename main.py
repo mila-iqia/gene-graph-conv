@@ -107,6 +107,10 @@ def main(argv=None):
 
     logging.info("Getting the dataset...")
     dataset = get_dataset(opt.data_dir, opt.data_file, opt.seed, opt.nb_class, opt.nb_examples, opt.nb_nodes, opt.dataset)
+
+    if graph is not None:
+        graph.intersection_with(dataset)
+
     writer, exp_dir = monitoring.setup_tensorboard_log(opt)
 
     train_set, valid_set, test_set = split_dataset(dataset, batch_size=opt.batch_size, seed=opt.seed,
@@ -137,8 +141,7 @@ def main(argv=None):
         start_timer = time.time()
 
         for no_b, mini in enumerate(train_set):
-
-            inputs, targets = mini[0], mini[1]
+            inputs, targets = mini['sample'], mini['labels']
 
             inputs = Variable(inputs, requires_grad=False).float()
             #targets = Variable(targets, requires_grad=False).long()

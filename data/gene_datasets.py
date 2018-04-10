@@ -124,7 +124,10 @@ class BRCACoexpr(GeneDataset):
 
 class GBMDataset(GeneDataset):
     " Glioblastoma Multiforme dataset"
-    def __init__(self, data_dir="/data/lisa/data/genomics/TCGA/", data_file="gbm.hdf5", seed=None, nb_class=None, nb_examples=None, nb_nodes=None):
+    def __init__(self, data_dir=None, data_file=None, seed=None, nb_class=None, nb_examples=None, nb_nodes=None):
+        data_dir = data_dir if data_dir is not None else "/data/lisa/data/genomics/TCGA/"
+        data_file = data_file if data_file is not None else "gbm.hdf5"
+
         super(GBMDataset, self).__init__(data_dir=data_dir, data_file=data_file, name='GBMDataset', seed=seed, nb_class=nb_class, nb_examples=nb_examples, nb_nodes=nb_nodes)
 
 
