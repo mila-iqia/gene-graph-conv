@@ -12,15 +12,12 @@ class Graph(object):
     def __init__(self):
         pass
 
-    def merge_data_and_graph(self, dataset, is_random_graph):
-        if not is_random_graph:
-            intersection = np.intersect1d(self.node_names, dataset.node_names)
-            dataset.df = dataset.df[intersection]
-            dataset.data = dataset.df.as_matrix()
-            self.df = self.df[intersection].filter(items=intersection, axis='index')
-            self.adj = self.df.as_matrix()
-        else:
-            self.adj = self.df.as_matrix()
+    def intersection_with(self, dataset):
+        intersection = np.intersect1d(self.node_names, dataset.node_names)
+        dataset.df = dataset.df[intersection]
+        dataset.data = dataset.df.as_matrix()
+        self.df = self.df[intersection].filter(items=intersection, axis='index')
+        self.adj = self.df.as_matrix()
 
     def load_random_adjacency(self, nb_nodes, approx_nb_edges, scale_free=True):
         nodes = np.arange(nb_nodes)
@@ -122,6 +119,8 @@ def get_path(graph):
         return "/data/lisa/data/genomics/graph/trust.hdf5"
     elif graph == "pathway":
         return "/data/lisa/data/genomics/graph/pathway_commons.hdf5"
+    elif graph == "pancan":
+        return "/data/lisa/data/genomics/graph/pancan-tissue-graph.hdf5"
 
 
 class EcoliEcocycGraph():

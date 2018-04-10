@@ -74,11 +74,7 @@ class PercolateDataset(Dataset):
     def __getitem__(self, idx):
         sample = self.data[idx]
         sample = np.expand_dims(sample, -1)  # Addin a dim for the channels\
-        sample = [sample, self.labels[idx]]
-
-        if self.transform is not None:
-            sample = self.transform(sample)
-
+        sample = {'sample': sample, 'labels': self.labels[idx]}
         return sample
 
     def labels_name(self, l):

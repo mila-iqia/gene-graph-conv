@@ -8,7 +8,7 @@ from logger import Logger
 from torch.autograd import Variable
 from models.models import get_model
 import hashlib
-import graphLayer
+
 
 def feature_selection(model, dataset, opt, top=100):
 
@@ -84,7 +84,7 @@ def get_representation(model, dataset, opt):
 
     # Get one representation.
     for no_b, mini in enumerate(dataset):
-        inputs, targets = mini[0], mini[1]
+        inputs, targets = mini['sample'], mini['labels']
         inputs = Variable(inputs, requires_grad=False).float()
 
         if opt.cuda:
@@ -95,9 +95,6 @@ def get_representation(model, dataset, opt):
 
         # Forward pass: Compute predicted y by passing x to the model
         retn = model.get_representation()
-
-        if type(targets) == list:
-            targets = targets[0]
         retn['example'] = {'input': inputs.cpu().data.numpy(), 'output': targets.cpu().numpy()}
 
         break
@@ -219,7 +216,7 @@ def load_checkpoint(load_folder, opt, dataset, graph, filename='checkpoint.pth.t
             epoch = checkpoint['epoch']
 
             # We override some of the options between the runs, otherwise it might be a pain.
-            opt.epoch = opt.epoch
+            new_opt.epoch = opt.epoch
             if str(opt.training_mode) != str(opt.training_mode):
                 optimizer_state = None
 
