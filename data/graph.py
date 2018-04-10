@@ -9,28 +9,12 @@ import pandas as pd
 import itertools
 
 class Graph(object):
-<<<<<<< HEAD
-    def __init__(self, opt, dataset):
-        if opt.graph == "random":
-            nb_nodes = dataset.nb_nodes if dataset.nb_nodes is not None else opt.nb_nodes
-            self.load_random_adjacency(nb_nodes=nb_nodes, approx_nb_edges=opt.approx_nb_edges, scale_free=opt.scale_free)
-        elif opt.graph is not None:
-            self.load_graph(get_path(opt.graph))
-        elif opt.dataset == "percolate" or opt.dataset == "percolate-plus":
-            self.generate_percolate(opt)
-        self.merge_data_and_graph(dataset)
-
-    def merge_data_and_graph(self, dataset):
-        try:
-            intersection = np.intersect1d(self.df.columns, dataset.df.columns)
-=======
     def __init__(self):
         pass
 
     def merge_data_and_graph(self, dataset, is_random_graph):
         if not is_random_graph:
             intersection = np.intersect1d(self.node_names, dataset.node_names)
->>>>>>> master
             dataset.df = dataset.df[intersection]
             dataset.data = dataset.df.as_matrix()
             self.df = self.df[intersection].filter(items=intersection, axis='index')
@@ -137,9 +121,6 @@ def get_path(graph):
     elif graph == "trust":
         return "/data/lisa/data/genomics/graph/trust.hdf5"
     elif graph == "pathway":
-<<<<<<< HEAD
-        return "genomics/graph/pathway_commons.hdf5"
-=======
         return "/data/lisa/data/genomics/graph/pathway_commons.hdf5"
 
 
@@ -177,4 +158,3 @@ class EcoliEcocycGraph():
         self.adj = adj
         self.adjs = adjs
         self.adjs_name = adjs_name
->>>>>>> master
