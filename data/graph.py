@@ -120,8 +120,8 @@ def get_path(graph):
     elif graph == "pathway":
         return "/data/lisa/data/genomics/graph/pathway_commons.hdf5"
     elif graph == "pancan":
-        return "/data/lisa/data/genomics/graph/pancan-tissue-graph.hdf5"
-
+        #return "/data/lisa/data/genomics/graph/pancan-tissue-graph.hdf5"
+        return "./genomics/graph/pancan-tissue-graph.hdf5"
 
 class EcoliEcocycGraph():
 

@@ -72,7 +72,7 @@ def split_dataset(dataset, batch_size=100, random=False, train_ratio=0.8, seed=1
     return train_set, valid_set, test_set
 
 
-def get_dataset(data_dir, data_file, seed, nb_class, nb_examples, nb_nodes, dataset):
+def get_dataset(data_dir, data_file, seed, nb_class, nb_examples, nb_nodes, dataset, opt):
     """
     Get a dataset based on the options.
     :param opt:
@@ -84,7 +84,7 @@ def get_dataset(data_dir, data_file, seed, nb_class, nb_examples, nb_nodes, data
 
     elif dataset == 'tcga-tissue':
         logging.info("Getting TCGA tissue type")
-        dataset = TCGATissue(opt=opt)
+        dataset = TCGATissue(data_dir=data_dir, data_file=data_file, seed=seed, nb_class=nb_class, nb_examples=nb_examples, nb_nodes=nb_nodes)
 
     elif dataset == 'tcga-brca':
         logging.info("Getting TCGA BRCA type")
