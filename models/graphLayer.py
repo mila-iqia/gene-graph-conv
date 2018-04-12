@@ -476,6 +476,12 @@ def get_transform(opt, adj):
         logging.info("Normalizing the graph...")
         adj_transform += [lambda layer_id: ApprNormalizeLaplacian()]  # Normalize the graph
 
+    #if opt.pool_graph == "ignore":
+#        def get_aggregate(self, layer_id):
+#            return self.aggregates[layer_id]
+#        def get_adj(self, adj, layer_id):
+#            return self.adjs[layer_id]
+
     # Our adj transform method.
     adj_transform = transforms.Compose(adj_transform)
     agregator = AggregationGraph(adj, opt.num_layer, adj_transform=adj_transform, on_cuda=opt.cuda, cluster_type=opt.pool_graph)  # TODO: pooling and stuff

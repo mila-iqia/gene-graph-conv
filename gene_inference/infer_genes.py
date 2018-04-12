@@ -2,13 +2,13 @@ import sys
 import pandas as pd
 
 
-def infer_gene(method, genes, gene_to_infer, train_size, test_size, trials, penalty=False):
-    mean = genes[gene_to_infer].mean()
-    labels = [1 if x > mean else 0 for x in genes[gene_to_infer]]
-    temp_genes = genes.drop(gene_to_infer, axis=1)
-
-    results = method(temp_genes, labels, trials, train_size, test_size, penalty=penalty)
-
+def infer_gene(method, dataset, gene_to_infer, train_size, test_size, trials, penalty=False):
+    mean = dataset.df[gene_to_infer].mean()
+    dataset.labels = [1 if x > mean else 0 for x in dataset.df[gene_to_infer]]
+    temp_df = dataset.df
+    dataset.df = dataset.df.drop(gene_to_infer, axis=1)
+    results = method(dataset, trials, train_size, test_size, penalty=penalty)
+    dataset.df = temp_df
     data = {"gene_name": gene_to_infer,
             "auc": results[0],
             "std": results[1]

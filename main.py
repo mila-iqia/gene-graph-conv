@@ -124,7 +124,7 @@ def main(argv=None):
 
     # Setup the loss
     #criterion = torch.nn.CrossEntropyLoss(size_average=True)
-    criterions = otim.get_criterion(opt, dataset)
+    criterions = otim.get_criterion(dataset, opt.training_mode)
     l1_criterion = torch.nn.L1Loss(size_average=False)
 
     if opt.cuda:
@@ -156,7 +156,7 @@ def main(argv=None):
             y_pred = my_model(inputs)
 
             # Compute and print loss
-            crit_loss = otim.compute_loss(opt, criterions, y_pred, targets)
+            crit_loss = otim.compute_loss(criterions, y_pred, targets, opt.training_mode, opt.semi_mse_lambda)
             model_regularization_loss = my_model.regularization(opt.model_reg_lambda)
             l1_loss = setup_l1_loss(my_model, opt.l1_loss_lambda, l1_criterion, opt.cuda)
             total_loss = crit_loss + model_regularization_loss + l1_loss
@@ -170,7 +170,7 @@ def main(argv=None):
         time_this_epoch = time.time() - start_timer
 
         if opt.training_mode != 'unsupervised':
-            acc, auc = record_metrics_for_epoch(writer, crit_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, dataset, opt)
+            acc, auc = record_metrics_for_epoch(writer, crit_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, dataset, opt.cuda)
             summary = [
                 t,
                 crit_loss.data[0],

@@ -98,7 +98,7 @@ def compute_metrics_per_class(data, model, nb_class, idx_to_str, on_cuda=False,
     return metrics
 
 
-def record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, dataset, opt):
+def record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, dataset, cuda):
     # Add some metric for tensorboard
     # Loss
     writer.scalar_summary('cross_loss', cross_loss.data[0], t)
@@ -110,13 +110,13 @@ def record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch,
     acc = {}
     auc_dict = {}
     for my_set, set_name in zip([train_set, valid_set, test_set], ['train', 'valid', 'test']):
-        acc[set_name] = accuracy(my_set, my_model, on_cuda=opt.cuda)
-        auc_dict[set_name] = auc(my_set, my_model, on_cuda=opt.cuda)
+        acc[set_name] = accuracy(my_set, my_model, on_cuda=cuda)
+        auc_dict[set_name] = auc(my_set, my_model, on_cuda=cuda)
 
         writer.scalar_summary('acc_{}'.format(set_name), acc[set_name], t)
         writer.scalar_summary('auc_{}'.format(set_name), auc_dict[set_name], t)
         # accuracy for a different class
-        metric_per_class = compute_metrics_per_class(my_set, my_model, dataset.nb_class, lambda x: dataset.labels_name(x), on_cuda=opt.cuda)
+        metric_per_class = compute_metrics_per_class(my_set, my_model, dataset.nb_class, lambda x: dataset.labels_name(x), on_cuda=cuda)
 
         for m, value in metric_per_class.iteritems():
             for cl, v in value.iteritems():
