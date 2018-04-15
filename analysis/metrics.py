@@ -98,13 +98,14 @@ def compute_metrics_per_class(data, model, nb_class, idx_to_str, on_cuda=False,
     return metrics
 
 
-def record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, dataset, cuda):
+def record_metrics_for_epoch(writer=None, cross_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, dataset, cuda):
     # Add some metric for tensorboard
     # Loss
-    writer.scalar_summary('cross_loss', cross_loss.data[0], t)
-    # writer.scalar_summary('other_loss', other_loss.data[0], t)
-    writer.scalar_summary('total_loss', total_loss.data[0], t)
-    writer.scalar_summary('time', time_this_epoch, t)
+    if writer:
+        writer.scalar_summary('cross_loss', cross_loss.data[0], t)
+        # writer.scalar_summary('other_loss', other_loss.data[0], t)
+        writer.scalar_summary('total_loss', total_loss.data[0], t)
+        writer.scalar_summary('time', time_this_epoch, t)
 
     # compute the metrics for all the sets, for all the classes. right now it's precision/recall/f1-score, for train and valid.
     acc = {}
@@ -112,15 +113,15 @@ def record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch,
     for my_set, set_name in zip([train_set, valid_set, test_set], ['train', 'valid', 'test']):
         acc[set_name] = accuracy(my_set, my_model, on_cuda=cuda)
         auc_dict[set_name] = auc(my_set, my_model, on_cuda=cuda)
-
-        writer.scalar_summary('acc_{}'.format(set_name), acc[set_name], t)
-        writer.scalar_summary('auc_{}'.format(set_name), auc_dict[set_name], t)
+        if writer:
+            writer.scalar_summary('acc_{}'.format(set_name), acc[set_name], t)
+            writer.scalar_summary('auc_{}'.format(set_name), auc_dict[set_name], t)
         # accuracy for a different class
         metric_per_class = compute_metrics_per_class(my_set, my_model, dataset.nb_class, lambda x: dataset.labels_name(x), on_cuda=cuda)
-
-        for m, value in metric_per_class.iteritems():
-            for cl, v in value.iteritems():
-                writer.scalar_summary('{}/{}/{}'.format(m, set_name, cl), v, t)  # metric/set/class
+        if writer:
+            for m, value in metric_per_class.iteritems():
+                for cl, v in value.iteritems():
+                    writer.scalar_summary('{}/{}/{}'.format(m, set_name, cl), v, t)  # metric/set/class
     return acc, auc_dict
 
 
