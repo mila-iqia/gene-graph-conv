@@ -70,7 +70,7 @@ class TestMaxPooling(unittest.TestCase):
                 for c in range(2):
                     solution[i, c] = np.max(x[0, c] * self.adj_p1[i]) # It's the max of the neighbours
 
-        agr = graphLayer.AgregateGraph(torch.FloatTensor(self.adj_p1), to_keep, type='max')
+        agr = graphLayer.AggregateGraph(torch.FloatTensor(self.adj_p1), to_keep, type='max')
 
         # import ipdb; ipdb.set_trace()
         #print solution, x.transpose((0, 2, 1))

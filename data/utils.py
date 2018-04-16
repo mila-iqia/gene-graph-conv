@@ -1,11 +1,9 @@
 import logging
 import numpy as np
-import torch
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 from gene_datasets import BRCACoexpr, GBMDataset, TCGATissue, NSLRSyntheticDataset
 from datasets import RandomDataset, PercolateDataset
-import datasets
 import data, data.colombos
 
 
@@ -74,40 +72,40 @@ def split_dataset(dataset, batch_size=100, random=False, train_ratio=0.8, seed=1
     return train_set, valid_set, test_set
 
 
-def get_dataset(opt):
+def get_dataset(data_dir, data_file, seed, nb_class, nb_examples, nb_nodes, dataset):
     """
     Get a dataset based on the options.
     :param opt:
     :return:
     """
-    if opt.dataset == 'random':
+    if dataset == 'random':
         logging.info("Getting a random dataset")
-        dataset = RandomDataset(opt=opt)
+        dataset = RandomDataset(seed, nb_class, nb_examples, nb_nodes)
 
-    elif opt.dataset == 'tcga-tissue':
+    elif dataset == 'tcga-tissue':
         logging.info("Getting TCGA tissue type")
         dataset = TCGATissue(opt=opt)
 
-    elif opt.dataset == 'tcga-brca':
+    elif dataset == 'tcga-brca':
         logging.info("Getting TCGA BRCA type")
         dataset = BRCACoexpr(opt=opt)
 
-    elif opt.dataset == 'percolate':
+    elif dataset == 'percolate':
         dataset = PercolateDataset(opt=opt)
 
-    elif opt.dataset == 'tcga-gbm':
+    elif dataset == 'tcga-gbm':
         logging.info("Getting TCGA GBM Dataset")
-        dataset = GBMDataset(opt=opt)
+        dataset = GBMDataset(data_dir=data_dir, data_file=data_file, seed=seed, nb_class=nb_class, nb_examples=nb_examples, nb_nodes=nb_nodes)
 
-    elif opt.dataset == 'nslr-syn':
+    elif dataset == 'nslr-syn':
         logging.info("Getting NSLR Synthetic Dataset")
         dataset = NSLRSyntheticDataset(opt=opt)
 
-    elif opt.dataset == 'percolate-plus':
+    elif dataset == 'percolate-plus':
         logging.info("Getting percolate-plus Dataset")
         pdata = PercolateDataset(opt=opt)
         dataset = add_noise(dataset=pdata, num_added_nodes=opt.extra_ucn)
-        
+
     elif opt.dataset == 'ecoli':
         logging.info("Getting ecoli Dataset")
         dataset = data.colombos.EcoliDataset(opt=opt)
@@ -183,8 +181,3 @@ class InpaintingGraph(object):
             return np.concatenate([inputs_supervised, inputs_unsupervised], -1), [labels, to_predict]
         else:
             return inputs_unsupervised, to_predict
-
-
-
-
-

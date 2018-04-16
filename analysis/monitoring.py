@@ -9,6 +9,7 @@ from torch.autograd import Variable
 from models.models import get_model
 import hashlib
 
+
 def feature_selection(model, dataset, opt, top=100):
 
     """
@@ -49,22 +50,22 @@ def get_graph(model):
     """
     Get the graph of a model.
     :param model:
-    :return:
+    :result:
     """
 
-    retn = []
+    result = []
 
     if not issubclass(model.__class__, GraphNetwork):
         print "The model is not a graph convolution."
-        return retn
+        return result
 
     # Go over all convolution
     for conv_layer in model.my_convs:
         adj = conv_layer.adj
         to_keep = conv_layer.to_keep
-        retn.append([adj, to_keep])
+        result.append([adj, to_keep])
 
-    return retn
+    return result
 
 
 def get_representation(model, dataset, opt):
@@ -83,7 +84,7 @@ def get_representation(model, dataset, opt):
 
     # Get one representation.
     for no_b, mini in enumerate(dataset):
-        inputs, targets = mini[0], mini[1]
+        inputs, targets = mini['sample'], mini['labels']
         inputs = Variable(inputs, requires_grad=False).float()
 
         if opt.cuda:
@@ -94,9 +95,6 @@ def get_representation(model, dataset, opt):
 
         # Forward pass: Compute predicted y by passing x to the model
         retn = model.get_representation()
-
-        if type(targets) == list:
-            targets = targets[0]
         retn['example'] = {'input': inputs.cpu().data.numpy(), 'output': targets.cpu().numpy()}
 
         break
@@ -188,7 +186,7 @@ def save_checkpoint(model, optimizer, epoch, opt, exp_dir, filename='checkpoint.
     filename = os.path.join(exp_dir, filename)
     torch.save(state, filename)
 
-def load_checkpoint(load_folder, opt, dataset, filename='checkpoint.pth.tar'):
+def load_checkpoint(load_folder, opt, dataset, graph, filename='checkpoint.pth.tar'):
 
     # Model
     model_state = None
@@ -199,12 +197,8 @@ def load_checkpoint(load_folder, opt, dataset, filename='checkpoint.pth.tar'):
     # Optimizser
     optimizer_state = None
 
-    # Options
-    new_opt = opt
-
     # Load the states if we saved them.
-    if opt.load_folder:
-
+    if opt.load_folder and opt.load_checkpoint:
         # Loading all the state
         filename = os.path.join(load_folder, filename)
         if os.path.isfile(filename):
@@ -213,8 +207,8 @@ def load_checkpoint(load_folder, opt, dataset, filename='checkpoint.pth.tar'):
             start_epoch = checkpoint['epoch']
 
             # Loading the options
-            new_opt = checkpoint['opt']
-            print "Loading the model with these parameters: {}".format(new_opt)
+            opt = checkpoint['opt']
+            print "Loading the model with these parameters: {}".format(opt)
 
             # Loading the state
             model_state = checkpoint['state_dict']
@@ -223,18 +217,33 @@ def load_checkpoint(load_folder, opt, dataset, filename='checkpoint.pth.tar'):
 
             # We override some of the options between the runs, otherwise it might be a pain.
             new_opt.epoch = opt.epoch
-            if str(new_opt.training_mode) != str(opt.training_mode):
+            if str(opt.training_mode) != str(opt.training_mode):
                 optimizer_state = None
 
-            new_opt.training_mode = opt.training_mode
+            opt.training_mode = opt.training_mode
             print"=> loaded checkpoint '{}' (epoch {})".format(filename, epoch)
         else:
             print("=> no checkpoint found at '{}'".format(filename))
 
+
     # Get the network
-
-
-    my_model = get_model(new_opt, dataset, model_state)
+    my_model = get_model(opt.seed,
+                         opt.nb_class,
+                         opt.nb_examples,
+                         opt.nb_nodes,
+                         opt.model,
+                         opt.cuda,
+                         opt.num_channel,
+                         opt.num_layer,
+                         opt.use_emb,
+                         opt.dropout,
+                         opt.training_mode,
+                         opt.use_gate,
+                         opt.nb_attention_head,
+                         graph,
+                         dataset,
+                         model_state,
+                         opt)
 
     # Get the optimizer
     optimizer = torch.optim.Adam(my_model.parameters(), lr=opt.lr, weight_decay=opt.weight_decay)
@@ -244,4 +253,4 @@ def load_checkpoint(load_folder, opt, dataset, filename='checkpoint.pth.tar'):
     print "Our model:"
     print my_model
 
-    return my_model, optimizer, epoch, new_opt
+    return my_model, optimizer, epoch, opt

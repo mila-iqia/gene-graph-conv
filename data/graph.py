@@ -9,26 +9,15 @@ import pandas as pd
 import itertools
 
 class Graph(object):
-    def __init__(self, opt, dataset):
+    def __init__(self):
+        pass
 
-#        if opt.graph == "random":
-#            self.load_random_adjacency(nb_nodes=dataset.nb_nodes, approx_nb_edges=opt.approx_nb_edges, scale_free=opt.scale_free)
-#        elif opt.dataset == "percolate" or opt.dataset == "percolate-plus":
-#            self.generate_percolate(opt)
-#        elif opt.graph is not None:
-#            self.load_graph(get_path(opt.graph))
-        self.merge_data_and_graph(dataset, is_random_graph=opt.graph == "random")
-
-    def merge_data_and_graph(self, dataset, is_random_graph):
-        if not is_random_graph:
-            intersection = np.intersect1d(self.node_names, dataset.node_names)
-            dataset.df = dataset.df[intersection]
-            dataset.data = dataset.df.as_matrix()
-            self.df = self.df[intersection].filter(items=intersection, axis='index')
-            self.adj = self.df.as_matrix()
-        else:
-            dataset.data = dataset.df.as_matrix()
-            self.adj = self.df.as_matrix()
+    def intersection_with(self, dataset):
+        intersection = np.intersect1d(self.node_names, dataset.node_names)
+        dataset.df = dataset.df[intersection]
+        dataset.data = dataset.df.as_matrix()
+        self.df = self.df[intersection].filter(items=intersection, axis='index')
+        self.adj = self.df.as_matrix()
 
     def load_random_adjacency(self, nb_nodes, approx_nb_edges, scale_free=True):
         nodes = np.arange(nb_nodes)
@@ -130,21 +119,23 @@ def get_path(graph):
         return "/data/lisa/data/genomics/graph/trust.hdf5"
     elif graph == "pathway":
         return "/data/lisa/data/genomics/graph/pathway_commons.hdf5"
+    elif graph == "pancan":
+        return "/data/lisa/data/genomics/graph/pancan-tissue-graph.hdf5"
 
-    
+
 class EcoliEcocycGraph():
 
     def __init__(self, opt=None):
-        
+
         d = pd.read_csv("data/ecocyc-21.5-pathways.col", sep="\t", skiprows=40,header=None)
         d = d.set_index(0)
         del d[1]
         d = d.loc[:,:110] # filter gene ids
-        
+
         # collect global names for nodes so all adj are aligned
         node_names = d.as_matrix().reshape(-1).astype(str)
         node_names = np.unique(node_names[node_names!= "nan"]) # nan removal
-        
+
         #stores all subgraphs and their pathway names
         adjs = []
         adjs_name = []
@@ -158,14 +149,11 @@ class EcoliEcocycGraph():
             adj = nx.to_numpy_matrix(G)
             adjs.append(adj)
             adjs_name.append(name)
-            
+
         #collapse all graphs to one graph
         adj = np.sum(adjs,axis=0)
         adj = np.clip(adj,0,1)
-        
+
         self.adj = adj
         self.adjs = adjs
         self.adjs_name = adjs_name
-        
-        
-        
