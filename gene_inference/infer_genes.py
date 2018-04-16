@@ -20,9 +20,9 @@ def infer_all_genes(method, genes, train_size, test_size, trials, penalty):
     results = pd.DataFrame(columns=["gene_name",
                                     "auc",
                                     "std"])
-    sys.stdout.write("num genes: " + str(len(genes.columns)))
+    sys.stdout.write("num genes: " + str(len(genes.df.columns)))
 
-    for index, gene in enumerate(genes):
+    for index, gene in enumerate(genes.df):
         sys.stdout.write(str(index) + ", ")
         # This throws errors sometimes when we give really unbalanced training sets. Those genes aren't particularly interesting for this usecase though, so we can ignore them,
         try:
