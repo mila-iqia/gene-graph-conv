@@ -26,10 +26,10 @@ class EmbeddingLayer(nn.Module):
 
     def reset_parameters(self):
         stdv = 1. / np.sqrt(self.emb.size(1))        # also, reduce the gene dataset to just the first degree neighbors of the target gene
-        if self.labels.shape != self.labels[:].reshape(-1).shape:
-            print "Converting one-hot labels to integers"
-            self.labels = np.argmax(self.labels[:], axis=1)
-
+        #if self.labels.shape != self.labels[:].reshape(-1).shape:
+        #    print "Converting one-hot labels to integers"
+        #    self.labels = np.argmax(self.labels[:], axis=1)
+	#
         self.emb.data.uniform_(-stdv, stdv)
 
 
