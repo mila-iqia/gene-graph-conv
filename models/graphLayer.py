@@ -472,7 +472,7 @@ def get_transform(opt, adj):
         logging.info("Adding the connectivity after each layer...")
         adj_transform += [lambda layer_id: AugmentGraphConnectivity(please_ignore=layer_id == 0)]  # Augmenting the connectivity of each layer.
 
-    if opt.norm_adj:
+    if False:#opt.norm_adj:
         logging.info("Normalizing the graph...")
         adj_transform += [lambda layer_id: ApprNormalizeLaplacian()]  # Normalize the graph
 

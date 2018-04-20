@@ -2,7 +2,7 @@ import logging
 import numpy as np
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
-from gene_datasets import BRCACoexpr, GBMDataset, TCGATissue, NSLRSyntheticDataset
+from gene_datasets import BRCACoexpr, GBMDataset, TCGATissue, NSLRSyntheticDataset, TCGAGeneInference
 from datasets import RandomDataset, PercolateDataset
 import data, data.colombos
 
@@ -84,7 +84,7 @@ def get_dataset(data_dir, data_file, seed, nb_class, nb_examples, nb_nodes, data
 
     elif dataset == 'tcga-tissue':
         logging.info("Getting TCGA tissue type")
-        dataset = TCGATissue(data_dir=data_dir, data_file=data_file, seed=seed, nb_class=nb_class, nb_examples=nb_examples, nb_nodes=nb_nodes)
+        dataset = TCGATissue(seed=seed, nb_class=nb_class, nb_examples=nb_examples, nb_nodes=nb_nodes)
 
     elif dataset == 'tcga-brca':
         logging.info("Getting TCGA BRCA type")
@@ -109,6 +109,10 @@ def get_dataset(data_dir, data_file, seed, nb_class, nb_examples, nb_nodes, data
     elif opt.dataset == 'ecoli':
         logging.info("Getting ecoli Dataset")
         dataset = data.colombos.EcoliDataset(opt=opt)
+    elif opt.dataset == 'tcga-tissue-gene-inference':
+        logging.info("TCGA tissue gene inference")
+        dataset = TCGAGeneInference(seed=seed, nb_class=nb_class, nb_examples=nb_examples, nb_nodes=nb_nodes)
+
     else:
         raise ValueError
     return dataset
