@@ -2,13 +2,13 @@ import sys
 import pandas as pd
 
 
-def infer_gene(method, genes, gene_to_infer, train_size, test_size, trials, penalty=False):
-    mean = genes[gene_to_infer].mean()
-    labels = [1 if x > mean else 0 for x in genes[gene_to_infer]]
-    temp_genes = genes.drop(gene_to_infer, axis=1)
-
-    results = method(temp_genes, labels, trials, train_size, test_size, penalty=penalty)
-
+def infer_gene(method, dataset, gene_to_infer, train_size, test_size, trials, model=None, penalty=False):
+    mean = dataset.df[gene_to_infer].mean()
+    dataset.labels = [1 if x > mean else 0 for x in dataset.df[gene_to_infer]]
+    temp_df = dataset.df
+    dataset.df = dataset.df.drop(gene_to_infer, axis=1)
+    results = method(dataset, trials, train_size, test_size, penalty=penalty, model=model)
+    dataset.df = temp_df
     data = {"gene_name": gene_to_infer,
             "auc": results[0],
             "std": results[1]
@@ -34,21 +34,23 @@ def infer_all_genes(method, genes, train_size, test_size, trials, penalty):
     return results
 
 
-def sample_neighbors(g, gene, num_neighbors):
-    results = set([gene])
+def sample_neighbors(g, gene, num_neighbors, include_self=True):
+    results = set([])
+    if include_self:
+        results = set([gene])
     all_nodes = set(g.nodes)
     first_degree = set(g.neighbors(gene))
     second_degree = set()
     for x in g.neighbors(gene):
         second_degree = second_degree.union(set(g.neighbors(x)))
     while len(results) < num_neighbors:
-        if len(first_degree - results) > 0:
-            unique = first_degree - results
+        if len(first_degree) - len(results) > 0:
+            unique = sorted(first_degree - results)
             results.add(unique.pop())
-        elif len(second_degree - results) > 0:
-            unique = second_degree - results
+        elif len(second_degree) - len(results) > 0:
+            unique = sorted(second_degree - results)
             results.add(unique.pop())
         else:
-            unique = all_nodes - results
+            unique = sorted(all_nodes - results)
             results.add(unique.pop())
     return results

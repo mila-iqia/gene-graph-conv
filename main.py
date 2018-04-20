@@ -60,7 +60,7 @@ def build_parser():
     parser.add_argument('--extra-ucn', default=0, type=int, help="The number of extra nodes without edges in the percolate-plus dataset")
     parser.add_argument('--disconnected', default=0, type=int, help="The number of disconnected nodes from the perc subgraph without edges in percolate-plus")
     parser.add_argument('--center', default=False, type=bool, help="center the data (subtract mean from each element)?")
-    parser.add_argument('--graph', default=None, choices=['kegg', 'pathway', 'trust', 'random', 'ecoli'], help="Which graph with which to prior")
+    parser.add_argument('--graph', default=None, choices=['kegg', 'pathway', 'trust', 'pancan', 'random', 'ecoli'], help="Which graph with which to prior")
     parser.add_argument('--approx-nb-edges', default=100, type=int, help="If we have a randomly generated graph, this is the approx nb of edges")
     parser.add_argument('--nb-nodes', default=None, type=int, help="If we have a randomly generated graph, this is the nb of nodes")
     parser.add_argument('--training-mode', default=None, choices=['semi', 'unsupervised'], help="which training mode we want to use.")
@@ -106,7 +106,7 @@ def main(argv=None):
         graph.load_graph(get_path(opt.graph))
 
     logging.info("Getting the dataset...")
-    dataset = get_dataset(opt.data_dir, opt.data_file, opt.seed, opt.nb_class, opt.nb_examples, opt.nb_nodes, opt.dataset)
+    dataset = get_dataset(opt.data_dir, opt.data_file, opt.seed, opt.nb_class, opt.nb_examples, opt.nb_nodes, opt.dataset, opt)
 
     if graph is not None:
         graph.intersection_with(dataset)
@@ -124,7 +124,7 @@ def main(argv=None):
 
     # Setup the loss
     #criterion = torch.nn.CrossEntropyLoss(size_average=True)
-    criterions = otim.get_criterion(opt, dataset)
+    criterions = otim.get_criterion(dataset, opt.training_mode)
     l1_criterion = torch.nn.L1Loss(size_average=False)
 
     if opt.cuda:
@@ -156,7 +156,7 @@ def main(argv=None):
             y_pred = my_model(inputs)
 
             # Compute and print loss
-            crit_loss = otim.compute_loss(opt, criterions, y_pred, targets)
+            crit_loss = otim.compute_loss(criterions, y_pred, targets, opt.training_mode, opt.semi_mse_lambda)
             model_regularization_loss = my_model.regularization(opt.model_reg_lambda)
             l1_loss = setup_l1_loss(my_model, opt.l1_loss_lambda, l1_criterion, opt.cuda)
             total_loss = crit_loss + model_regularization_loss + l1_loss
@@ -170,7 +170,7 @@ def main(argv=None):
         time_this_epoch = time.time() - start_timer
 
         if opt.training_mode != 'unsupervised':
-            acc, auc = record_metrics_for_epoch(writer, crit_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, dataset, opt)
+            acc, auc = record_metrics_for_epoch(writer, crit_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, dataset, opt.cuda)
             summary = [
                 t,
                 crit_loss.data[0],

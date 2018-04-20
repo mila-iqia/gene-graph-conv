@@ -122,7 +122,7 @@ class AggregationGraph(object):
                                                                       memory='testing123_123', connectivity=(adj > 0.).astype(int),
                                                                       compute_full_tree='auto', linkage='ward')
             ids = self.clustering.fit_predict(self.adj)  # all nodes has a cluster.
-        elif self.cluster_type is None:
+        elif self.cluster_type is None or self.cluster_type == 'ignore':
             pass
         elif self.cluster_type == 'grid':
             grid_size = int(np.sqrt(nb_nodes))
@@ -464,7 +464,6 @@ def get_transform(opt, adj):
     """
 
     adj_transform = []
-
     if opt.add_self:
         logging.info("Adding self connection to the graph...")
         adj_transform += [lambda layer_id: SelfConnection(opt.add_self, please_ignore=False)]  # Add a self connection.
@@ -476,6 +475,12 @@ def get_transform(opt, adj):
     if opt.norm_adj:
         logging.info("Normalizing the graph...")
         adj_transform += [lambda layer_id: ApprNormalizeLaplacian()]  # Normalize the graph
+
+    #if opt.pool_graph == "ignore":
+#        def get_aggregate(self, layer_id):
+#            return self.aggregates[layer_id]
+#        def get_adj(self, adj, layer_id):
+#            return self.adjs[layer_id]
 
     # Our adj transform method.
     adj_transform = transforms.Compose(adj_transform)
