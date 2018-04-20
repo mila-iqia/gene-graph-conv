@@ -147,9 +147,9 @@ def get_state_dict(model, convert_to_numpy=True):
 
 def monitor_everything(model, dataset, opt, exp_dir):
     print "Saving everything in:", exp_dir
-    print "Extracting the graphs..."
-    graphs = get_graph(model)
-    pickle.dump(graphs, open(os.path.join(exp_dir, 'graphs.pkl'), 'wb'))
+    #print "Extracting the graphs..."
+    #graphs = get_graph(model)
+    #pickle.dump(graphs, open(os.path.join(exp_dir, 'graphs.pkl'), 'wb'))
 
     print "Saving a representation..."
     rep = get_representation(model, dataset, opt)

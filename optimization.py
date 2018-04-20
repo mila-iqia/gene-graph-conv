@@ -18,6 +18,9 @@ def get_criterion(dataset, training_mode=None):
         #do transform
         dataset.transform = utils.InpaintingGraph(dataset.graph, keep_original=False)
 
+    if training_mode == 'gene-inference':
+        criterions = torch.nn.MSELoss(size_average=True)
+
     return criterions
 
 
@@ -49,3 +52,15 @@ def compute_loss(criterions, y_pred, targets, training_mode=None, semi_mse_lambd
         y_pred[1] = y_pred[1] * to_check.float()
         mse_loss = mse(y_pred[1].float(), targets_semi.float())
         return ce_loss.mean() + semi_mse_lambda * mse_loss.mean()
+
+    elif training_mode == 'gene-inference':
+
+        #import ipdb; ipdb.set_trace()
+
+        targets_uns = Variable(targets, requires_grad=False).squeeze(-1)
+        mse = criterions
+        to_check = targets_uns != 0.
+        y_pred = y_pred * to_check.float()
+        #import ipdb; ipdb.set_trace()
+        mse_loss = mse(y_pred.float(), targets_uns.float()) * y_pred.size(1)
+        return mse_loss.mean()

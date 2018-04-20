@@ -98,7 +98,7 @@ def compute_metrics_per_class(data, model, nb_class, idx_to_str, on_cuda=False,
     return metrics
 
 
-def record_metrics_for_epoch(writer=None, cross_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, dataset, cuda):
+def record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, dataset, cuda):
     # Add some metric for tensorboard
     # Loss
     if writer:
