@@ -29,7 +29,6 @@ class EmbeddingLayer(nn.Module):
         #if self.labels.shape != self.labels[:].reshape(-1).shape:
         #    print "Converting one-hot labels to integers"
         #    self.labels = np.argmax(self.labels[:], axis=1)
-
         self.emb.data.uniform_(-stdv, stdv)
 
 
