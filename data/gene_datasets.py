@@ -65,6 +65,40 @@ class TCGATissue(GeneDataset):
     def __init__(self, data_dir='/data/lisa/data/genomics/TCGA/', data_file='TCGA_tissue_ppi.hdf5', **kwargs):
         super(TCGATissue, self).__init__(data_dir=data_dir, data_file=data_file, name='TCGATissue', **kwargs)
 
+class TCGAGeneInference(GeneDataset):
+    """TCGA Dataset. We predict tissue."""
+    def __init__(self, data_dir='/data/lisa/data/genomics/TCGA/', data_file='TCGA_tissue_ppi.hdf5', **kwargs):
+        super(TCGAGeneInference, self).__init__(data_dir=data_dir, data_file=data_file, name='TCGATissue', **kwargs)
+
+
+        total_gene = 5000
+        all_genes = np.arange(total_gene)
+        np.random.shuffle(all_genes)
+
+        # Do something not stupid here.
+        self.gene_to_keep = all_genes[:total_gene/2]
+        self.gene_to_infer = all_genes[total_gene/2:total_gene]
+        self.df = self.df.iloc[:, :total_gene]
+        self.data = self.data[:, :total_gene]
+        self.nb_nodes = total_gene
+        self.node_names = self.df.columns
+
+        #import ipdb; ipdb.set_trace()
+
+    def __getitem__(self, idx):
+        sample = self.data[idx]
+        sample[self.gene_to_infer] = 0.
+        sample[self.gene_to_keep] += 1e-8
+
+        sample = np.expand_dims(sample, axis=-1)
+
+        label = self.data[idx]
+        label[self.gene_to_keep] = 0.
+        label[self.gene_to_infer] += 1e-8
+
+        sample = {'sample': sample, 'labels': label}
+        return sample
+
 
 class TCGAForLabel(GeneDataset):
     """TCGA Dataset."""

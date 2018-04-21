@@ -29,7 +29,6 @@ class EmbeddingLayer(nn.Module):
         #if self.labels.shape != self.labels[:].reshape(-1).shape:
         #    print "Converting one-hot labels to integers"
         #    self.labels = np.argmax(self.labels[:], axis=1)
-	#
         self.emb.data.uniform_(-stdv, stdv)
 
 
@@ -275,6 +274,9 @@ class GraphNetwork(nn.Module):
         if self.training_mode == 'semi':
             self.last_semi_layer = nn.Conv1d(dims[-1], 1, 1, bias=True)
 
+        if self.training_mode == 'gene-inference':
+            self.last_inference_layer = nn.Conv1d(dims[-1], 1, 1, bias=True)
+
         logging.info("Done!")
         # TODO: add all the funky bells and stuff that the old CGN has.
 
@@ -299,6 +301,42 @@ class GraphNetwork(nn.Module):
             semi = self.semi_supervised(x[:, :, nb_channels/2:])
 
             return [supervised, semi]
+
+        elif self.training_mode == 'gene-inference':
+            return self.gene_inference(x)
+
+
+    def gene_inference(self, x):
+
+        nb_examples, nb_nodes, nb_channels = x.size()
+
+        if self.add_emb:
+            x = self.emb(x)
+            x.register_hook(self.save_grad('emb'))
+
+        for i, [layer, dropout] in enumerate(zip(self.my_convs, self.my_dropouts)):
+
+            x = layer(x)
+            x = F.relu(x)  # + old_x
+            x.register_hook(self.save_grad('layer_{}'.format(i)))
+
+
+            if dropout is not None:
+                id_to_keep = dropout(torch.FloatTensor(np.ones((x.size(0), x.size(1))))).unsqueeze(2)
+                if self.on_cuda:
+                    id_to_keep = id_to_keep.cuda()
+
+                x = x * id_to_keep
+
+        # Do attention pooling here
+        #if self.attention_head:
+        #    x, attn = self.attentionLayer(x)
+
+        x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
+        x = self.last_inference_layer(x)
+        x = x.permute(0, 2, 1).contiguous()  # from ex, ch, node -> ex, node, ch
+
+        return x
 
     def semi_supervised(self, x):
 
@@ -416,15 +454,19 @@ class LCG(GraphNetwork):
 
 
 class MLP(nn.Module):
-    def __init__(self, input_dim, channels, out_dim=None, on_cuda=True, dropout=False):
+    def __init__(self, input_dim, channels, out_dim=None, on_cuda=True, dropout=False, training_mode=None):
         super(MLP, self).__init__()
         out_dim = out_dim if out_dim is not None else 2
         input_dim = input_dim if input_dim is not None else 2
+
+        if training_mode == 'gene-inference':
+            out_dim = input_dim
 
         self.my_layers = []
         self.out_dim = out_dim
         self.on_cuda = on_cuda
         self.dropout = dropout
+        self.training_mode = training_mode
 
         dims = [input_dim] + channels
 
@@ -560,21 +602,21 @@ def get_model(seed, nb_class, nb_examples, nb_nodes, model, on_cuda, num_channel
     if model == 'cgn':
         assert graph is not None
         adj_transform, aggregate_function = graphLayer.get_transform(opt, graph.adj)
-        my_model = CGN(nb_nodes=nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
+        my_model = CGN(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
                        on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
                        attention_head=nb_attention_head, training_mode=training_mode)
 
     elif model == 'lcg':
         assert graph is not None
         adj_transform, aggregate_function = graphLayer.get_transform(opt, graph.adj)
-        my_model = LCG(nb_nodes=nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
+        my_model = LCG(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
                        on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
                        attention_head=nb_attention_head, training_mode=training_mode)
 
     elif model == 'sgc':
         assert graph is not None
         adj_transform, aggregate_function = graphLayer.get_transform(opt, graph.adj)
-        my_model = SGC(nb_nodes=nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
+        my_model = SGC(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
                        on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
                        attention_head=nb_attention_head, training_mode=training_mode)
 
@@ -586,7 +628,7 @@ def get_model(seed, nb_class, nb_examples, nb_nodes, model, on_cuda, num_channel
         my_model = LogisticRegression(nb_nodes=nb_nodes, input_dim=1, out_dim=nb_class, on_cuda=on_cuda)
 
     elif model == 'mlp':
-        my_model = MLP(dataset.nb_nodes, [num_channel] * num_layer, nb_class, on_cuda=on_cuda, dropout=dropout)
+        my_model = MLP(dataset.nb_nodes, [num_channel] * num_layer, nb_class, on_cuda=on_cuda, dropout=dropout, training_mode=training_mode)
 
     # elif model == 'random':
     #     my_model = Random(dataset.nb_nodes, [num_channel] * num_layer, dataset.nb_class, on_cuda=on_cuda)

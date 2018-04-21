@@ -52,9 +52,9 @@ def auc(data, model, on_cuda=False):
         all_preds = np.concatenate([all_preds, preds])
         all_targets = np.concatenate([all_targets, targets])
     try:
-	return metrics.roc_auc_score(all_targets, all_preds)
+	    return metrics.roc_auc_score(all_targets, all_preds)
     except ValueError:
-	return 1.0
+	    return 1.0
 
 def recall(preds, gts, cl):
     """How many revelant item are selected?"""
