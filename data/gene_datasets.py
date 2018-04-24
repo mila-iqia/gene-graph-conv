@@ -19,6 +19,7 @@ class GeneDataset(Dataset):
         self.sub_class = sub_class
         self.data_dir = data_dir
         self.data_file = data_file
+
         super(GeneDataset, self).__init__(name=name, seed=seed, nb_class=nb_class, nb_examples=nb_examples, nb_nodes=nb_nodes)
 
     def load_data(self):
@@ -117,19 +118,22 @@ class DGEXGEO(GeneDataset):
     	self.gene_to_infer = all_genes[lm_gene_num:]
 
 
+
     def __getitem__(self, idx):
         assert self.data.shape[1] == self.all_gene_num
-        sample = self.data[idx]
+        sample = self.data[idx].copy()
         sample[self.gene_to_infer] = 0.
         sample[self.gene_to_keep] += 1e-8
 
         sample = np.expand_dims(sample, axis=-1)
 
-        label = self.data[idx]
+        label = self.data[idx].copy()
         label[self.gene_to_keep] = 0.
         label[self.gene_to_infer] += 1e-8
 
         sample = {'sample': sample, 'labels': label}
+
+
         return sample
 
 

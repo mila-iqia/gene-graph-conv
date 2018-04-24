@@ -13,6 +13,8 @@ class Dataset(Dataset):
         self.nb_examples = nb_examples
         self.nb_nodes = nb_nodes
         self.load_data()
+        self.df = self.df - self.df.mean(0)
+        self.data = self.df.as_matrix()
 
     def load_data(self):
         raise NotImplementedError()

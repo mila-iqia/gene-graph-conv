@@ -8,7 +8,7 @@ import torch
 import time
 from torch.autograd import Variable
 from analysis import monitoring
-from analysis.metrics import record_metrics_for_epoch, summarize
+from analysis.metrics import record_metrics_for_epoch, summarize, record_metrics_mse
 import optimization as otim
 
 def build_parser():
@@ -192,19 +192,22 @@ def main(argv=None):
                 patience = 1000
 
         else:
+            mse = record_metrics_mse(my_model, writer, t, criterions, train_set, valid_set, test_set, dataset, opt.cuda)
             summary = [
                 t,
-                crit_loss.data[0],
+                mse['train'],
+                mse['valid'],
+                mse['test'],
                 time_this_epoch
             ]
-            summary = "epoch {}, cross_loss: {:.03f}, time: {:.02f} sec".format(*summary)
+            summary = "epoch {}, mse (train): {:.04f}, mse (valid): {:.04f}, mse (test): {:.03f}, time: {:.02f} sec".format(*summary)
             logging.info(summary)
 
         # Saving the checkpoint
         monitoring.save_checkpoint(my_model, optimizer, t, opt, exp_dir)
 
     logging.info("Done!")
-    monitoring.monitor_everything(my_model, valid_set, opt, exp_dir)
+    #monitoring.monitor_everything(my_model, valid_set, opt, exp_dir)
     return best_summary
 
 if __name__ == '__main__':

@@ -1,7 +1,7 @@
 import numpy as np
 from torch.autograd import Variable
 from sklearn import metrics
-
+import optimization as optim
 
 def format_mini(mini, model, on_cuda):
     inputs = Variable(mini['sample'], requires_grad=False).float()
@@ -123,6 +123,31 @@ def record_metrics_for_epoch(writer, cross_loss, total_loss, t, time_this_epoch,
 		# writer.scalar_summary('{}/{}/{}'.format(m, set_name, cl), v, t)  # metric/set/class
     return acc, auc_dict
 
+
+def record_metrics_mse(model, writer, t, criterions, train_set, valid_set, test_set, dataset, cuda):
+
+    # compute the metrics for all the sets, for all the classes. right now it's precision/recall/f1-score, for train and valid.
+    mse_map = {}
+    model.eval()
+    for my_set, set_name in zip([train_set, valid_set, test_set], ['train', 'valid', 'test']):
+
+        all_mse = []
+        for i, mini in enumerate(my_set):
+
+
+            preds, targets = format_mini(mini, model, cuda)
+            targets = mini['labels']
+            if cuda:
+                targets = targets.cuda()
+            #targets = Variable(targets, requires_grad=False).float()
+
+            mse = optim.compute_loss(criterions, preds, targets, training_mode='gene-inference', semi_mse_lambda=0)
+            all_mse.append(mse.data.cpu().numpy())
+
+        mse_map[set_name] = np.array(all_mse).mean()
+        writer.scalar_summary('mse/{}/'.format(set_name), mse_map[set_name], t)  # metric/set/class
+
+    return mse_map
 
 def summarize(epoch, cross_loss, total_loss, accuracy, auc):
     summary = {

@@ -197,6 +197,9 @@ def load_checkpoint(load_folder, opt, dataset, graph, filename='checkpoint.pth.t
     # Optimizser
     optimizer_state = None
 
+    #opt
+    new_opt = opt
+
     # Load the states if we saved them.
     if opt.load_folder and opt.load_checkpoint:
         # Loading all the state
@@ -207,7 +210,7 @@ def load_checkpoint(load_folder, opt, dataset, graph, filename='checkpoint.pth.t
             start_epoch = checkpoint['epoch']
 
             # Loading the options
-            opt = checkpoint['opt']
+            new_opt = checkpoint['opt']
             print "Loading the model with these parameters: {}".format(opt)
 
             # Loading the state
@@ -217,40 +220,43 @@ def load_checkpoint(load_folder, opt, dataset, graph, filename='checkpoint.pth.t
 
             # We override some of the options between the runs, otherwise it might be a pain.
             new_opt.epoch = opt.epoch
-            if str(opt.training_mode) != str(opt.training_mode):
+            if str(opt.training_mode) != str(new_opt.training_mode):
                 optimizer_state = None
 
-            opt.training_mode = opt.training_mode
+            new_opt.training_mode = opt.training_mode
             print"=> loaded checkpoint '{}' (epoch {})".format(filename, epoch)
         else:
             print("=> no checkpoint found at '{}'".format(filename))
 
 
     # Get the network
-    my_model = get_model(opt.seed,
-                         opt.nb_class,
-                         opt.nb_examples,
-                         opt.nb_nodes,
-                         opt.model,
-                         opt.cuda,
-                         opt.num_channel,
-                         opt.num_layer,
-                         opt.use_emb,
-                         opt.dropout,
-                         opt.training_mode,
-                         opt.use_gate,
-                         opt.nb_attention_head,
+    my_model = get_model(new_opt.seed,
+                         new_opt.nb_class,
+                         new_opt.nb_examples,
+                         new_opt.nb_nodes,
+                         new_opt.model,
+                         new_opt.cuda,
+                         new_opt.num_channel,
+                         new_opt.num_layer,
+                         new_opt.use_emb,
+                         new_opt.dropout,
+                         new_opt.training_mode,
+                         new_opt.use_gate,
+                         new_opt.nb_attention_head,
                          graph,
                          dataset,
                          model_state,
-                         opt)
+                         new_opt)
 
     # Get the optimizer
-    optimizer = torch.optim.Adam(my_model.parameters(), lr=opt.lr, weight_decay=opt.weight_decay)
+    optimizer = torch.optim.Adam(my_model.parameters(), lr=new_opt.lr, weight_decay=new_opt.weight_decay)
     if optimizer_state is not None:
-        optimizer.load_state_dict(optimizer_state)
+        try:
+            optimizer.load_state_dict(optimizer_state)
+        except:
+            print "The optimizer doesn't fit. returning a new one."
 
     print "Our model:"
     print my_model
 
-    return my_model, optimizer, epoch, opt
+    return my_model, optimizer, epoch, new_opt
