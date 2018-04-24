@@ -13,15 +13,29 @@ class Graph(object):
         pass
 
     def intersection_with(self, dataset):
-        import pdb; pdb.set_trace()
-	intersection = np.intersect1d(self.node_names, dataset.node_names)
-        #dataset.df = dataset.df[intersection]
-        #dataset.data = dataset.df.as_matrix()
+        # Drop duplicate columns in dataset.def
+        l = dataset.df.columns.tolist()
+        duplicates = set([x for x in l if l.count(x) > 1])
+        for dup in duplicates:
+            l.remove(dup)
+        dataset.df = dataset.df.groupby(lambda x:x, axis=1).mean()
+        dataset.node_names = dataset.df.columns.tolist()
+        dataset.data = dataset.df.as_matrix()
+
+        # find intersection with graph
+    	intersection = np.intersect1d(self.node_names, dataset.df.columns.tolist())
+
+        # filter rows/columns in graph that aren't in dataset
         self.df = self.df[intersection].filter(items=intersection, axis='index')
+
+        #add zero'd columns/rows to graph for genes present only in dataset
+    	diff = np.setdiff1d(dataset.node_names, intersection)
+    	zeros = pd.DataFrame(0, index=diff.tolist(), columns=diff.tolist())
+        self.df = pd.concat([self.df, zeros]).fillna(0.)
+        self.df = self.df[l].loc[l]
+
         self.adj = self.df.as_matrix()
-	diff = np.setdiff1d(dataset.node_names, intersection)
-	zeros = pd.DataFrame(0 ,index=self.df.index, columns=diff.tolist())
-	x = pd.concat([self.df, zeros], axis=1)
+
     def load_random_adjacency(self, nb_nodes, approx_nb_edges, scale_free=True):
         nodes = np.arange(nb_nodes)
 
