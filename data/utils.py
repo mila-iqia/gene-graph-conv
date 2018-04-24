@@ -2,7 +2,7 @@ import logging
 import numpy as np
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
-from gene_datasets import BRCACoexpr, GBMDataset, TCGATissue, NSLRSyntheticDataset, TCGAGeneInference
+from gene_datasets import BRCACoexpr, GBMDataset, TCGATissue, NSLRSyntheticDataset, DGEXGEO, TCGAGeneInference
 from datasets import RandomDataset, PercolateDataset
 import data, data.colombos
 
@@ -109,6 +109,9 @@ def get_dataset(data_dir, data_file, seed, nb_class, nb_examples, nb_nodes, data
     elif opt.dataset == 'ecoli':
         logging.info("Getting ecoli Dataset")
         dataset = data.colombos.EcoliDataset(opt=opt)
+    elif opt.dataset == 'dgex':
+        logging.info("Getting DGEX GEO Microarray data")
+        dataset = DGEXGEO(data_dir=data_dir, data_file=data_file, seed=seed, nb_class=nb_class, nb_examples=nb_examples, nb_nodes=nb_nodes)
     elif opt.dataset == 'tcga-tissue-gene-inference':
         logging.info("TCGA tissue gene inference")
         dataset = TCGAGeneInference(seed=seed, nb_class=nb_class, nb_examples=nb_examples, nb_nodes=nb_nodes)

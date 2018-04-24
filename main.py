@@ -23,7 +23,7 @@ def build_parser():
     parser.add_argument('--weight-decay', default=0., type=float, help='weight decay (L2 loss).')
     parser.add_argument('--l1-loss-lambda', default=0., type=float, help='L1 loss lambda.')
     parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
-    parser.add_argument('--dataset', choices=['random', 'ecoli', 'tcga-tissue', 'tcga-brca', 'tcga-label', 'tcga-gbm', 'percolate', 'nslr-syn', 'percolate-plus', 'tcga-tissue-gene-inference'],
+    parser.add_argument('--dataset', choices=['random', 'ecoli', 'tcga-tissue', 'tcga-brca', 'tcga-label', 'tcga-gbm', 'percolate', 'nslr-syn', 'percolate-plus', 'tcga-tissue-gene-inference', 'dgex'],
                         default='random', help='Which dataset to use.')
     parser.add_argument('--clinical-file', type=str, default='PANCAN_clinicalMatrix.gz', help='File to read labels from')
     parser.add_argument('--clinical-label', type=str, default='gender', help='Label to join with data')
