@@ -198,12 +198,12 @@ class ApprNormalizeLaplacian(object):
     """
 
     # TODO: add unittests
-    def __init__(self, processed_dir='/Tmp/ApprNormalizeLaplacian/',
+    def __init__(self, processed_dir='/Tmp/',
                  processed_file=None, unique_id=None, overwrite=False, **kwargs):
 
         import getpass
 
-        self.processed_dir = os.path.join(processed_dir, getpass.getuser())
+        self.processed_dir = os.path.join(processed_dir, "ApprNormalizeLaplacian-" + str(getpass.getuser()))
         self.processed_file = processed_file
         self.overwrite = overwrite
         self.unique_id = unique_id
@@ -211,6 +211,7 @@ class ApprNormalizeLaplacian(object):
     def __call__(self, adj):
 
         adj = np.array(adj)
+        adj_hash = str(hash(str(adj))) + str(adj.shape)
         processed_path = None
         if self.processed_dir and self.processed_file:
             processed_path = os.path.join(self.processed_dir, self.processed_file)
@@ -218,7 +219,7 @@ class ApprNormalizeLaplacian(object):
             if not os.path.exists(processed_path):
                 os.makedirs(processed_path)
 
-            processed_path = processed_path + '_{}.npy'.format(self.unique_id)
+            processed_path = processed_path + adj_hash + '_{}.npy'.format(self.unique_id)
 
             if not self.overwrite and os.path.exists(processed_path):
                 logging.info("returning a saved transformation.")
@@ -228,7 +229,7 @@ class ApprNormalizeLaplacian(object):
 
         # Fill the diagonal
         np.fill_diagonal(adj, 1.)  # TODO: Hummm, think it's a 0.
-
+        
         D = adj.sum(axis=1)
         D_inv = np.diag(1. / np.sqrt(D))
         norm_transform = D_inv.dot(adj).dot(D_inv)
