@@ -13,12 +13,15 @@ class Graph(object):
         pass
 
     def intersection_with(self, dataset):
-        intersection = np.intersect1d(self.node_names, dataset.node_names)
-        dataset.df = dataset.df[intersection]
-        dataset.data = dataset.df.as_matrix()
+        import pdb; pdb.set_trace()
+	intersection = np.intersect1d(self.node_names, dataset.node_names)
+        #dataset.df = dataset.df[intersection]
+        #dataset.data = dataset.df.as_matrix()
         self.df = self.df[intersection].filter(items=intersection, axis='index')
         self.adj = self.df.as_matrix()
-
+	diff = np.setdiff1d(dataset.node_names, intersection)
+	zeros = pd.DataFrame(0 ,index=self.df.index, columns=diff.tolist())
+	x = pd.concat([self.df, zeros], axis=1)
     def load_random_adjacency(self, nb_nodes, approx_nb_edges, scale_free=True):
         nodes = np.arange(nb_nodes)
 
