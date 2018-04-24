@@ -24,7 +24,7 @@ class GeneDataset(Dataset):
     def load_data(self):
         data_file = os.path.join(self.data_dir, self.data_file)
         self.file = h5py.File(data_file, 'r')
-        self.data = np.array(self.file['expression_data'])
+        self.data = np.array(self.file['expression_data'][:self.nb_examples])
         self.nb_nodes = self.data.shape[1]
         try:    
             self.labels = self.file['labels_data']
@@ -35,7 +35,7 @@ class GeneDataset(Dataset):
         except Exception:
             self.sample_names = pd.DataFrame([])
         self.node_names = np.array(self.file['gene_names']) 
-        self.df = pd.DataFrame(np.array(self.file['expression_data']))
+        self.df = pd.DataFrame(self.data)
         
         self.df.columns = self.node_names[:len(self.df.columns)]
         self.nb_class = self.nb_class if self.nb_class is not None else 2
@@ -90,7 +90,6 @@ class TCGAGeneInference(GeneDataset):
         self.nb_nodes = total_gene
         self.node_names = self.df.columns
 
-        #import ipdb; ipdb.set_trace()
 
     def __getitem__(self, idx):
         sample = self.data[idx]
