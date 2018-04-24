@@ -60,7 +60,12 @@ def compute_loss(criterions, y_pred, targets, training_mode=None, semi_mse_lambd
         targets_uns = Variable(targets, requires_grad=False).squeeze(-1)
         mse = criterions
         to_check = targets_uns != 0.
-        y_pred = y_pred * to_check.float()
+
+        if y_pred.size(0) == 1: # batch size 1, grrr
+            y_pred = y_pred.squeeze(-1).mul(to_check.float()).unsqueeze(-1)
+        else:
+            y_pred = y_pred.mul(to_check.float())
+
         #import ipdb; ipdb.set_trace()
-        mse_loss = mse(y_pred.float(), targets_uns.float()) * y_pred.size(1)
-        return mse_loss.mean()
+        mse_loss = mse(y_pred.float(), targets_uns.float())# * y_pred.size(1)
+        return mse_loss
