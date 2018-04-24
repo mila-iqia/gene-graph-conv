@@ -240,12 +240,13 @@ class GraphNetwork(nn.Module):
         else:
             logistic_in_dim = [self.nb_nodes * dims[-1]]
 
-        for d in logistic_in_dim:
-            layer = nn.Linear(d, self.out_dim)
-            layer.register_forward_hook(save_computations)  # For monitoring
-            logistic_layer.append(layer)
+        if self.training_mode is not 'gene-inference':
+            for d in logistic_in_dim:
+                layer = nn.Linear(d, self.out_dim)
+                layer.register_forward_hook(save_computations)  # For monitoring
+                logistic_layer.append(layer)
 
-        self.my_logistic_layers = nn.ModuleList(logistic_layer)
+            self.my_logistic_layers = nn.ModuleList(logistic_layer)
 
         # The gating
         self.use_gate = use_gate
