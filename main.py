@@ -61,7 +61,7 @@ def build_parser():
     parser.add_argument('--extra-ucn', default=0, type=int, help="The number of extra nodes without edges in the percolate-plus dataset")
     parser.add_argument('--disconnected', default=0, type=int, help="The number of disconnected nodes from the perc subgraph without edges in percolate-plus")
     parser.add_argument('--center', default=False, type=bool, help="center the data (subtract mean from each element)?")
-    parser.add_argument('--graph', default=None, choices=['kegg', 'pathway', 'trust', 'pancan', 'random', 'ecoli'], help="Which graph with which to prior")
+    parser.add_argument('--graph', default=None, choices=['kegg', 'pathway', 'trust', 'pancan', 'random', 'ecoli', 'train-corr'], help="Which graph with which to prior")
     parser.add_argument('--approx-nb-edges', default=100, type=int, help="If we have a randomly generated graph, this is the approx nb of edges")
     parser.add_argument('--nb-nodes', default=None, type=int, help="If we have a randomly generated graph, this is the nb of nodes")
     parser.add_argument('--training-mode', default=None, choices=['semi', 'unsupervised', 'gene-inference'], help="which training mode we want to use.")
@@ -95,6 +95,13 @@ def main(argv=None):
         torch.cuda.manual_seed_all(opt.seed)
     torch.manual_seed(opt.seed)
 
+    logging.info("Getting the dataset...")
+    dataset = get_dataset(opt.data_dir, opt.data_file, opt.seed, opt.nb_class, opt.nb_examples, opt.nb_nodes, opt.dataset, opt.master_nodes, opt)
+    train_set, valid_set, test_set = split_dataset(dataset, batch_size=opt.batch_size, seed=opt.seed,
+                                                   nb_samples=opt.nb_examples, train_ratio=opt.train_ratio, nb_per_class=opt.nb_per_class)
+
+
+    logging.info("Getting the graph...")
     graph = None
     if opt.graph == "percolate" or opt.graph == "percolate-plus":
         graph = Graph()
@@ -102,23 +109,26 @@ def main(argv=None):
     elif opt.graph == "random":
         graph = Graph()
         graph.load_random_adjacency(nb_nodes=opt.nb_nodes, approx_nb_edges=opt.approx_nb_edges, scale_free=opt.scale_free)
+    elif opt.graph == 'train-corr':
+        graph = Graph()
+        graph.build_correlation_graph(train_set.dataset.data[train_set.sampler.indices])
+
     elif opt.graph is not None:
         graph = Graph()
         graph.load_graph(get_path(opt.graph))
 
+    #import ipdb; ipdb.set_trace()
+
     # Adding the master nodes
     graph.add_master_nodes(opt.master_nodes)
 
-    logging.info("Getting the dataset...")
-    dataset = get_dataset(opt.data_dir, opt.data_file, opt.seed, opt.nb_class, opt.nb_examples, opt.nb_nodes, opt.dataset, opt.master_nodes, opt)
+
 
     if graph is not None:
         graph.intersection_with(dataset)
 
     writer, exp_dir = monitoring.setup_tensorboard_log(opt)
 
-    train_set, valid_set, test_set = split_dataset(dataset, batch_size=opt.batch_size, seed=opt.seed,
-                                                   nb_samples=opt.nb_examples, train_ratio=opt.train_ratio, nb_per_class=opt.nb_per_class)
 
     logging.info("Getting the model...")
     my_model, optimizer, epoch, opt = monitoring.load_checkpoint(exp_dir, opt, dataset, graph)

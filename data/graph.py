@@ -70,9 +70,21 @@ class Graph(object):
         self.df.columns = self.node_names
         self.df.index = self.node_names
 
+    def build_correlation_graph(self, dataset, threshold=0.2):
+
+        #import ipdb; ipdb.set_trace()
+        #data = dataset.dataset.data[dataset.sampler.indices]
+        corr = np.corrcoef(dataset, rowvar=False)
+        corr = np.nan_to_num(corr)
+        corr = (np.abs(corr) > threshold).astype(float)
+        print "The correlation graph has {} average neighbours".format((corr > 0.).sum(0).mean())
+
+        self.adj = corr
+        self.df = pd.DataFrame(np.array(self.adj))
+        self.node_names = list(range(self.adj.shape[0]))
+
+
     def add_master_nodes(self, nb_master_nodes):
-
-
         if nb_master_nodes > 0:
             master = pd.DataFrame(1., index=['master_{}'.format(i) for i in range(nb_master_nodes)], columns=['master_{}'.format(i) for i in range(nb_master_nodes)])
             self.df = pd.concat([self.df, master]).fillna(1,)
