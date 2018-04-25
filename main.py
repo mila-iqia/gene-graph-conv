@@ -35,6 +35,7 @@ def build_parser():
     parser.add_argument('--load-folder', type=str, default=None, help="Folder where to load the network and resume training.")
     parser.add_argument('--load-checkpoint', type=bool, default=False, help="Should we load the checkpoint?")
     parser.add_argument('--neighborhood', choices=['all', 'first', 'second'], default='all', help="Should we look at the full dataset, or neighborhood for the gene to infer?")
+    parser.add_argument('--master-nodes', type=int, default=0, help="Number of master node to add in the graph. All nodes are connected to it.")
 
     # Model specific options
     parser.add_argument('--num-channel', default=32, type=int, help='Number of channel in the model.')
@@ -105,8 +106,11 @@ def main(argv=None):
         graph = Graph()
         graph.load_graph(get_path(opt.graph))
 
+    # Adding the master nodes
+    graph.add_master_nodes(opt.master_nodes)
+
     logging.info("Getting the dataset...")
-    dataset = get_dataset(opt.data_dir, opt.data_file, opt.seed, opt.nb_class, opt.nb_examples, opt.nb_nodes, opt.dataset, opt)
+    dataset = get_dataset(opt.data_dir, opt.data_file, opt.seed, opt.nb_class, opt.nb_examples, opt.nb_nodes, opt.dataset, opt.master_nodes, opt)
 
     if graph is not None:
         graph.intersection_with(dataset)

@@ -14,11 +14,14 @@ class Graph(object):
 
     def intersection_with(self, dataset):
         # Drop duplicate columns in dataset.def
+
+
         l = dataset.df.columns.tolist()
         duplicates = set([x for x in l if l.count(x) > 1])
         for dup in duplicates:
             l.remove(dup)
         dataset.df = dataset.df.groupby(lambda x:x, axis=1).mean()
+        dataset.df = dataset.df[l]
         dataset.node_names = dataset.df.columns.tolist()
         dataset.data = dataset.df.as_matrix()
 
@@ -66,6 +69,17 @@ class Graph(object):
         self.df = pd.DataFrame(np.array(self.adj))
         self.df.columns = self.node_names
         self.df.index = self.node_names
+
+    def add_master_nodes(self, nb_master_nodes):
+
+
+        if nb_master_nodes > 0:
+            master = pd.DataFrame(1., index=['master_{}'.format(i) for i in range(nb_master_nodes)], columns=['master_{}'.format(i) for i in range(nb_master_nodes)])
+            self.df = pd.concat([self.df, master]).fillna(1,)
+            self.node_names = self.df.columns
+
+
+        self.adj = self.df.as_matrix()
 
     def generate_percolate(self, opt):
         self.nb_class = 2
@@ -139,6 +153,10 @@ def get_path(graph):
     elif graph == "pancan":
         return "/data/lisa/data/genomics/graph/pancan-tissue-graph.hdf5"
         #return "./genomics/graph/pancan-tissue-graph.hdf5"
+
+#def add_master_node(graph, dataset, nb_master_nodes):
+
+
 
 class EcoliEcocycGraph():
 

@@ -10,7 +10,7 @@ from datasets import Dataset
 class GeneDataset(Dataset):
     """Gene Expression Dataset."""
 
-    def __init__(self, data_dir=None, data_file=None, sub_class=None, name=None, seed=None, nb_class=None, nb_examples=None, nb_nodes=None):
+    def __init__(self, data_dir=None, data_file=None, sub_class=None, name=None, seed=None, nb_class=None, nb_examples=None, nb_nodes=None, **kwargs):
         """
         Args:
             data_file (string): Path to the h5df file.
@@ -20,7 +20,7 @@ class GeneDataset(Dataset):
         self.data_dir = data_dir
         self.data_file = data_file
 
-        super(GeneDataset, self).__init__(name=name, seed=seed, nb_class=nb_class, nb_examples=nb_examples, nb_nodes=nb_nodes)
+        super(GeneDataset, self).__init__(name=name, seed=seed, nb_class=nb_class, nb_examples=nb_examples, nb_nodes=nb_nodes, **kwargs)
 
     def load_data(self):
         data_file = os.path.join(self.data_dir, self.data_file)
@@ -110,8 +110,8 @@ class TCGAGeneInference(GeneDataset):
 class DGEXGEO(GeneDataset):
     def __init__(self, data_dir='/data/lisa/data/genomics/D-GEX/', data_file='bgedv2.hdf5', **kwargs):
         super(DGEXGEO, self).__init__(data_dir=data_dir, data_file=data_file, name='GDEXGEO', **kwargs)
-    	lm_gene_num = 943
-        self.all_gene_num = 10018
+    	lm_gene_num = 943 + self.nb_master_nodes
+        self.all_gene_num = 10018 + self.nb_master_nodes
         self.nb_nodes = self.all_gene_num
     	all_genes = np.arange(self.all_gene_num)
         self.gene_to_keep = all_genes[:lm_gene_num]
@@ -121,6 +121,9 @@ class DGEXGEO(GeneDataset):
 
     def __getitem__(self, idx):
         assert self.data.shape[1] == self.all_gene_num
+
+        #import ipdb; ipdb.set_trace()
+
         sample = self.data[idx].copy()
         sample[self.gene_to_infer] = 0.
         sample[self.gene_to_keep] += 1e-8
