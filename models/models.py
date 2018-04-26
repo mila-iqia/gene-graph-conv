@@ -196,8 +196,9 @@ class LogisticRegression(nn.Module):
 
 class GraphNetwork(nn.Module):
     def __init__(self, nb_nodes, input_dim, channels, adj, out_dim,
-                 on_cuda=True, add_emb=None, transform_adj=None, aggregate_adj=None, graphLayerType=graphLayer.CGNLayer, use_gate=0.0001, dropout=False, attention_head=0,
-                 training_mode=None):
+                 on_cuda=True, add_emb=None, transform_adj=None, aggregate_adj=None,
+                 graphLayerType=graphLayer.CGNLayer, use_gate=0.0001, dropout=False, attention_head=0,
+                 training_mode=None, master_nodes=0):
         super(GraphNetwork, self).__init__()
 
         if transform_adj is None:
@@ -213,6 +214,7 @@ class GraphNetwork(nn.Module):
         self.dropout = dropout
         self.attention_head = attention_head
         self.training_mode = training_mode
+        self.master_nodes = master_nodes
 
         if add_emb:
             logging.info("Adding node embeddings.")
@@ -240,7 +242,7 @@ class GraphNetwork(nn.Module):
         else:
             logistic_in_dim = [self.nb_nodes * dims[-1]]
 
-        if self.training_mode is not 'gene-inference':
+        if self.training_mode != 'gene-inference':
             for d in logistic_in_dim:
                 layer = nn.Linear(d, self.out_dim)
                 layer.register_forward_hook(save_computations)  # For monitoring
@@ -272,6 +274,7 @@ class GraphNetwork(nn.Module):
             self.attentionLayer = AttentionLayer(dims[-1], attention_head)
             self.attentionLayer.register_forward_hook(save_computations)  # For monitoringv
 
+
         if self.training_mode == 'semi':
             self.last_semi_layer = nn.Conv1d(dims[-1], 1, 1, bias=True)
 
@@ -294,6 +297,7 @@ class GraphNetwork(nn.Module):
     # Depending on the training mode, we will call different functions.
         #import ipdb;
         #ipdb.set_trace()
+
         nb_examples, nb_nodes, nb_channels = x.size()
         if self.training_mode is None:
             return self.supervised(x)
@@ -589,6 +593,35 @@ class CNN(nn.Module):
     def regularization(self, reg_lambda):
         return 0.0
 
+class Graph_plus_MLP(nn.Module):
+    def __init__(self, nb_nodes, input_dim, on_cuda=True, dropout=False, training_mode=None, **kwargs):
+        super(Graph_plus_MLP, self).__init__()
+
+        self.graph_network = GraphNetwork(nb_nodes=nb_nodes, input_dim=input_dim, training_mode=training_mode, dropout=dropout,
+                                          on_cuda=on_cuda, **kwargs)
+
+        self.mlp = MLP(input_dim=nb_nodes, channels=[512], training_mode=training_mode,
+                       dropout=dropout, on_cuda=on_cuda)
+
+
+    def forward(self, x):
+        return self.mlp.forward(x) + self.graph_network.forward(x)
+
+    def load_state_dict(self, state_dict):
+        own_state = self.state_dict()
+        for name, param in state_dict.items():
+            if name not in own_state:
+                continue
+            if isinstance(param, nn.Parameter):
+                # backwards compatibility for serialized parameters
+                param = param.data
+            try:
+                own_state[name].copy_(param)
+            except AttributeError as e:
+                pass # because of fucking sparse matrices.
+
+    def regularization(self, reg_lambda):
+        return 0.0
 
 def get_model(seed, nb_class, nb_examples, nb_nodes, model, on_cuda, num_channel, num_layer, use_emb, dropout, training_mode, use_gate, nb_attention_head, graph, dataset, model_state=None, opt=None):
     """
@@ -606,6 +639,13 @@ def get_model(seed, nb_class, nb_examples, nb_nodes, model, on_cuda, num_channel
         my_model = CGN(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
                        on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
                        attention_head=nb_attention_head, training_mode=training_mode)
+    elif model == 'cgn+mlp':
+        assert graph is not None
+        adj_transform, aggregate_function = graphLayer.get_transform(opt, graph.adj)
+        my_model = Graph_plus_MLP(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
+                       on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
+                       attention_head=nb_attention_head, training_mode=training_mode)
+
 
     elif model == 'lcg':
         assert graph is not None
@@ -643,7 +683,7 @@ def get_model(seed, nb_class, nb_examples, nb_nodes, model, on_cuda, num_channel
         my_model = CNN(input_dim=1, channels=[num_channel] * num_layer, grid_shape=grid_shape, out_dim=nb_class, on_cuda=on_cuda)
 
     else:
-        raise ValueError
+        raise ValueError("{} is not a valid option!".format(model))
 
     if model_state is not None:
         init_state_dict = my_model.state_dict()
