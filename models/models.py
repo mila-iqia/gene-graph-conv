@@ -279,7 +279,10 @@ class GraphNetwork(nn.Module):
             self.last_semi_layer = nn.Conv1d(dims[-1], 1, 1, bias=True)
 
         if self.training_mode == 'gene-inference':
-            self.last_inference_layer = nn.Conv1d(dims[-1], 1, 1, bias=True)
+            if self.attention_head:
+                self.last_inference_layer = nn.Linear(dims[-1] * self.attention_head, nb_nodes, bias=True)
+            else:
+                self.last_inference_layer = nn.Conv1d(dims[-1], 1, 1, bias=True)
 
         logging.info("Done!")
         # TODO: add all the funky bells and stuff that the old CGN has.
@@ -334,12 +337,13 @@ class GraphNetwork(nn.Module):
                 x = x * id_to_keep
 
         # Do attention pooling here
-        #if self.attention_head:
-        #    x, attn = self.attentionLayer(x)
-
-        x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
-        x = self.last_inference_layer(x)
-        x = x.permute(0, 2, 1).contiguous()  # from ex, ch, node -> ex, node, ch
+        if self.attention_head:
+            x, attn = self.attentionLayer(x)
+            x = self.last_inference_layer(x)
+        else:
+            x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
+            x = self.last_inference_layer(x)
+            x = x.permute(0, 2, 1).contiguous()  # from ex, ch, node -> ex, node, ch
 
         return x
 
