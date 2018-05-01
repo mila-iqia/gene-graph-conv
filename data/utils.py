@@ -2,7 +2,7 @@ import logging
 import numpy as np
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
-from gene_datasets import BRCACoexpr, GBMDataset, TCGATissue, NSLRSyntheticDataset
+from gene_datasets import BRCACoexpr, GBMDataset, TCGATissue, NSLRSyntheticDataset, DGEXGEO, TCGAGeneInference
 from datasets import RandomDataset, PercolateDataset
 import data, data.colombos
 
@@ -72,7 +72,7 @@ def split_dataset(dataset, batch_size=100, random=False, train_ratio=0.8, seed=1
     return train_set, valid_set, test_set
 
 
-def get_dataset(data_dir, data_file, seed, nb_class, nb_examples, nb_nodes, dataset):
+def get_dataset(data_dir, data_file, seed, nb_class, nb_examples, nb_nodes, dataset, nb_master_nodes, opt):
     """
     Get a dataset based on the options.
     :param opt:
@@ -84,7 +84,7 @@ def get_dataset(data_dir, data_file, seed, nb_class, nb_examples, nb_nodes, data
 
     elif dataset == 'tcga-tissue':
         logging.info("Getting TCGA tissue type")
-        dataset = TCGATissue(opt=opt)
+        dataset = TCGATissue(seed=seed, nb_class=nb_class, nb_examples=nb_examples, nb_nodes=nb_nodes, nb_master_nodes=nb_master_nodes)
 
     elif dataset == 'tcga-brca':
         logging.info("Getting TCGA BRCA type")
@@ -109,6 +109,13 @@ def get_dataset(data_dir, data_file, seed, nb_class, nb_examples, nb_nodes, data
     elif opt.dataset == 'ecoli':
         logging.info("Getting ecoli Dataset")
         dataset = data.colombos.EcoliDataset(opt=opt)
+    elif opt.dataset == 'dgex':
+        logging.info("Getting DGEX GEO Microarray data")
+        dataset = DGEXGEO(data_dir=data_dir, data_file=data_file, seed=seed, nb_class=nb_class, nb_examples=nb_examples, nb_nodes=nb_nodes, nb_master_nodes=nb_master_nodes)
+    elif opt.dataset == 'tcga-tissue-gene-inference':
+        logging.info("TCGA tissue gene inference")
+        dataset = TCGAGeneInference(seed=seed, nb_class=nb_class, nb_examples=nb_examples, nb_nodes=nb_nodes, nb_master_nodes=nb_master_nodes)
+
     else:
         raise ValueError
     return dataset

@@ -15,22 +15,22 @@ import colombos_load_data
 
 class EcoliDataset(Dataset):
 
-    def __init__(self, name="EcoliDataset", opt=None):
-        super(EcoliDataset, self).__init__(name=name, opt=opt)
+    def __init__(self):
+        super(EcoliDataset, self).__init__(name="EcoliDataset", seed=None, nb_class=None, nb_examples=None, nb_nodes=None)
 
     def load_data(self):
-        
 
         data =  colombos_load_data.load("ecoli", False)
         self.raw_data = data
         self.data = data[0]
         self.nb_nodes = self.data.shape[1]
+        #self.labels =
         #self.labels = self.file['labels_data']
         self.sample_names = data[1]
         self.node_names = data[2]
         self.df = pd.DataFrame(self.data)
         self.df.columns = self.node_names
-        self.nb_class = self.nb_class if self.nb_class is not None else len(self.labels[0])
+        #self.nb_class = self.nb_class if self.nb_class is not None else len(self.labels[0])
         #self.label_name = self.labels.attrs
 
     def __getitem__(self, idx):

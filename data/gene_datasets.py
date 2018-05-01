@@ -10,7 +10,7 @@ from datasets import Dataset
 class GeneDataset(Dataset):
     """Gene Expression Dataset."""
 
-    def __init__(self, data_dir=None, data_file=None, sub_class=None, name=None, seed=None, nb_class=None, nb_examples=None, nb_nodes=None):
+    def __init__(self, data_dir=None, data_file=None, sub_class=None, name=None, seed=None, nb_class=None, nb_examples=None, nb_nodes=None, **kwargs):
         """
         Args:
             data_file (string): Path to the h5df file.
@@ -19,20 +19,28 @@ class GeneDataset(Dataset):
         self.sub_class = sub_class
         self.data_dir = data_dir
         self.data_file = data_file
-        super(GeneDataset, self).__init__(name=name, seed=seed, nb_class=nb_class, nb_examples=nb_examples, nb_nodes=nb_nodes)
+
+        super(GeneDataset, self).__init__(name=name, seed=seed, nb_class=nb_class, nb_examples=nb_examples, nb_nodes=nb_nodes, **kwargs)
 
     def load_data(self):
         data_file = os.path.join(self.data_dir, self.data_file)
         self.file = h5py.File(data_file, 'r')
-        self.data = np.array(self.file['expression_data'])
+        self.data = np.array(self.file['expression_data'][:self.nb_examples])
         self.nb_nodes = self.data.shape[1]
-        self.labels = self.file['labels_data']
-        self.sample_names = self.file['sample_names']
-        self.node_names = self.file['gene_names']
-        self.df = pd.DataFrame(np.array(self.file['expression_data']))
-        self.df.columns = self.node_names
+        try:
+            self.labels = self.file['labels_data']
+        except Exception:
+            self.labels = np.array([])
+        try:
+            self.sample_names = self.file['sample_names']
+        except Exception:
+            self.sample_names = pd.DataFrame([])
+        self.node_names = np.array(self.file['gene_names'])
+        self.df = pd.DataFrame(self.data)
+
+        self.df.columns = self.node_names[:len(self.df.columns)]
         self.nb_class = self.nb_class if self.nb_class is not None else 2
-        self.label_name = self.labels.attrs
+        self.label_name = self.node_names[len(self.df.columns)+1:]
         self.transform = None
 
         if self.labels.shape != self.labels[:].reshape(-1).shape:
@@ -64,6 +72,72 @@ class TCGATissue(GeneDataset):
     """TCGA Dataset. We predict tissue."""
     def __init__(self, data_dir='/data/lisa/data/genomics/TCGA/', data_file='TCGA_tissue_ppi.hdf5', **kwargs):
         super(TCGATissue, self).__init__(data_dir=data_dir, data_file=data_file, name='TCGATissue', **kwargs)
+
+class TCGAGeneInference(GeneDataset):
+    """TCGA Dataset. We predict tissue."""
+    def __init__(self, data_dir='/data/lisa/data/genomics/TCGA/', data_file='TCGA_tissue_ppi.hdf5', **kwargs):
+        super(TCGAGeneInference, self).__init__(data_dir=data_dir, data_file=data_file, name='TCGATissue', **kwargs)
+
+
+        total_gene = 5000
+        all_genes = np.arange(total_gene)
+        np.random.shuffle(all_genes)
+
+        # Do something not stupid here.
+        self.gene_to_keep = all_genes[:total_gene/2]
+        self.gene_to_infer = all_genes[total_gene/2:total_gene]
+        self.df = self.df.iloc[:, :total_gene]
+        self.data = self.data[:, :total_gene]
+        self.nb_nodes = total_gene
+        self.node_names = self.df.columns
+
+
+    def __getitem__(self, idx):
+        sample = self.data[idx]
+        sample[self.gene_to_infer] = 0.
+        sample[self.gene_to_keep] += 1e-8
+
+        sample = np.expand_dims(sample, axis=-1)
+
+        label = self.data[idx]
+        label[self.gene_to_keep] = 0.
+        label[self.gene_to_infer] += 1e-8
+
+        sample = {'sample': sample, 'labels': label}
+        return sample
+
+
+class DGEXGEO(GeneDataset):
+    def __init__(self, data_dir='/data/lisa/data/genomics/D-GEX/', data_file='bgedv2.hdf5', **kwargs):
+        super(DGEXGEO, self).__init__(data_dir=data_dir, data_file=data_file, name='GDEXGEO', **kwargs)
+    	lm_gene_num = 943 + self.nb_master_nodes
+        self.all_gene_num = 10018 + self.nb_master_nodes
+        self.nb_nodes = self.all_gene_num
+    	all_genes = np.arange(self.all_gene_num)
+        self.gene_to_keep = all_genes[:lm_gene_num]
+    	self.gene_to_infer = all_genes[lm_gene_num:]
+
+
+
+    def __getitem__(self, idx):
+        assert self.data.shape[1] == self.all_gene_num
+
+        #import ipdb; ipdb.set_trace()
+
+        sample = self.data[idx].copy()
+        sample[self.gene_to_infer] = 0.
+        sample[self.gene_to_keep] += 1e-8
+
+        sample = np.expand_dims(sample, axis=-1)
+
+        label = self.data[idx].copy()
+        label[self.gene_to_keep] = 0.
+        label[self.gene_to_infer] += 1e-8
+
+        sample = {'sample': sample, 'labels': label}
+
+
+        return sample
 
 
 class TCGAForLabel(GeneDataset):

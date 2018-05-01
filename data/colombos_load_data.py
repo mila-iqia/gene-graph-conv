@@ -3,7 +3,6 @@ import numpy
 import os
 import pandas
 import sys
-import theano
 import urllib
 import zipfile
 
@@ -80,6 +79,7 @@ def load(organism, shared = True, data_dir="data/colombos_data"):
 #    os.remove(testannotfname)
 
     if shared:
+        import theano
         return theano.shared(numpy.asarray(expressions, 
                                            dtype = theano.config.floatX), 
                              borrow = True), \

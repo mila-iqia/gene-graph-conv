@@ -5,7 +5,7 @@ from graph import Graph
 
 
 class Dataset(Dataset):
-    def __init__(self, name, seed, nb_class, nb_examples, nb_nodes):
+    def __init__(self, name, seed, nb_class, nb_examples, nb_nodes, nb_master_nodes=0):
 
         self.name = name
         self.seed = seed
@@ -13,6 +13,14 @@ class Dataset(Dataset):
         self.nb_examples = nb_examples
         self.nb_nodes = nb_nodes
         self.load_data()
+        self.df = self.df - self.df.mean(0)
+        self.nb_master_nodes = nb_master_nodes
+
+        for master in range(nb_master_nodes):
+            self.df.insert(0, 'master_{}'.format(master), 1.)
+
+
+        self.data = self.df.as_matrix()
 
     def load_data(self):
         raise NotImplementedError()

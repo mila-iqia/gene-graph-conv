@@ -13,10 +13,30 @@ class Graph(object):
         pass
 
     def intersection_with(self, dataset):
-        intersection = np.intersect1d(self.node_names, dataset.node_names)
-        dataset.df = dataset.df[intersection]
+        # Drop duplicate columns in dataset.def
+
+
+        l = dataset.df.columns.tolist()
+        duplicates = set([x for x in l if l.count(x) > 1])
+        for dup in duplicates:
+            l.remove(dup)
+        dataset.df = dataset.df.groupby(lambda x:x, axis=1).mean()
+        dataset.df = dataset.df[l]
+        dataset.node_names = dataset.df.columns.tolist()
         dataset.data = dataset.df.as_matrix()
+
+        # find intersection with graph
+    	intersection = np.intersect1d(self.node_names, dataset.df.columns.tolist())
+
+        # filter rows/columns in graph that aren't in dataset
         self.df = self.df[intersection].filter(items=intersection, axis='index')
+
+        #add zero'd columns/rows to graph for genes present only in dataset
+    	diff = np.setdiff1d(dataset.node_names, intersection)
+    	zeros = pd.DataFrame(0, index=diff.tolist(), columns=diff.tolist())
+        self.df = pd.concat([self.df, zeros]).fillna(0.)
+        self.df = self.df[l].loc[l]
+
         self.adj = self.df.as_matrix()
 
     def load_random_adjacency(self, nb_nodes, approx_nb_edges, scale_free=True):
@@ -49,6 +69,29 @@ class Graph(object):
         self.df = pd.DataFrame(np.array(self.adj))
         self.df.columns = self.node_names
         self.df.index = self.node_names
+
+    def build_correlation_graph(self, dataset, threshold=0.2):
+
+        #import ipdb; ipdb.set_trace()
+        #data = dataset.dataset.data[dataset.sampler.indices]
+        corr = np.corrcoef(dataset, rowvar=False)
+        corr = np.nan_to_num(corr)
+        corr = (np.abs(corr) > threshold).astype(float)
+        print "The correlation graph has {} average neighbours".format((corr > 0.).sum(0).mean())
+
+        self.adj = corr
+        self.df = pd.DataFrame(np.array(self.adj))
+        self.node_names = list(range(self.adj.shape[0]))
+
+
+    def add_master_nodes(self, nb_master_nodes):
+        if nb_master_nodes > 0:
+            master = pd.DataFrame(1., index=['master_{}'.format(i) for i in range(nb_master_nodes)], columns=['master_{}'.format(i) for i in range(nb_master_nodes)])
+            self.df = pd.concat([self.df, master]).fillna(1,)
+            self.node_names = self.df.columns
+
+
+        self.adj = self.df.as_matrix()
 
     def generate_percolate(self, opt):
         self.nb_class = 2
@@ -121,6 +164,10 @@ def get_path(graph):
         return "/data/lisa/data/genomics/graph/pathway_commons.hdf5"
     elif graph == "pancan":
         return "/data/lisa/data/genomics/graph/pancan-tissue-graph.hdf5"
+        #return "./genomics/graph/pancan-tissue-graph.hdf5"
+
+#def add_master_node(graph, dataset, nb_master_nodes):
+
 
 
 class EcoliEcocycGraph():

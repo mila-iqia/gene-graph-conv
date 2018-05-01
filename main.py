@@ -8,7 +8,7 @@ import torch
 import time
 from torch.autograd import Variable
 from analysis import monitoring
-from analysis.metrics import record_metrics_for_epoch, summarize
+from analysis.metrics import record_metrics_for_epoch, summarize, record_metrics_mse
 import optimization as otim
 
 def build_parser():
@@ -23,7 +23,7 @@ def build_parser():
     parser.add_argument('--weight-decay', default=0., type=float, help='weight decay (L2 loss).')
     parser.add_argument('--l1-loss-lambda', default=0., type=float, help='L1 loss lambda.')
     parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
-    parser.add_argument('--dataset', choices=['random', 'ecoli', 'tcga-tissue', 'tcga-brca', 'tcga-label', 'tcga-gbm', 'percolate', 'nslr-syn', 'percolate-plus'],
+    parser.add_argument('--dataset', choices=['random', 'ecoli', 'tcga-tissue', 'tcga-brca', 'tcga-label', 'tcga-gbm', 'percolate', 'nslr-syn', 'percolate-plus', 'tcga-tissue-gene-inference', 'dgex'],
                         default='random', help='Which dataset to use.')
     parser.add_argument('--clinical-file', type=str, default='PANCAN_clinicalMatrix.gz', help='File to read labels from')
     parser.add_argument('--clinical-label', type=str, default='gender', help='Label to join with data')
@@ -35,13 +35,14 @@ def build_parser():
     parser.add_argument('--load-folder', type=str, default=None, help="Folder where to load the network and resume training.")
     parser.add_argument('--load-checkpoint', type=bool, default=False, help="Should we load the checkpoint?")
     parser.add_argument('--neighborhood', choices=['all', 'first', 'second'], default='all', help="Should we look at the full dataset, or neighborhood for the gene to infer?")
+    parser.add_argument('--master-nodes', type=int, default=0, help="Number of master node to add in the graph. All nodes are connected to it.")
 
     # Model specific options
     parser.add_argument('--num-channel', default=32, type=int, help='Number of channel in the model.')
     parser.add_argument('--semi-mse-lambda', default=100., type=float, help='The lambda to use when using the semi supervised loss.')
     parser.add_argument('--dropout', default=False, type=bool, help='If we want to perform dropout in the model..')
     parser.add_argument('--add-connectivity', default=False, type=bool, help='If we want to augment the connectivity after each convolution layer after the first one.')
-    parser.add_argument('--model', default='cgn', choices=['cgn', 'mlp', 'lcg', 'sgc', 'slr', 'cnn', 'random', 'lr'], help='Which model to use.')
+    parser.add_argument('--model', default='cgn', choices=['cgn', 'mlp', 'lcg', 'sgc', 'slr', 'cnn', 'random', 'lr', 'cgn+mlp'], help='Which model to use.')
     parser.add_argument('--num-layer', default=1, type=int, help='Number of convolution layer in the CGN.')
     parser.add_argument('--nb-class', default=None, type=int, help="Number of class for the dataset (won't work with random graph).")
     parser.add_argument('--nb-examples', default=None, type=int, help="Number of samples to train on.")
@@ -60,10 +61,10 @@ def build_parser():
     parser.add_argument('--extra-ucn', default=0, type=int, help="The number of extra nodes without edges in the percolate-plus dataset")
     parser.add_argument('--disconnected', default=0, type=int, help="The number of disconnected nodes from the perc subgraph without edges in percolate-plus")
     parser.add_argument('--center', default=False, type=bool, help="center the data (subtract mean from each element)?")
-    parser.add_argument('--graph', default=None, choices=['kegg', 'pathway', 'trust', 'random', 'ecoli'], help="Which graph with which to prior")
+    parser.add_argument('--graph', default=None, choices=['kegg', 'pathway', 'trust', 'pancan', 'random', 'ecoli', 'train-corr'], help="Which graph with which to prior")
     parser.add_argument('--approx-nb-edges', default=100, type=int, help="If we have a randomly generated graph, this is the approx nb of edges")
     parser.add_argument('--nb-nodes', default=None, type=int, help="If we have a randomly generated graph, this is the nb of nodes")
-    parser.add_argument('--training-mode', default=None, choices=['semi', 'unsupervised'], help="which training mode we want to use.")
+    parser.add_argument('--training-mode', default=None, choices=['semi', 'unsupervised', 'gene-inference'], help="which training mode we want to use.")
     parser.add_argument('--data-dir', default=None, type=str, help="where is your dataset located?")
     parser.add_argument('--data-file', default=None, type=str, help="where is your dataset located?")
     return parser
@@ -94,6 +95,13 @@ def main(argv=None):
         torch.cuda.manual_seed_all(opt.seed)
     torch.manual_seed(opt.seed)
 
+    logging.info("Getting the dataset...")
+    dataset = get_dataset(opt.data_dir, opt.data_file, opt.seed, opt.nb_class, opt.nb_examples, opt.nb_nodes, opt.dataset, opt.master_nodes, opt)
+    train_set, valid_set, test_set = split_dataset(dataset, batch_size=opt.batch_size, seed=opt.seed,
+                                                   nb_samples=opt.nb_examples, train_ratio=opt.train_ratio, nb_per_class=opt.nb_per_class)
+
+
+    logging.info("Getting the graph...")
     graph = None
     if opt.graph == "percolate" or opt.graph == "percolate-plus":
         graph = Graph()
@@ -101,20 +109,26 @@ def main(argv=None):
     elif opt.graph == "random":
         graph = Graph()
         graph.load_random_adjacency(nb_nodes=opt.nb_nodes, approx_nb_edges=opt.approx_nb_edges, scale_free=opt.scale_free)
+    elif opt.graph == 'train-corr':
+        graph = Graph()
+        graph.build_correlation_graph(train_set.dataset.data[train_set.sampler.indices])
+
     elif opt.graph is not None:
         graph = Graph()
         graph.load_graph(get_path(opt.graph))
 
-    logging.info("Getting the dataset...")
-    dataset = get_dataset(opt.data_dir, opt.data_file, opt.seed, opt.nb_class, opt.nb_examples, opt.nb_nodes, opt.dataset)
+    #import ipdb; ipdb.set_trace()
+
+    # Adding the master nodes
+    graph.add_master_nodes(opt.master_nodes)
+
+
 
     if graph is not None:
         graph.intersection_with(dataset)
 
     writer, exp_dir = monitoring.setup_tensorboard_log(opt)
 
-    train_set, valid_set, test_set = split_dataset(dataset, batch_size=opt.batch_size, seed=opt.seed,
-                                                   nb_samples=opt.nb_examples, train_ratio=opt.train_ratio, nb_per_class=opt.nb_per_class)
 
     logging.info("Getting the model...")
     my_model, optimizer, epoch, opt = monitoring.load_checkpoint(exp_dir, opt, dataset, graph)
@@ -124,7 +138,7 @@ def main(argv=None):
 
     # Setup the loss
     #criterion = torch.nn.CrossEntropyLoss(size_average=True)
-    criterions = otim.get_criterion(opt, dataset)
+    criterions = otim.get_criterion(dataset, opt.training_mode)
     l1_criterion = torch.nn.L1Loss(size_average=False)
 
     if opt.cuda:
@@ -156,7 +170,7 @@ def main(argv=None):
             y_pred = my_model(inputs)
 
             # Compute and print loss
-            crit_loss = otim.compute_loss(opt, criterions, y_pred, targets)
+            crit_loss = otim.compute_loss(criterions, y_pred, targets, opt.training_mode, opt.semi_mse_lambda)
             model_regularization_loss = my_model.regularization(opt.model_reg_lambda)
             l1_loss = setup_l1_loss(my_model, opt.l1_loss_lambda, l1_criterion, opt.cuda)
             total_loss = crit_loss + model_regularization_loss + l1_loss
@@ -169,8 +183,8 @@ def main(argv=None):
 
         time_this_epoch = time.time() - start_timer
 
-        if opt.training_mode != 'unsupervised':
-            acc, auc = record_metrics_for_epoch(writer, crit_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, dataset, opt)
+        if opt.training_mode != 'unsupervised' and opt.training_mode != 'gene-inference':
+            acc, auc = record_metrics_for_epoch(writer, crit_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, dataset, opt.cuda)
             summary = [
                 t,
                 crit_loss.data[0],
@@ -192,19 +206,22 @@ def main(argv=None):
                 patience = 1000
 
         else:
+            mse = record_metrics_mse(my_model, writer, t, criterions, train_set, valid_set, test_set, dataset, opt.cuda)
             summary = [
                 t,
-                crit_loss.data[0],
+                mse['train'],
+                mse['valid'],
+                mse['test'],
                 time_this_epoch
             ]
-            summary = "epoch {}, cross_loss: {:.03f}, time: {:.02f} sec".format(*summary)
+            summary = "epoch {}, mse (train): {:.04f}, mse (valid): {:.04f}, mse (test): {:.03f}, time: {:.02f} sec".format(*summary)
             logging.info(summary)
 
         # Saving the checkpoint
         monitoring.save_checkpoint(my_model, optimizer, t, opt, exp_dir)
 
     logging.info("Done!")
-    monitoring.monitor_everything(my_model, valid_set, opt, exp_dir)
+    #monitoring.monitor_everything(my_model, valid_set, opt, exp_dir)
     return best_summary
 
 if __name__ == '__main__':
