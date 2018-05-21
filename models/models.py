@@ -522,6 +522,65 @@ class MLP(nn.Module):
     def regularization(self, reg_lambda):
         return 0.0
 
+class DGEX(nn.Module):
+    def __init__(self, input_dim, channels, out_dim=None, on_cuda=True, dropout=False, training_mode=None):
+        super(DGEX, self).__init__()
+        out_dim = out_dim if out_dim is not None else 2
+        input_dim = input_dim if input_dim is not None else 2
+
+        if training_mode == 'gene-inference':
+            out_dim = input_dim
+            in_size = 943
+
+        # out_size = 4760
+        # b_size = 200
+        # l_rate = 5e-4
+        # l_rate_min = 1e-5
+        # decay_factor = 0.9
+        # lr_scale = 3.0
+        # momentum = 0.5
+
+        self.my_layers = []
+        self.out_dim = out_dim
+        self.on_cuda = on_cuda
+        self.dropout = dropout
+        self.training_mode = training_mode
+
+        dims = [input_dim] + channels
+
+        logging.info("Constructing the network...")
+        layers = []
+        for c_in, c_out in zip(dims[:-1], dims[1:]):
+            layer = nn.Linear(c_in, c_out)
+            layers.append(layer)
+        self.my_layers = nn.ModuleList(layers)
+
+        if channels:
+            self.last_layer = nn.Linear(channels[-1], out_dim)
+        else:
+            self.last_layer = nn.Linear(input_dim, out_dim)
+
+        self.my_dropout = None
+        self.my_dropout = torch.nn.Dropout(0.1)
+
+        logging.info("Done!")
+
+    def forward(self, x):
+        nb_examples, nb_nodes, nb_channels = x.size()
+        x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
+        for layer in self.my_layers:
+            x = F.relu(layer(x.view(nb_examples, -1)))  # or relu, sigmoid...
+
+            if self.dropout:
+                x = self.my_dropout(x)
+
+        x = self.last_layer(x.view(nb_examples, -1))
+
+        return x
+
+    def regularization(self, reg_lambda):
+        return 0.0
+
 
 # class Random(nn.Module):
 #     def __init__(self, input_dim, channels, out_dim=None, on_cuda=True):
