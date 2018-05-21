@@ -308,7 +308,7 @@ class GraphLayer(nn.Module):
 
         if self.aggregate_adj is not None:
             self.aggregate_adj = self.aggregate_adj(id_layer)
-        self.to_keep = self.aggregate_adj.to_keep
+        #self.to_keep = self.aggregate_adj.to_keep
 
         self.init_params()
 
@@ -319,6 +319,29 @@ class GraphLayer(nn.Module):
         raise NotImplementedError()
 
 
+class SparseMM(torch.autograd.Function):
+    """
+    Sparse x dense matrix multiplication with autograd support.
+    Implementation by Soumith Chintala:
+    https://discuss.pytorch.org/t/
+    does-pytorch-support-autograd-on-sparse-matrix/6156/7
+    From: https://github.com/tkipf/pygcn/blob/master/pygcn/layers.py
+    """
+
+    def __init__(self, sparse):
+        super(SparseMM, self).__init__()
+        self.sparse = sparse
+
+    def forward(self, dense):
+        return torch.mm(self.sparse, dense)
+
+    def backward(self, grad_output):
+        grad_input = None
+        if self.needs_input_grad[0]:
+            grad_input = torch.mm(self.sparse.t(), grad_output)
+        return grad_input
+        
+        
 class CGNLayer(GraphLayer):
 
     def init_params(self):
@@ -338,7 +361,9 @@ class CGNLayer(GraphLayer):
         x = x.view(-1, nb_nodes)
 
         # Needs this hack to work: https://discuss.pytorch.org/t/does-pytorch-support-autograd-on-sparse-matrix/6156/7
-        x = D.mm(x.t()).t()
+        #x = D.mm(x.t()).t()
+        x = SparseMM(D)(x.t()).t()
+        
         x = x.contiguous().view(nb_examples, nb_channels, nb_nodes)
         return x
 
