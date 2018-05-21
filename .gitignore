@@ -4,6 +4,7 @@ experiments/experiments/
 *.RData
 Dataset/SyntheticData/test.hdf5
 slurm-*
-cache/
-slurm/
-testing123/
+cache/*
+slurm/*
+testing123*
+*.ipynb_checkpoints*
