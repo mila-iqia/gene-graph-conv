@@ -196,7 +196,7 @@ class LogisticRegression(nn.Module):
 
 class GraphNetwork(nn.Module):
     def __init__(self, nb_nodes, input_dim, channels, adj, out_dim,
-                 on_cuda=True, add_emb=None, transform_adj=None, aggregate_adj=None,
+                 on_cuda=True, add_emb=None, transform_adj=None, aggregate_adj=None, prepool_extralayers=0,
                  graphLayerType=graphLayer.CGNLayer, use_gate=0.0001, dropout=False, attention_head=0,
                  training_mode=None, master_nodes=0):
         super(GraphNetwork, self).__init__()
@@ -215,6 +215,7 @@ class GraphNetwork(nn.Module):
         self.attention_head = attention_head
         self.training_mode = training_mode
         self.master_nodes = master_nodes
+        self.prepool_extralayers = prepool_extralayers
 
         if add_emb:
             logging.info("Adding node embeddings.")
@@ -228,6 +229,13 @@ class GraphNetwork(nn.Module):
         self.dims = dims
         for i, [c_in, c_out] in enumerate(zip(dims[:-1], dims[1:])):
             # transformation to apply at each layer.
+            
+            if self.aggregate_adj is not None:
+                for el in range(self.prepool_extralayers):
+                    print "add extra layer before pooling" + str(el)
+                    layer = graphLayerType(adj, c_in, c_in, on_cuda, i, transform_adj=None, aggregate_adj=None)
+                    convs.append(layer)
+            
             layer = graphLayerType(adj, c_in, c_out, on_cuda, i, transform_adj=transform_adj, aggregate_adj=aggregate_adj)
             layer.register_forward_hook(save_computations)  # For monitoringv
             convs.append(layer)
