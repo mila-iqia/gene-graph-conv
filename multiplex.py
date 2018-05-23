@@ -29,6 +29,10 @@ import numpy as np
 
 # 3 graphs, all genes
 # 3 graphs, reduce to only nodes with
+# just MLP
+# add 1 trial each time
+# do a diff on the big results graph, I can do a merge (I think at the end)
+
 def sample_neighbors(g, gene, num_neighbors, include_self=True):
     results = set([])
     if include_self:
@@ -116,7 +120,8 @@ class PyTorch(Method):
         l1_criterion = torch.nn.L1Loss(size_average=False)
 
         patience = self.patience
-        opt.num_layer = self.num_layer
+
+        #opt.num_layer = self.num_layer
         #adj_transform, aggregate_function = models.graphLayer.get_transform(opt, adj)
 
         if self.model == "CGN":
@@ -249,7 +254,7 @@ class PyTorch(Method):
                 patience = self.patience
 
 
-def method_comparison(results, dataset, models, gene, num_genes, trials, train_size, test_size):
+def method_comparison(results, dataset, models, gene, num_genes, trials, train_size, test_size, file_to_write=None):
     mean = dataset.df[gene].mean()
     dataset.labels = [1 if x > mean else 0 for x in dataset.df[gene]]
     if num_genes != len(dataset.df.columns):
@@ -285,7 +290,7 @@ def method_comparison(results, dataset, models, gene, num_genes, trials, train_s
                     }
 
             results["df"] = results["df"].append(experiment, ignore_index=True)
-            pickle.dump(results, open("results-.pkl", "wb"))
+            pickle.dump(results, open(file_to_write, "wb"))
 
 m = [
     {'key': 'MLP', 'method': PyTorch("MLP", dropout=False, cuda=False)},
@@ -297,12 +302,13 @@ def build_parser():
         description="Meta learning ")
 
     parser.add_argument('--bucket', default=0, type=int, help='which bucket is this.')
+    parser.add_argument('--dir', default=0, type=int, help='which exp dir is this.')
     return parser
 
 
 def parse_args(argv):
     if type(argv) == list or argv is None:
-        opt = build_parser().parse_args(argv)1000
+        opt = build_parser().parse_args(argv)
     else:
         opt = argv
 
@@ -312,12 +318,12 @@ def parse_args(argv):
 def main(argv=None):
     opt = parse_args(argv)
 
-    #tcgatissue = data.gene_datasets.TCGATissue(data_dir='./genomics/TCGA/', data_file='TCGA_tissue_ppi.hdf5')
-    tcgatissue = data.gene_datasets.TCGATissue()
+    tcgatissue = data.gene_datasets.TCGATissue(data_dir='./genomics/TCGA/', data_file='TCGA_tissue_ppi.hdf5')
+    #tcgatissue = data.gene_datasets.TCGATissue()
 
     graph = Graph()
-    path = "/data/lisa/data/genomics/graph/pancan-tissue-graph.hdf5"
-    #path = "genomics/graph/pancan-tissue-graph.hdf5"
+    #path = "/data/lisa/data/genomics/graph/pancan-tissue-graph.hdf5"
+    path = "genomics/graph/pancan-tissue-graph.hdf5"
     graph.load_graph(path)
     #graph.intersection_with(tcgatissue)
     g = nx.from_numpy_matrix(graph.adj)
@@ -326,10 +332,10 @@ def main(argv=None):
 
 
     results = {"df": pd.DataFrame(columns=['auc','gene_name', 'model', 'num_genes', 'seed', 'train_size'])}
-    results = pickle.load(open("results_tuesday_morning.pkl", "r"))
+    #results = pickle.load(open("results_tuesday_morning.pkl", "r"))
 
-    #tcgatissue = data.gene_datasets.TCGATissue(data_dir='./genomics/TCGA/', data_file='TCGA_tissue_ppi.hdf5')
-    tcgatissue = data.gene_datasets.TCGATissue()
+    tcgatissue = data.gene_datasets.TCGATissue(data_dir='./genomics/TCGA/', data_file='TCGA_tissue_ppi.hdf5')
+    #tcgatissue = data.gene_datasets.TCGATissue()
     tcgatissue.df = tcgatissue.df - tcgatissue.df.mean()
 
 
@@ -337,16 +343,15 @@ def main(argv=None):
     bucket_size = tcgatissue.df.shape[-1] / 100
     start = bucket * bucket_size
     end = (1 + bucket) * bucket_size
-    import pdb; pdb.set_trace()
 
-    df = tcgatissue.df[start:end].copy(deep=True)
-    genes_to_iter = df.columns.difference(results['df']['gene_name'].unique())
-
+    df = tcgatissue.df.copy(deep=True)
+    genes_to_iter = tcgatissue.df.iloc[:, start:end].columns.difference(results['df']['gene_name'].unique())
+    file_to_write = opt.dir + '/results-' + str(bucket) + '.pkl'
     for gene in genes_to_iter:
         tcgatissue.df = df
-        method_comparison(results, tcgatissue, m, gene=gene, num_genes=16300, trials=3, train_size=50, test_size=113)
+        method_comparison(results, tcgatissue, m, gene=gene, num_genes=16300, trials=3, train_size=50, test_size=113, file_to_write=file_to_write)
         tcgatissue.df = df
-        method_comparison(results, tcgatissue, m, gene=gene, num_genes=50, trials=3, train_size=50, test_size=113)
+        method_comparison(results, tcgatissue, m, gene=gene, num_genes=50, trials=3, train_size=50, test_size=113, file_to_write=file_to_write)
 
 if __name__ == '__main__':
     main()
