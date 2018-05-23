@@ -27,7 +27,8 @@ import analysis
 import sklearn, sklearn.model_selection, sklearn.metrics, sklearn.linear_model, sklearn.neural_network, sklearn.tree
 import numpy as np
 
-
+# 3 graphs, all genes
+# 3 graphs, reduce to only nodes with
 def sample_neighbors(g, gene, num_neighbors, include_self=True):
     results = set([])
     if include_self:
@@ -295,14 +296,13 @@ def build_parser():
     parser = argparse.ArgumentParser(
         description="Meta learning ")
 
-    parser.add_argument('--start', default=0, type=int, help='starting index.')
-    parser.add_argument('--end', default=-1, type=int, help='ending index.')
+    parser.add_argument('--bucket', default=0, type=int, help='which bucket is this.')
     return parser
 
 
 def parse_args(argv):
     if type(argv) == list or argv is None:
-        opt = build_parser().parse_args(argv)
+        opt = build_parser().parse_args(argv)1000
     else:
         opt = argv
 
@@ -311,12 +311,13 @@ def parse_args(argv):
 
 def main(argv=None):
     opt = parse_args(argv)
-    tcgatissue = data.gene_datasets.TCGATissue(data_dir='./genomics/TCGA/', data_file='TCGA_tissue_ppi.hdf5')
-    #tcgatissue = data.gene_datasets.TCGATissue()
+
+    #tcgatissue = data.gene_datasets.TCGATissue(data_dir='./genomics/TCGA/', data_file='TCGA_tissue_ppi.hdf5')
+    tcgatissue = data.gene_datasets.TCGATissue()
 
     graph = Graph()
-    #path = "/data/lisa/data/genomics/graph/pancan-tissue-graph.hdf5"
-    path = "genomics/graph/pancan-tissue-graph.hdf5"
+    path = "/data/lisa/data/genomics/graph/pancan-tissue-graph.hdf5"
+    #path = "genomics/graph/pancan-tissue-graph.hdf5"
     graph.load_graph(path)
     #graph.intersection_with(tcgatissue)
     g = nx.from_numpy_matrix(graph.adj)
@@ -327,17 +328,25 @@ def main(argv=None):
     results = {"df": pd.DataFrame(columns=['auc','gene_name', 'model', 'num_genes', 'seed', 'train_size'])}
     results = pickle.load(open("results_tuesday_morning.pkl", "r"))
 
-    tcgatissue = data.gene_datasets.TCGATissue(data_dir='./genomics/TCGA/', data_file='TCGA_tissue_ppi.hdf5')
+    #tcgatissue = data.gene_datasets.TCGATissue(data_dir='./genomics/TCGA/', data_file='TCGA_tissue_ppi.hdf5')
+    tcgatissue = data.gene_datasets.TCGATissue()
     tcgatissue.df = tcgatissue.df - tcgatissue.df.mean()
 
-    genes_to_iter = tcgatissue.df.columns.difference(results['df']['gene_name'].unique())
 
-    full_df = tcgatissue.df.copy(deep=True)
+    bucket = opt.bucket
+    bucket_size = tcgatissue.df.shape[-1] / 100
+    start = bucket * bucket_size
+    end = (1 + bucket) * bucket_size
+    import pdb; pdb.set_trace()
+
+    df = tcgatissue.df[start:end].copy(deep=True)
+    genes_to_iter = df.columns.difference(results['df']['gene_name'].unique())
+
     for gene in genes_to_iter:
-        tcgatissue.df = full_df[:1500]
-        method_comparison(results, tcgatissue, m, gene=gene, num_genes=16300, trials=3, train_size=50, test_size=1000)
-        tcgatissue.df = full_df[:1500]
-        method_comparison(results, tcgatissue, m, gene=gene, num_genes=50, trials=3, train_size=50, test_size=1000)
+        tcgatissue.df = df
+        method_comparison(results, tcgatissue, m, gene=gene, num_genes=16300, trials=3, train_size=50, test_size=113)
+        tcgatissue.df = df
+        method_comparison(results, tcgatissue, m, gene=gene, num_genes=50, trials=3, train_size=50, test_size=113)
 
 if __name__ == '__main__':
     main()
