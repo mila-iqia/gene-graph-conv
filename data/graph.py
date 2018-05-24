@@ -164,6 +164,8 @@ def get_path(graph):
         return "/data/lisa/data/genomics/graph/pathway_commons.hdf5"
     elif graph == "pancan":
         return "/data/lisa/data/genomics/graph/pancan-tissue-graph.hdf5"
+    elif graph == 'merged':
+        return "/data/lisa/data/genomics/merged_trust_pathway_pancan.hdf5"
         #return "./genomics/graph/pancan-tissue-graph.hdf5"
 
 #def add_master_node(graph, dataset, nb_master_nodes):
