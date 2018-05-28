@@ -1,3 +1,4 @@
+gene_inference/pickles/*
 experiments/experiments/
 *.pyc
 *.Rhistory

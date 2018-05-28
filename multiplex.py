@@ -261,11 +261,20 @@ class PyTorch(Method):
                 patience = self.patience
 
 
-def method_comparison(results, dataset, models, gene, num_genes, trials, train_size, test_size, file_to_write=None, g=None):
+def method_comparison(results, dataset, models, gene, num_genes, trials, train_size, test_size, file_to_write=None, g=None, first_degree=False, second_degree=False):
     mean = dataset.df[gene].mean()
     dataset.labels = [1 if x > mean else 0 for x in dataset.df[gene]]
     if num_genes != len(dataset.df.columns):
-        neighbors = sample_neighbors(g, gene, num_genes, include_self=True)
+        neighbors = set([gene])
+        all_nodes = set(g.nodes)
+        try:
+            neighbors = neighbors.union(set(g.neighbors(gene)))
+            if second_degree:
+                for x in g.neighbors(gene):
+                    neighbors = neighbors.union(set(g.neighbors(x)))
+        except:
+            first_degree = all_nodes
+            second_degree = all_nodes
         dataset.df = dataset.df[list(neighbors)]
 
     dataset.df[gene] = 1
@@ -296,6 +305,7 @@ def method_comparison(results, dataset, models, gene, num_genes, trials, train_s
                     }
 
             results["df"] = results["df"].append(experiment, ignore_index=True)
+            print results
             pickle.dump(results, open(file_to_write, "wb"))
 
 m = [
@@ -310,6 +320,8 @@ def build_parser():
     parser.add_argument('--bucket', default=0, type=int, help='which bucket is this.')
     parser.add_argument('--exp-dir', default=0, type=str, help='which exp dir is this.')
     parser.add_argument('--graph-path', default=0, type=str, help='which exp dir is this.')
+    parser.add_argument('--first-degree', default=False, type=bool, help='which exp dir is this.')
+    parser.add_argument('--second-degree', default=False, type=str, help='which exp dir is this.')
     return parser
 
 
@@ -346,17 +358,17 @@ def main(argv=None):
     tcgatissue = data.gene_datasets.TCGATissue()
     tcgatissue.df = tcgatissue.df - tcgatissue.df.mean()
 
-    bucket_size = tcgatissue.df.shape[-1] / 10
+    bucket_size = tcgatissue.df.shape[-1] / 100
     start = opt.bucket * bucket_size
     end = (1 + opt.bucket) * bucket_size
 
     df = tcgatissue.df.copy(deep=True)
     genes_to_iter = tcgatissue.df.iloc[:, start:end].columns.difference(results['df']['gene_name'].unique())
     for gene in genes_to_iter:
+#        tcgatissue.df = df[:]
+#        method_comparison(results, tcgatissue, m, gene=gene, num_genes=16300, trials=3, train_size=50, test_size=1000, file_to_write=results_file, g=g)
         tcgatissue.df = df[:]
-        method_comparison(results, tcgatissue, m, gene=gene, num_genes=16300, trials=3, train_size=50, test_size=1000, file_to_write=results_file, g=g)
-        tcgatissue.df = df[:]
-        method_comparison(results, tcgatissue, m, gene=gene, num_genes=50, trials=3, train_size=50, test_size=1000, file_to_write=results_file, g=g)
+        method_comparison(results, tcgatissue, m, gene=gene, num_genes=50, trials=3, train_size=50, test_size=1000, file_to_write=results_file, g=g, first_degree=opt.first_degree, second_degree=opt.second_degree)
 
 if __name__ == '__main__':
     main()

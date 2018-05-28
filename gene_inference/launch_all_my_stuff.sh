@@ -4,9 +4,10 @@
 export HOME=`getent passwd $USER | cut -d':' -f6`
 source activate pytorch0.2
 
-# ./gene_inference/launch_all_my_stuff.sh  10 gene_inference/genemania /data/lisa/data/genomics/graph/pancan-tissue-graph.hdf5.hdf5
-# ./gene_inference/launch_all_my_stuff.sh  10 gene_inference/pathway /data/lisa/data/genomics/graph/pathway_commons.hdf5
-# ./gene_inference/launch_all_my_stuff.sh  10 gene_inference/pathway /data/lisa/data/genomics/graph/kegg.hdf5
+# ./gene_inference/launch_all_my_stuff.sh  100 gene_inference/merged_first /data/lisa/data/genomics/merged_trust_pathway_pancan.hdf5 True False
+# ./gene_inference/launch_all_my_stuff.sh  1 gene_inference/genemania_first /data/lisa/data/genomics/graph/pancan-tissue-graph.hdf5 True False
+# ./gene_inference/launch_all_my_stuff.sh  10 gene_inference/pathway_100 /data/lisa/data/genomics/graph/pathway_commons.hdf5
+# ./gene_inference/launch_all_my_stuff.sh  10 gene_inference/regnet_100 /data/lisa/data/genomics/graph/kegg.hdf5
 
 
 num_buckets=$1
