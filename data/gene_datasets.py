@@ -70,12 +70,12 @@ class GeneDataset(Dataset):
 
 class TCGATissue(GeneDataset):
     """TCGA Dataset. We predict tissue."""
-    def __init__(self, data_dir='/data/lisa/data/genomics/TCGA/', data_file='TCGA_tissue_ppi.hdf5', **kwargs):
+    def __init__(self, data_dir='data/gene_expression/', data_file='TCGA_tissue_ppi.hdf5', **kwargs):
         super(TCGATissue, self).__init__(data_dir=data_dir, data_file=data_file, name='TCGATissue', **kwargs)
 
 class TCGAGeneInference(GeneDataset):
     """TCGA Dataset. We predict tissue."""
-    def __init__(self, data_dir='/data/lisa/data/genomics/TCGA/', data_file='TCGA_tissue_ppi.hdf5', **kwargs):
+    def __init__(self, data_dir='data/gene_expression/', data_file='TCGA_tissue_ppi.hdf5', **kwargs):
         super(TCGAGeneInference, self).__init__(data_dir=data_dir, data_file=data_file, name='TCGATissue', **kwargs)
 
 
@@ -106,44 +106,10 @@ class TCGAGeneInference(GeneDataset):
         sample = {'sample': sample, 'labels': label}
         return sample
 
-
-class DGEXGEO(GeneDataset):
-    def __init__(self, data_dir='/data/lisa/data/genomics/D-GEX/', data_file='bgedv2.hdf5', **kwargs):
-        super(DGEXGEO, self).__init__(data_dir=data_dir, data_file=data_file, name='GDEXGEO', **kwargs)
-    	lm_gene_num = 943 + self.nb_master_nodes
-        self.all_gene_num = 10018 + self.nb_master_nodes
-        self.nb_nodes = self.all_gene_num
-    	all_genes = np.arange(self.all_gene_num)
-        self.gene_to_keep = all_genes[:lm_gene_num]
-    	self.gene_to_infer = all_genes[lm_gene_num:]
-
-
-
-    def __getitem__(self, idx):
-        assert self.data.shape[1] == self.all_gene_num
-
-        #import ipdb; ipdb.set_trace()
-
-        sample = self.data[idx].copy()
-        sample[self.gene_to_infer] = 0.
-        sample[self.gene_to_keep] += 1e-8
-
-        sample = np.expand_dims(sample, axis=-1)
-
-        label = self.data[idx].copy()
-        label[self.gene_to_keep] = 0.
-        label[self.gene_to_infer] += 1e-8
-
-        sample = {'sample': sample, 'labels': label}
-
-
-        return sample
-
-
 class TCGAForLabel(GeneDataset):
     """TCGA Dataset."""
     def __init__(self,
-                 data_dir='/data/lisa/data/genomics/TCGA/',
+                 data_dir='data/gene_expression/',
                  data_file='TCGA_tissue_ppi.hdf5',
                  clinical_file="PANCAN_clinicalMatrix.gz",
                  clinical_label="gender",
@@ -177,35 +143,3 @@ class TCGAForLabel(GeneDataset):
 
         self.labels = pd.get_dummies(clinical_joined).as_matrix().astype(np.float)
         self.data = data_joined.as_matrix()
-
-
-class BRCACoexpr(GeneDataset):
-    """Breast cancer, with coexpression graph. """
-    def __init__(self, data_dir='/data/lisa/data/genomics/TCGA/', data_file='BRCA_coexpr.hdf5', nb_class=2, **kwargs):
-
-        # For this dataset, when we chose 2 classes, it's the 'Infiltrating Ductal Carcinoma'
-        # and the 'Infiltrating Lobular Carcinoma'
-
-        sub_class = None
-        if nb_class == 2:
-            nb_class = None
-            sub_class = [0, 7]
-
-        super(BRCACoexpr, self).__init__(data_dir=data_dir, data_file=data_file,
-                                         nb_class=nb_class, sub_class=sub_class, name='BRCACoexpr',
-                                         **kwargs)
-
-
-class GBMDataset(GeneDataset):
-    " Glioblastoma Multiforme dataset"
-    def __init__(self, data_dir=None, data_file=None, seed=None, nb_class=None, nb_examples=None, nb_nodes=None):
-        data_dir = data_dir if data_dir is not None else "/data/lisa/data/genomics/TCGA/"
-        data_file = data_file if data_file is not None else "gbm.hdf5"
-
-        super(GBMDataset, self).__init__(data_dir=data_dir, data_file=data_file, name='GBMDataset', seed=seed, nb_class=nb_class, nb_examples=nb_examples, nb_nodes=nb_nodes)
-
-
-class NSLRSyntheticDataset(GeneDataset):
-    " SynMin dataset"
-    def __init__(self, data_dir="/data/lisa/data/genomics/TCGA/", data_file="syn_nslr.hdf5", nb_class=2, **kwargs):
-        super(NSLRSyntheticDataset, self).__init__(data_dir=data_dir, data_file=data_file, nb_class=nb_class, name='NSLRSyntheticDataset', **kwargs)

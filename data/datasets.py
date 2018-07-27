@@ -18,8 +18,6 @@ class Dataset(Dataset):
 
         for master in range(nb_master_nodes):
             self.df.insert(0, 'master_{}'.format(master), 1.)
-
-
         self.data = self.df.as_matrix()
 
     def load_data(self):
@@ -60,29 +58,6 @@ class RandomDataset(Dataset):
     def __getitem__(self, idx):
         sample = self.data[idx]
         sample = [sample, self.labels[idx]]
-        return sample
-
-    def labels_name(self, l):
-        labels = {0: 'neg', 'neg': 0, 'pos': 1, 1: 'pos'}
-        return labels[l]
-
-
-class PercolateDataset(Dataset):
-
-    """
-    A random dataset where the goal if to find if we can percolate from one side of the graph to the other.
-    """
-
-    def __init__(self, opt):
-        super(PercolateDataset, self).__init__(name='PercolateDataset', opt=opt)
-
-    def load_data(self):
-        return
-
-    def __getitem__(self, idx):
-        sample = self.data[idx]
-        sample = np.expand_dims(sample, -1)  # Addin a dim for the channels\
-        sample = {'sample': sample, 'labels': self.labels[idx]}
         return sample
 
     def labels_name(self, l):

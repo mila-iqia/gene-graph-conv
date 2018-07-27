@@ -103,9 +103,6 @@ def main(argv=None):
 
     logging.info("Getting the graph...")
     graph = None
-    if opt.graph == "percolate" or opt.graph == "percolate-plus":
-        graph = Graph()
-        graph.generate_percolate(opt)
     elif opt.graph == "random":
         graph = Graph()
         graph.load_random_adjacency(nb_nodes=opt.nb_nodes, approx_nb_edges=opt.approx_nb_edges, scale_free=opt.scale_free)
