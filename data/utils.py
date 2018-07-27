@@ -2,9 +2,9 @@ import logging
 import numpy as np
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
-from gene_datasets import BRCACoexpr, GBMDataset, TCGATissue, NSLRSyntheticDataset, DGEXGEO, TCGAGeneInference
-from datasets import RandomDataset, PercolateDataset
-import data, data.colombos
+from gene_datasets import TCGATissue, TCGAGeneInference
+from datasets import RandomDataset
+import data
 
 
 def split_dataset(dataset, batch_size=100, random=False, train_ratio=0.8, seed=1993, nb_samples=None, nb_per_class=None):
@@ -81,69 +81,15 @@ def get_dataset(data_dir, data_file, seed, nb_class, nb_examples, nb_nodes, data
     if dataset == 'random':
         logging.info("Getting a random dataset")
         dataset = RandomDataset(seed, nb_class, nb_examples, nb_nodes)
-
     elif dataset == 'tcga-tissue':
         logging.info("Getting TCGA tissue type")
         dataset = TCGATissue(seed=seed, nb_class=nb_class, nb_examples=nb_examples, nb_nodes=nb_nodes, nb_master_nodes=nb_master_nodes)
-
-    elif dataset == 'tcga-brca':
-        logging.info("Getting TCGA BRCA type")
-        dataset = BRCACoexpr(opt=opt)
-
-    elif dataset == 'percolate':
-        dataset = PercolateDataset(opt=opt)
-
-    elif dataset == 'tcga-gbm':
-        logging.info("Getting TCGA GBM Dataset")
-        dataset = GBMDataset(data_dir=data_dir, data_file=data_file, seed=seed, nb_class=nb_class, nb_examples=nb_examples, nb_nodes=nb_nodes)
-
-    elif dataset == 'nslr-syn':
-        logging.info("Getting NSLR Synthetic Dataset")
-        dataset = NSLRSyntheticDataset(opt=opt)
-
-    elif dataset == 'percolate-plus':
-        logging.info("Getting percolate-plus Dataset")
-        pdata = PercolateDataset(opt=opt)
-        dataset = add_noise(dataset=pdata, num_added_nodes=opt.extra_ucn)
-
-    elif opt.dataset == 'ecoli':
-        logging.info("Getting ecoli Dataset")
-        dataset = data.colombos.EcoliDataset(opt=opt)
-    elif opt.dataset == 'dgex':
-        logging.info("Getting DGEX GEO Microarray data")
-        dataset = DGEXGEO(data_dir=data_dir, data_file=data_file, seed=seed, nb_class=nb_class, nb_examples=nb_examples, nb_nodes=nb_nodes, nb_master_nodes=nb_master_nodes)
     elif opt.dataset == 'tcga-tissue-gene-inference':
         logging.info("TCGA tissue gene inference")
         dataset = TCGAGeneInference(seed=seed, nb_class=nb_class, nb_examples=nb_examples, nb_nodes=nb_nodes, nb_master_nodes=nb_master_nodes)
 
     else:
         raise ValueError
-    return dataset
-
-
-def add_noise(dataset, num_added_nodes=10):
-    """
-    Will add random features and add these nodes as not connected
-
-    Usage:
-    pdataset = datasets.PercolateDataset()
-    dataset = add_noise(dataset=pdataset, num_added_nodes=100)
-    """
-
-    num_samples = dataset.data.shape[0]
-    num_features = dataset.data.shape[1]
-
-    newdata = np.random.random((num_samples, num_features+num_added_nodes))
-    newdata = (newdata*2)-1  # normalize; maybe adapt to data?
-    newdata[:num_samples, :num_features] = dataset.data  # set to 0 to see it in an image
-    dataset.data = newdata
-
-    oldadj = dataset.get_adj()
-
-    newadj = np.zeros((num_features+num_added_nodes, num_features+num_added_nodes))
-    newadj[:num_features, :num_features] = oldadj  # set to 0 to see it in an image
-    dataset.adj = newadj
-    dataset.nb_nodes = dataset.adj.shape[0]
     return dataset
 
 
@@ -160,8 +106,8 @@ def subsample_graph(adj, percentile=100):
         to_keep = adj >= threshold  # throw away all the edges that are bigger than what we have.
         return adj * to_keep
 
-class InpaintingGraph(object):
 
+class InpaintingGraph(object):
     def __init__(self, graph, keep_original=True):
         self.graph = graph
         self.epsilon = 1e-8
@@ -171,7 +117,6 @@ class InpaintingGraph(object):
 
         # Could do node2vec or something here.
         inputs, labels = sample
-        #import ipdb; ipdb.set_trace()
         nb_nodes = inputs.shape[0]
 
         to_predict_idx = np.random.randint(nb_nodes)
@@ -183,7 +128,6 @@ class InpaintingGraph(object):
         inputs_unsupervised = inputs.copy()
         inputs_unsupervised[to_predict_idx] = 0.
 
-        #import ipdb; ipdb.set_trace()
         if self.keep_original:
             return np.concatenate([inputs_supervised, inputs_unsupervised], -1), [labels, to_predict]
         else:
