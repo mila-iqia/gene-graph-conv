@@ -6,6 +6,7 @@ import networkx as nx
 import gene_datasets
 import pandas as pd
 import itertools
+import academictorrents as at
 
 class Graph(object):
     def __init__(self):
@@ -62,7 +63,7 @@ class Graph(object):
         self.node_names = list(range(nb_nodes))
 
     def load_graph(self, path):
-        f = h5py.File(path, 'r')
+        f = h5py.File(at.get(path))
         self.adj = np.array(f['graph_data']).astype('float32')
         self.node_names = np.array(f['gene_names'])
         self.df = pd.DataFrame(np.array(self.adj))
@@ -88,17 +89,17 @@ class Graph(object):
         self.adj = self.df.as_matrix()
 
 
-def get_path(graph):
+def get_hash(graph):
     if graph == "kegg":
-        return "data/graph/kegg.hdf5"
+        return "3c8ac6e7ab6fbf962cedb77192177c58b7518b23"
     elif graph == "trust":
-        return "data/graph/trust.hdf5"
+        return "8605f22b03ba591bc0eb9907a1f70f7d3758bcd8"
     elif graph == "pathway":
-        return "data/graph/pathway_commons.hdf5"
+        return "0332d23cc9909532b3b2c5ddcc3ac045f3f30ff4"
     elif graph == "pancan":
-        return "data/graph/pancan-tissue-graph.hdf5"
+        return "ae2691e4f4f068d32f83797b224eb854b27bd3ee"
     elif graph == 'merged':
-        return "data/graph/merged_trust_pathway_pancan.hdf5"
+        return "a8b1bb215a6ab49d6947f666cc7780a66e1b86fe"
 
 
 class EcoliEcocycGraph():

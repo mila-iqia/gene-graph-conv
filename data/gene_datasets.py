@@ -5,6 +5,7 @@ import collections
 import logging
 import numpy as np
 from datasets import Dataset
+import academictorrents as at
 
 
 class GeneDataset(Dataset):
@@ -23,9 +24,14 @@ class GeneDataset(Dataset):
         super(GeneDataset, self).__init__(name=name, seed=seed, nb_class=nb_class, nb_examples=nb_examples, nb_nodes=nb_nodes, **kwargs)
 
     def load_data(self):
-        data_file = os.path.join(self.data_dir, self.data_file)
-        self.file = h5py.File(data_file, 'r')
-        self.data = np.array(self.file['expression_data'][:self.nb_examples])
+        try:
+            data_file = os.path.join(self.data_dir, self.data_file)
+            self.file = h5py.File(data_file, 'r')
+            self.data = np.array(self.file['expression_data'][:self.nb_examples])
+        except Exception as e:
+            data_file = at.get('4070a45bc7dd69584f33e86ce193a2c903f0776d')
+            self.file = h5py.File(data_file, 'r')
+            self.data = np.array(self.file['expression_data'][:self.nb_examples])
         self.nb_nodes = self.data.shape[1]
         try:
             self.labels = self.file['labels_data']
@@ -77,7 +83,6 @@ class TCGAGeneInference(GeneDataset):
     """TCGA Dataset. We predict tissue."""
     def __init__(self, data_dir='data/gene_expression/', data_file='TCGA_tissue_ppi.hdf5', **kwargs):
         super(TCGAGeneInference, self).__init__(data_dir=data_dir, data_file=data_file, name='TCGATissue', **kwargs)
-
 
         total_gene = 5000
         all_genes = np.arange(total_gene)

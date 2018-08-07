@@ -72,7 +72,7 @@ def split_dataset(dataset, batch_size=100, random=False, train_ratio=0.8, seed=1
     return train_set, valid_set, test_set
 
 
-def get_dataset(data_dir, data_file, seed, nb_class, nb_examples, nb_nodes, dataset, nb_master_nodes, opt):
+def get_dataset(seed, nb_class, nb_examples, nb_nodes, dataset, nb_master_nodes, opt):
     """
     Get a dataset based on the options.
     :param opt:

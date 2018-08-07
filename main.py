@@ -2,7 +2,7 @@ import argparse
 import logging
 import tensorflow as tf  # necessary to import here to avoid segfault
 from data.utils import get_dataset, split_dataset
-from data.graph import Graph, get_path
+from data.graph import Graph, get_hash
 from models.models import get_model, setup_l1_loss
 import torch
 import time
@@ -23,8 +23,7 @@ def build_parser():
     parser.add_argument('--weight-decay', default=0., type=float, help='weight decay (L2 loss).')
     parser.add_argument('--l1-loss-lambda', default=0., type=float, help='L1 loss lambda.')
     parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
-    parser.add_argument('--dataset', choices=['random', 'ecoli', 'tcga-tissue', 'tcga-brca', 'tcga-label', 'tcga-gbm', 'percolate', 'nslr-syn', 'percolate-plus', 'tcga-tissue-gene-inference', 'dgex'],
-                        default='random', help='Which dataset to use.')
+    parser.add_argument('--dataset', choices=['tcga-tissue', 'tcga-tissue-gene-inference'], default='tcga-tissue', help='Which dataset to use.')
     parser.add_argument('--clinical-file', type=str, default='PANCAN_clinicalMatrix.gz', help='File to read labels from')
     parser.add_argument('--clinical-label', type=str, default='gender', help='Label to join with data')
     parser.add_argument('--scale-free', action='store_true', help='If we want a scale-free random adjacency matrix for the dataset.')
@@ -61,7 +60,7 @@ def build_parser():
     parser.add_argument('--extra-ucn', default=0, type=int, help="The number of extra nodes without edges in the percolate-plus dataset")
     parser.add_argument('--disconnected', default=0, type=int, help="The number of disconnected nodes from the perc subgraph without edges in percolate-plus")
     parser.add_argument('--center', default=False, type=bool, help="center the data (subtract mean from each element)?")
-    parser.add_argument('--graph', default=None, choices=['kegg', 'pathway', 'trust', 'pancan', 'random', 'ecoli', 'train-corr', 'merged'], help="Which graph with which to prior")
+    parser.add_argument('--graph', default='pancan', choices=['kegg', 'pathway', 'trust', 'pancan', 'random', 'train-corr', 'merged'], help="Which graph with which to prior")
     parser.add_argument('--approx-nb-edges', default=100, type=int, help="If we have a randomly generated graph, this is the approx nb of edges")
     parser.add_argument('--nb-nodes', default=None, type=int, help="If we have a randomly generated graph, this is the nb of nodes")
     parser.add_argument('--training-mode', default=None, choices=['semi', 'unsupervised', 'gene-inference'], help="which training mode we want to use.")
@@ -96,36 +95,29 @@ def main(argv=None):
     torch.manual_seed(opt.seed)
 
     logging.info("Getting the dataset...")
-    dataset = get_dataset(opt.data_dir, opt.data_file, opt.seed, opt.nb_class, opt.nb_examples, opt.nb_nodes, opt.dataset, opt.master_nodes, opt)
+    dataset = get_dataset(opt.seed, opt.nb_class, opt.nb_examples, opt.nb_nodes, opt.dataset, opt.master_nodes, opt)
     train_set, valid_set, test_set = split_dataset(dataset, batch_size=opt.batch_size, seed=opt.seed,
                                                    nb_samples=opt.nb_examples, train_ratio=opt.train_ratio, nb_per_class=opt.nb_per_class)
 
 
     logging.info("Getting the graph...")
     graph = None
-    elif opt.graph == "random":
+    if opt.graph == "random":
         graph = Graph()
         graph.load_random_adjacency(nb_nodes=opt.nb_nodes, approx_nb_edges=opt.approx_nb_edges, scale_free=opt.scale_free)
     elif opt.graph == 'train-corr':
         graph = Graph()
         graph.build_correlation_graph(train_set.dataset.data[train_set.sampler.indices])
-
     elif opt.graph is not None:
         graph = Graph()
-        graph.load_graph(get_path(opt.graph))
-
-    #import ipdb; ipdb.set_trace()
+        graph.load_graph(get_hash(opt.graph))
 
     # Adding the master nodes
     graph.add_master_nodes(opt.master_nodes)
-
-
-
     if graph is not None:
         graph.intersection_with(dataset)
 
     writer, exp_dir = monitoring.setup_tensorboard_log(opt)
-
 
     logging.info("Getting the model...")
     my_model, optimizer, epoch, opt = monitoring.load_checkpoint(exp_dir, opt, dataset, graph)
@@ -134,7 +126,6 @@ def main(argv=None):
     logging.info(my_model)
 
     # Setup the loss
-    #criterion = torch.nn.CrossEntropyLoss(size_average=True)
     criterions = otim.get_criterion(dataset, opt.training_mode)
     l1_criterion = torch.nn.L1Loss(size_average=False)
 
@@ -150,10 +141,9 @@ def main(argv=None):
     for t in range(epoch, opt.epoch):
 
         start_timer = time.time()
-
         for no_b, mini in enumerate(train_set):
             inputs, targets = mini['sample'], mini['labels']
-
+            import pdb; pdb.set_trace()
             inputs = Variable(inputs, requires_grad=False).float()
             #targets = Variable(targets, requires_grad=False).long()
 
@@ -167,6 +157,7 @@ def main(argv=None):
             y_pred = my_model(inputs)
 
             # Compute and print loss
+            import pdb; pdb.set_trace()
             crit_loss = otim.compute_loss(criterions, y_pred, targets, opt.training_mode, opt.semi_mse_lambda)
             model_regularization_loss = my_model.regularization(opt.model_reg_lambda)
             l1_loss = setup_l1_loss(my_model, opt.l1_loss_lambda, l1_criterion, opt.cuda)
