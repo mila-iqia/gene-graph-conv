@@ -3,21 +3,22 @@ import time
 import copy
 import pickle
 import argparse
+import os
 
 from scipy.stats import norm
 from itertools import repeat
-import data, data.gene_datasets
 import sklearn, sklearn.model_selection, sklearn.metrics, sklearn.linear_model, sklearn.neural_network, sklearn.tree
 import numpy as np
-import matplotlib, matplotlib.pyplot as plt
+import matplotlib
+import matplotlib.pyplot as plt
 import networkx as nx
 import pandas as pd
-import gene_inference
-#from gene_inference.infer_genes import infer_all_genes, sample_neighbors
-import models, models.graphLayer
+import models
+import models.graphLayer
 from models.models import CGN
-import data, data.gene_datasets
-from data.graph import Graph
+import data
+import data.gene_datasets
+from data.graph import Graph, get_hash
 from data.utils import split_dataset
 import optimization
 import torch
@@ -27,47 +28,13 @@ import analysis
 import sklearn, sklearn.model_selection, sklearn.metrics, sklearn.linear_model, sklearn.neural_network, sklearn.tree
 import numpy as np
 
-# 3 graphs, all genes
-# 3 graphs, reduce to only nodes with
-# just MLP
-# add 1 trial each time
-# do a diff on the big results graph, I can do a merge (I think at the end)
-# put images in the paper
-#do just one trial and add logic to do repeated trials
-
-def sample_neighbors(g, gene, num_neighbors, include_self=True):
-    results = set([])
-    if include_self:
-        results = set([gene])
-    all_nodes = set(g.nodes)
-    try:
-        first_degree = set(g.neighbors(gene))
-        second_degree = set()
-        for x in g.neighbors(gene):
-            second_degree = second_degree.union(set(g.neighbors(x)))
-    except:
-        first_degree = all_nodes
-        second_degree = all_nodes
-
-    while len(results) < num_neighbors:
-        if len(first_degree) - len(results) > 0:
-            unique = sorted(first_degree - results)
-            results.add(unique.pop())
-        elif len(second_degree) - len(results) > 0:
-            unique = sorted(second_degree - results)
-            results.add(unique.pop())
-        else:
-            unique = sorted(all_nodes - results)
-            results.add(unique.pop())
-    return results
-
 
 class Method:
     def __init__(self):
         pass
 
-class SkLearn(Method):
 
+class SkLearn(Method):
     def __init__(self, model, penalty=False):
         self.model = model
         self.penalty = penalty
@@ -83,7 +50,7 @@ class SkLearn(Method):
         elif self.model == "DT":
             model = sklearn.tree.DecisionTreeClassifier()
         elif self.model == "MLP":
-            model = sklearn.neural_network.MLPClassifier(hidden_layer_sizes=(32,3), learning_rate_init=0.001, early_stopping=False,  max_iter=1000)
+            model = sklearn.neural_network.MLPClassifier(hidden_layer_sizes=(32, 3), learning_rate_init=0.001, early_stopping=False,  max_iter=1000)
         else:
             print "incorrect label"
 
@@ -196,7 +163,7 @@ class PyTorch(Method):
         for t in range(0, self.num_epochs):
             start_timer = time.time()
 
-            for base_x in range(0,local_X_train.shape[0], self.batch_size):
+            for base_x in range(0, local_X_train.shape[0], self.batch_size):
                 inputs, labels = local_X_train[base_x:base_x+self.batch_size], local_y_train[base_x:base_x+self.batch_size]
 
                 inputs = Variable(inputs, requires_grad=False).float()
@@ -209,8 +176,8 @@ class PyTorch(Method):
 
                 # Compute and print loss
                 crit_loss = optimization.compute_loss(criterion, y_pred, labels)
-                #l1_loss = setup_l1_loss(model, l1_loss_lambda, l1_criterion, False)
-                total_loss = crit_loss #+ l1_loss
+                # l1_loss = setup_l1_loss(model, l1_loss_lambda, l1_criterion, False)
+                total_loss = crit_loss  # + l1_loss
 
                 # Zero gradients, perform a backward pass, and update the weights.
                 optimizer.zero_grad()
@@ -221,21 +188,21 @@ class PyTorch(Method):
             auc = {'train': 0., 'valid': 0., 'test': 0.}
             res = []
             try:
-                for base_x in range(0,local_X_train.shape[0], self.batch_size):
+                for base_x in range(0, local_X_train.shape[0], self.batch_size):
                     inputs = Variable(local_X_train[base_x:base_x+self.batch_size], requires_grad=False).float()
-                    res.append(model(inputs)[:,1].data.cpu().numpy())
+                    res.append(model(inputs)[:, 1].data.cpu().numpy())
                 auc['train'] = sklearn.metrics.roc_auc_score(local_y_train.numpy(), np.asarray(res).flatten())
 
                 res = []
-                for base_x in range(0,local_X_valid.shape[0], self.batch_size):
+                for base_x in range(0, local_X_valid.shape[0], self.batch_size):
                     inputs = Variable(local_X_valid[base_x:base_x+self.batch_size], requires_grad=False).float()
-                    res.append(model(inputs)[:,1].data.cpu().numpy())
+                    res.append(model(inputs)[:, 1].data.cpu().numpy())
                 auc['valid'] = sklearn.metrics.roc_auc_score(local_y_valid, np.asarray(res).flatten())
 
                 res = []
-                for base_x in range(0,X_test.shape[0], self.batch_size):
+                for base_x in range(0, X_test.shape[0], self.batch_size):
                     inputs = Variable(X_test[base_x:base_x+self.batch_size], requires_grad=False).float()
-                    res.append(model(inputs)[:,1].data.cpu().numpy())
+                    res.append(model(inputs)[:, 1].data.cpu().numpy())
                 auc['test'] = sklearn.metrics.roc_auc_score(y_test, np.asarray(res).flatten())
             except Exception:
                 pass
@@ -247,10 +214,8 @@ class PyTorch(Method):
 #             auc['valid'] = sklearn.metrics.roc_auc_score(local_y_valid, model(Variable(local_X_valid.cpu(), requires_grad=False).float())[:,1].cpu().data.numpy())
 #             auc['test'] = sklearn.metrics.roc_auc_score(y_test, model(Variable(X_test.cpu(), requires_grad=False).float())[:,1].cpu().data.numpy())
 
-            summary = [ t, crit_loss.data[0], auc['train'], auc['valid'], time_this_epoch ]
+            summary = [t, crit_loss.data[0], auc['train'], auc['valid'], time_this_epoch ]
             summary = "epoch {}, cross_loss: {:.03f}, auc_train: {:0.3f}, auc_valid:{:0.3f}, time: {:.02f} sec".format(*summary)
-            #print summary
-
             patience = patience - 1
             if patience == 0:
                 return max_valid_test
@@ -261,29 +226,20 @@ class PyTorch(Method):
                 patience = self.patience
 
 
-def method_comparison(results, dataset, models, gene, num_genes, trials, train_size, test_size, file_to_write=None, g=None, first_degree=False, second_degree=False):
+def method_comparison(results, dataset, models, gene, num_genes, trials, train_size, test_size, file_to_write=None, g=None):
     mean = dataset.df[gene].mean()
     dataset.labels = [1 if x > mean else 0 for x in dataset.df[gene]]
     if num_genes != len(dataset.df.columns):
         neighbors = set([gene])
         all_nodes = set(g.nodes)
-        try:
-            neighbors = neighbors.union(set(g.neighbors(gene)))
-            if second_degree:
-                for x in g.neighbors(gene):
-                    neighbors = neighbors.union(set(g.neighbors(x)))
-        except:
-            first_degree = all_nodes
-            second_degree = all_nodes
+        neighbors = neighbors.union(set(g.neighbors(gene)))
         dataset.df = dataset.df[list(neighbors)]
 
     dataset.df[gene] = 1
     dataset.data = dataset.df.as_matrix()
-    neighborhood=None
+    neighborhood = None
     for model in models:
         for seed in range(trials):
-
-            #have we already done it?
             already_done = results["df"][(results["df"].gene_name == gene) &
                                          (results["df"].model == model['key']) &
                                          (results["df"].num_genes == num_genes) &
@@ -296,32 +252,34 @@ def method_comparison(results, dataset, models, gene, num_genes, trials, train_s
             print "doing:", model['key'], num_genes, seed
             result = model['method'].loop(dataset=dataset, seed=seed, train_size=train_size, test_size=test_size, adj=neighborhood)
 
-            experiment = {"gene_name": gene,
-                    "model": model['key'],
-                    "num_genes": num_genes,
-                    "seed":seed,
-                    "train_size": train_size,
-                    "auc":result
-                    }
+            experiment = {
+                          "gene_name": gene,
+                          "model": model['key'],
+                          "num_genes": num_genes,
+                          "seed": seed,
+                          "train_size": train_size,
+                          "auc": result
+                         }
 
             results["df"] = results["df"].append(experiment, ignore_index=True)
             print results
+
+            dir = "/".join(file_to_write.split('/')[0:-1])
+            if not os.path.isdir(dir):
+                os.mkdir(dir)
             pickle.dump(results, open(file_to_write, "wb"))
 
-m = [
-    {'key': 'MLP', 'method': PyTorch("MLP", dropout=False, cuda=False)},
-    #{'key': 'LR', 'method': PyTorch("LR", dropout=False, cuda=False)},
-    ]
+
+m = [{'key': 'MLP', 'method': PyTorch("MLP", dropout=False, cuda=False)}, ]
+
 
 def build_parser():
     parser = argparse.ArgumentParser(
         description="Meta learning ")
 
     parser.add_argument('--bucket', default=0, type=int, help='which bucket is this.')
-    parser.add_argument('--exp-dir', default=0, type=str, help='which exp dir is this.')
-    parser.add_argument('--graph-path', default=0, type=str, help='which exp dir is this.')
-    parser.add_argument('--first-degree', default=False, type=bool, help='which exp dir is this.')
-    parser.add_argument('--second-degree', default=False, type=str, help='which exp dir is this.')
+    parser.add_argument('--exp-name', default=0, type=str, help='which exp dir is this.')
+    parser.add_argument('--graph', default=0, type=str, help='which graph is this.')
     return parser
 
 
@@ -330,31 +288,25 @@ def parse_args(argv):
         opt = build_parser().parse_args(argv)
     else:
         opt = argv
-
     return opt
 
 
 def main(argv=None):
     opt = parse_args(argv)
-
-    #tcgatissue = data.gene_datasets.TCGATissue(data_dir='./genomics/TCGA/', data_file='TCGA_tissue_ppi.hdf5')
     tcgatissue = data.gene_datasets.TCGATissue()
-
     graph = Graph()
-    #path = "genomics/graph/pancan-tissue-graph.hdf5"
-    graph.load_graph(opt.graph_path)
-    #graph.intersection_with(tcgatissue)
+    graph.load_graph(get_hash(opt.graph))
+    # graph.intersection_with(tcgatissue)
     g = nx.from_numpy_matrix(graph.adj)
     mapping = dict(zip(range(0, len(tcgatissue.df.columns)), tcgatissue.df.columns))
     g = nx.relabel_nodes(g, mapping)
 
-    results_file =  opt.exp_dir + '/results-' + str(opt.bucket) + '.pkl'
+    results_file = "experiments/results/" + opt.exp_name + '/results-' + str(opt.bucket) + '.pkl'
     try:
         results = pickle.load(open(results_file, "r"))
     except Exception:
-        results = {"df": pd.DataFrame(columns=['auc','gene_name', 'model', 'num_genes', 'seed', 'train_size'])}
+        results = {"df": pd.DataFrame(columns=['auc', 'gene_name', 'model', 'num_genes', 'seed', 'train_size'])}
 
-    #tcgatissue = data.gene_datasets.TCGATissue(data_dir='./genomics/TCGA/', data_file='TCGA_tissue_ppi.hdf5')
     tcgatissue = data.gene_datasets.TCGATissue()
     tcgatissue.df = tcgatissue.df - tcgatissue.df.mean()
 
@@ -365,10 +317,9 @@ def main(argv=None):
     df = tcgatissue.df.copy(deep=True)
     genes_to_iter = tcgatissue.df.iloc[:, start:end].columns.difference(results['df']['gene_name'].unique())
     for gene in genes_to_iter:
-#        tcgatissue.df = df[:]
-#        method_comparison(results, tcgatissue, m, gene=gene, num_genes=16300, trials=3, train_size=50, test_size=1000, file_to_write=results_file, g=g)
         tcgatissue.df = df[:]
-        method_comparison(results, tcgatissue, m, gene=gene, num_genes=50, trials=3, train_size=50, test_size=1000, file_to_write=results_file, g=g, first_degree=opt.first_degree, second_degree=opt.second_degree)
+        method_comparison(results, tcgatissue, m, gene=gene, num_genes=50, trials=3, train_size=50, test_size=1000, file_to_write=results_file, g=g)
+
 
 if __name__ == '__main__':
     main()

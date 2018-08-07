@@ -13,6 +13,7 @@ import optimization as otim
 import sys
 import time
 import copy
+import pickle
 
 from itertools import repeat
 import data, data.gene_datasets
@@ -21,8 +22,6 @@ import numpy as np
 import matplotlib, matplotlib.pyplot as plt
 import networkx as nx
 import pandas as pd
-import gene_inference
-#from gene_inference.infer_genes import infer_all_genes, sample_neighbors
 import models, models.graphLayer
 from models.models import CGN
 import data, data.gene_datasets
@@ -34,13 +33,13 @@ from torch.autograd import Variable
 from analysis.metrics import record_metrics_for_epoch
 import analysis
 reload(analysis.metrics)
-reload(gene_inference);
 import os
 
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--gene', default="S100A8", type=str)
 parser.add_argument('--cuda', action='store_true', help='If we want to run on gpu.')
+parser.add_argument('--exp', action='store_true', help='If we want to run on gpu.')
 opt = parser.parse_args()
 
 
@@ -334,22 +333,22 @@ def method_comparison(results, dataset, models, gene, search_num_genes, trials, 
                     result = model['method'].loop(dataset=dataset, seed=seed, train_size=train_size, test_size=test_size, adj=neighborhood)
 
                     experiment = {"gene_name": gene,
-                            "model": model['key'],
-                            "num_genes": num_genes,
-                            "seed":seed,
-                            "train_size": train_size,
-                            "auc":result
-                            }
+                                  "model": model['key'],
+                                  "num_genes": num_genes,
+                                  "seed": seed,
+                                  "train_size": train_size,
+                                  "auc": result
+                                 }
 
                     results["df"] = results["df"].append(experiment, ignore_index=True)
-                    pickle.dump(results, open("results_" + gene + ".pkl", "wb"))
+                    results_file = "experiments/results/fig-5/results_" + str(opt.gene) + '.pkl'
+                    pickle.dump(results, open(results_file, "wb"))
             dataset.df = full_df
 
 
 
 
 
-import pickle
 
 m = [
 #    {'key': 'LR-L1', 'method': SkLearn("LR", penalty=True)},
