@@ -30,7 +30,7 @@ def infer_all_genes(method, genes, train_size, test_size, trials, penalty):
 
     for index, gene in enumerate(genes.df):
         sys.stdout.write(str(index) + ", ")
-        # This throws errors sometimes when we give really unbalanced training sets. Those genes aren't particularly interesting for this usecase though, so we can ignore them,
+        # This throws errors with really unbalanced training sets.
         try:
             data = infer_gene(method, genes, gene, train_size, test_size, trials, penalty)
             results = results.append(pd.DataFrame(data, index=range(0, len(data))))

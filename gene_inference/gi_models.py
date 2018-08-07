@@ -8,7 +8,6 @@ def lr(dataset, trials, train_size, test_size, penalty=False, **kwargs):
 
     for i in range(trials):
         X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(dataset.df, dataset.labels, stratify=dataset.labels, train_size=train_size, test_size=test_size, random_state=i)
-        import pdb; pdb.set_trace()
         model = sklearn.linear_model.LogisticRegression()
         if penalty:
             model = sklearn.linear_model.LogisticRegression(penalty='l1', tol=0.001)
