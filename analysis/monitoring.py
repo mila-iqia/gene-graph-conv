@@ -220,10 +220,6 @@ def load_checkpoint(load_folder, opt, dataset, graph, filename='checkpoint.pth.t
 
             # We override some of the options between the runs, otherwise it might be a pain.
             new_opt.epoch = opt.epoch
-            if str(opt.training_mode) != str(new_opt.training_mode):
-                optimizer_state = None
-
-            new_opt.training_mode = opt.training_mode
             print"=> loaded checkpoint '{}' (epoch {})".format(filename, epoch)
         else:
             print("=> no checkpoint found at '{}'".format(filename))
@@ -240,7 +236,6 @@ def load_checkpoint(load_folder, opt, dataset, graph, filename='checkpoint.pth.t
                          new_opt.num_layer,
                          new_opt.use_emb,
                          new_opt.dropout,
-                         new_opt.training_mode,
                          new_opt.use_gate,
                          new_opt.nb_attention_head,
                          graph,

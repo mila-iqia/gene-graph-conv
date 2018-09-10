@@ -8,7 +8,7 @@ import torch
 import time
 from torch.autograd import Variable
 from analysis import monitoring
-from analysis.metrics import record_metrics_for_epoch, summarize, record_metrics_mse
+from analysis.metrics import record_metrics_for_epoch, summarize
 import optimization as otim
 
 def build_parser():
@@ -24,9 +24,6 @@ def build_parser():
     parser.add_argument('--l1-loss-lambda', default=0., type=float, help='L1 loss lambda.')
     parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
     parser.add_argument('--dataset', choices=['tcga-tissue', 'tcga-tissue-gene-inference'], default='tcga-tissue', help='Which dataset to use.')
-    parser.add_argument('--clinical-file', type=str, default='PANCAN_clinicalMatrix.gz', help='File to read labels from')
-    parser.add_argument('--clinical-label', type=str, default='gender', help='Label to join with data')
-    parser.add_argument('--scale-free', action='store_true', help='If we want a scale-free random adjacency matrix for the dataset.')
     parser.add_argument('--cuda', action='store_true', help='If we want to run on gpu.')
     parser.add_argument('--norm-adj', default=True, type=bool, help="If we want to normalize the adjancy matrix.")
     parser.add_argument('--log', choices=['console', 'silent'], default='console', help="Determines what kind of logging you get")
@@ -38,7 +35,6 @@ def build_parser():
 
     # Model specific options
     parser.add_argument('--num-channel', default=32, type=int, help='Number of channel in the model.')
-    parser.add_argument('--semi-mse-lambda', default=100., type=float, help='The lambda to use when using the semi supervised loss.')
     parser.add_argument('--dropout', default=False, type=bool, help='If we want to perform dropout in the model..')
     parser.add_argument('--add-connectivity', default=False, type=bool, help='If we want to augment the connectivity after each convolution layer after the first one.')
     parser.add_argument('--model', default='cgn', choices=['cgn', 'mlp', 'lcg', 'sgc', 'slr', 'cnn', 'random', 'lr', 'cgn+mlp'], help='Which model to use.')
@@ -60,10 +56,9 @@ def build_parser():
     parser.add_argument('--extra-ucn', default=0, type=int, help="The number of extra nodes without edges in the percolate-plus dataset")
     parser.add_argument('--disconnected', default=0, type=int, help="The number of disconnected nodes from the perc subgraph without edges in percolate-plus")
     parser.add_argument('--center', default=False, type=bool, help="center the data (subtract mean from each element)?")
-    parser.add_argument('--graph', default='pancan', choices=['kegg', 'pathway', 'trust', 'pancan', 'random', 'train-corr', 'merged'], help="Which graph with which to prior")
+    parser.add_argument('--graph', default='genemania', choices=['regnet', 'genemania'], help="Which graph with which to prior")
     parser.add_argument('--approx-nb-edges', default=100, type=int, help="If we have a randomly generated graph, this is the approx nb of edges")
     parser.add_argument('--nb-nodes', default=None, type=int, help="If we have a randomly generated graph, this is the nb of nodes")
-    parser.add_argument('--training-mode', default=None, choices=['semi', 'unsupervised', 'gene-inference'], help="which training mode we want to use.")
     parser.add_argument('--data-dir', default=None, type=str, help="where is your dataset located?")
     parser.add_argument('--data-file', default=None, type=str, help="where is your dataset located?")
     return parser
@@ -126,7 +121,7 @@ def main(argv=None):
     logging.info(my_model)
 
     # Setup the loss
-    criterions = otim.get_criterion(dataset, opt.training_mode)
+    criterions = otim.get_criterion(dataset)
     l1_criterion = torch.nn.L1Loss(size_average=False)
 
     if opt.cuda:
@@ -157,8 +152,7 @@ def main(argv=None):
             y_pred = my_model(inputs)
 
             # Compute and print loss
-            import pdb; pdb.set_trace()
-            crit_loss = otim.compute_loss(criterions, y_pred, targets, opt.training_mode, opt.semi_mse_lambda)
+            crit_loss = otim.compute_loss(criterions, y_pred, targets)
             model_regularization_loss = my_model.regularization(opt.model_reg_lambda)
             l1_loss = setup_l1_loss(my_model, opt.l1_loss_lambda, l1_criterion, opt.cuda)
             total_loss = crit_loss + model_regularization_loss + l1_loss
@@ -171,39 +165,26 @@ def main(argv=None):
 
         time_this_epoch = time.time() - start_timer
 
-        if opt.training_mode != 'unsupervised' and opt.training_mode != 'gene-inference':
-            acc, auc = record_metrics_for_epoch(writer, crit_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, dataset, opt.cuda)
-            summary = [
-                t,
-                crit_loss.data[0],
-                acc['train'],
-                acc['valid'],
-                auc['train'],
-                auc['valid'],
-                time_this_epoch
-            ]
-            summary = "epoch {}, cross_loss: {:.03f}, acc_train: {:0.3f}, acc_valid: {:0.3f}, auc_train: {:0.3f}, auc_valid:{:0.3f}, time: {:.02f} sec".format(*summary)
-            logging.info(summary)
+        acc, auc = record_metrics_for_epoch(writer, crit_loss, total_loss, t, time_this_epoch, train_set, valid_set, test_set, my_model, dataset, opt.cuda)
+        summary = [
+            t,
+            crit_loss.data[0],
+            acc['train'],
+            acc['valid'],
+            auc['train'],
+            auc['valid'],
+            time_this_epoch
+        ]
+        summary = "epoch {}, cross_loss: {:.03f}, acc_train: {:0.3f}, acc_valid: {:0.3f}, auc_train: {:0.3f}, auc_valid:{:0.3f}, time: {:.02f} sec".format(*summary)
+        logging.info(summary)
 
-            patience = patience - 1
-            if patience == 0:
-                break
-            if max_valid < auc['valid'] and t > 5:
-                max_valid = auc['valid']
-                best_summary = summarize(t, crit_loss.data[0], total_loss.data[0], acc, auc)
-                patience = 1000
-
-        else:
-            mse = record_metrics_mse(my_model, writer, t, criterions, train_set, valid_set, test_set, dataset, opt.cuda)
-            summary = [
-                t,
-                mse['train'],
-                mse['valid'],
-                mse['test'],
-                time_this_epoch
-            ]
-            summary = "epoch {}, mse (train): {:.04f}, mse (valid): {:.04f}, mse (test): {:.03f}, time: {:.02f} sec".format(*summary)
-            logging.info(summary)
+        patience = patience - 1
+        if patience == 0:
+            break
+        if max_valid < auc['valid'] and t > 5:
+            max_valid = auc['valid']
+            best_summary = summarize(t, crit_loss.data[0], total_loss.data[0], acc, auc)
+            patience = 1000
 
         # Saving the checkpoint
         monitoring.save_checkpoint(my_model, optimizer, t, opt, exp_dir)

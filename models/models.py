@@ -197,8 +197,7 @@ class LogisticRegression(nn.Module):
 class GraphNetwork(nn.Module):
     def __init__(self, nb_nodes, input_dim, channels, adj, out_dim,
                  on_cuda=True, add_emb=None, transform_adj=None, aggregate_adj=None, prepool_extralayers=0,
-                 graphLayerType=graphLayer.CGNLayer, use_gate=0.0001, dropout=False, attention_head=0,
-                 training_mode=None, master_nodes=0):
+                 graphLayerType=graphLayer.CGNLayer, use_gate=0.0001, dropout=False, attention_head=0, master_nodes=0):
         super(GraphNetwork, self).__init__()
 
         if transform_adj is None:
@@ -213,7 +212,6 @@ class GraphNetwork(nn.Module):
         self.aggregate_adj = aggregate_adj
         self.dropout = dropout
         self.attention_head = attention_head
-        self.training_mode = training_mode
         self.master_nodes = master_nodes
         self.prepool_extralayers = prepool_extralayers
 
@@ -229,13 +227,13 @@ class GraphNetwork(nn.Module):
         self.dims = dims
         for i, [c_in, c_out] in enumerate(zip(dims[:-1], dims[1:])):
             # transformation to apply at each layer.
-            
+
             if self.aggregate_adj is not None:
                 for el in range(self.prepool_extralayers):
                     print "add extra layer before pooling" + str(el)
                     layer = graphLayerType(adj, c_in, c_in, on_cuda, i, transform_adj=None, aggregate_adj=None)
                     convs.append(layer)
-            
+
             layer = graphLayerType(adj, c_in, c_out, on_cuda, i, transform_adj=transform_adj, aggregate_adj=aggregate_adj)
             layer.register_forward_hook(save_computations)  # For monitoringv
             convs.append(layer)
@@ -250,11 +248,10 @@ class GraphNetwork(nn.Module):
         else:
             logistic_in_dim = [self.nb_nodes * dims[-1]]
 
-        if self.training_mode != 'gene-inference':
-            for d in logistic_in_dim:
-                layer = nn.Linear(d, self.out_dim)
-                layer.register_forward_hook(save_computations)  # For monitoring
-                logistic_layer.append(layer)
+        for d in logistic_in_dim:
+            layer = nn.Linear(d, self.out_dim)
+            layer.register_forward_hook(save_computations)  # For monitoring
+            logistic_layer.append(layer)
 
             self.my_logistic_layers = nn.ModuleList(logistic_layer)
 
@@ -282,16 +279,6 @@ class GraphNetwork(nn.Module):
             self.attentionLayer = AttentionLayer(dims[-1], attention_head)
             self.attentionLayer.register_forward_hook(save_computations)  # For monitoringv
 
-
-        if self.training_mode == 'semi':
-            self.last_semi_layer = nn.Conv1d(dims[-1], 1, 1, bias=True)
-
-        if self.training_mode == 'gene-inference':
-            if self.attention_head:
-                self.last_inference_layer = nn.Linear(dims[-1] * self.attention_head, nb_nodes, bias=True)
-            else:
-                self.last_inference_layer = nn.Conv1d(dims[-1], 1, 1, bias=True)
-
         logging.info("Done!")
         # TODO: add all the funky bells and stuff that the old CGN has.
 
@@ -310,20 +297,9 @@ class GraphNetwork(nn.Module):
         #ipdb.set_trace()
 
         nb_examples, nb_nodes, nb_channels = x.size()
-        if self.training_mode is None:
-            return self.supervised(x)
-        elif self.training_mode == 'semi':
-            supervised = self.supervised(x[:, :, :nb_channels/2])
-            semi = self.semi_supervised(x[:, :, nb_channels/2:])
-
-            return [supervised, semi]
-
-        elif self.training_mode == 'gene-inference':
-            return self.gene_inference(x)
-
+        return self.supervised(x)
 
     def gene_inference(self, x):
-
         nb_examples, nb_nodes, nb_channels = x.size()
 
         if self.add_emb:
@@ -471,19 +447,15 @@ class LCG(GraphNetwork):
 
 
 class MLP(nn.Module):
-    def __init__(self, input_dim, channels, out_dim=None, on_cuda=True, dropout=False, training_mode=None):
+    def __init__(self, input_dim, channels, out_dim=None, on_cuda=True, dropout=False):
         super(MLP, self).__init__()
         out_dim = out_dim if out_dim is not None else 2
         input_dim = input_dim if input_dim is not None else 2
-
-        if training_mode == 'gene-inference':
-            out_dim = input_dim
 
         self.my_layers = []
         self.out_dim = out_dim
         self.on_cuda = on_cuda
         self.dropout = dropout
-        self.training_mode = training_mode
 
         dims = [input_dim] + channels
 
@@ -522,179 +494,8 @@ class MLP(nn.Module):
     def regularization(self, reg_lambda):
         return 0.0
 
-class DGEX(nn.Module):
-    def __init__(self, input_dim, channels, out_dim=None, on_cuda=True, dropout=False, training_mode=None):
-        super(DGEX, self).__init__()
-        out_dim = out_dim if out_dim is not None else 2
-        input_dim = input_dim if input_dim is not None else 2
 
-        if training_mode == 'gene-inference':
-            out_dim = input_dim
-            in_size = 943
-
-        # out_size = 4760
-        # b_size = 200
-        # l_rate = 5e-4
-        # l_rate_min = 1e-5
-        # decay_factor = 0.9
-        # lr_scale = 3.0
-        # momentum = 0.5
-
-        self.my_layers = []
-        self.out_dim = out_dim
-        self.on_cuda = on_cuda
-        self.dropout = dropout
-        self.training_mode = training_mode
-
-        dims = [input_dim] + channels
-
-        logging.info("Constructing the network...")
-        layers = []
-        for c_in, c_out in zip(dims[:-1], dims[1:]):
-            layer = nn.Linear(c_in, c_out)
-            layers.append(layer)
-        self.my_layers = nn.ModuleList(layers)
-
-        if channels:
-            self.last_layer = nn.Linear(channels[-1], out_dim)
-        else:
-            self.last_layer = nn.Linear(input_dim, out_dim)
-
-        self.my_dropout = None
-        self.my_dropout = torch.nn.Dropout(0.1)
-
-        logging.info("Done!")
-
-    def forward(self, x):
-        nb_examples, nb_nodes, nb_channels = x.size()
-        x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
-        for layer in self.my_layers:
-            x = F.relu(layer(x.view(nb_examples, -1)))  # or relu, sigmoid...
-
-            if self.dropout:
-                x = self.my_dropout(x)
-
-        x = self.last_layer(x.view(nb_examples, -1))
-
-        return x
-
-    def regularization(self, reg_lambda):
-        return 0.0
-
-
-# class Random(nn.Module):
-#     def __init__(self, input_dim, channels, out_dim=None, on_cuda=True):
-#         super(Random, self).__init__()
-#
-#         self.my_layers = []
-#         self.out_dim = out_dim
-#         self.on_cuda = on_cuda
-#
-#         dims = [input_dim] + channels
-#
-#         logging.info("Constructing the network...")
-#         layers = []
-#         for c_in, c_out in zip(dims[:-1], dims[1:]):
-#             layer = nn.Linear(c_in, c_out)
-#             layers.append(layer)
-#         self.my_layers = nn.ModuleList(layers)
-#
-#         if channels:
-#             self.last_layer = nn.Linear(channels[-1], out_dim)
-#         else:
-#             self.last_layer = nn.Linear(input_dim, out_dim)
-#
-#         logging.info("Done!")
-#
-#     def forward(self, x):
-#         nb_examples, nb_nodes, nb_channels = x.size()
-#         guesses = np.random.permutation(x[0].data.numpy())
-#         x = Variable(torch.FloatTensor(guesses))
-#         return x
-#
-#     def regularization(self, reg_lambda):
-#         return 0.0
-#
-
-class CNN(nn.Module):
-    def __init__(self, input_dim, channels, grid_shape, out_dim=None, on_cuda=True):
-        super(CNN, self).__init__()
-
-        self.input_dim = input_dim
-        self.channels = channels
-        self.out_dim = out_dim
-        self.grid_shape = grid_shape
-        kernel_size = 2
-        stride = 1
-        padding = 0
-
-        layers = []
-        dims = [input_dim] + channels
-
-        current_size = grid_shape[0]
-
-        for c_in, c_out in zip(dims[:-1], dims[1:]):
-            layer = nn.Sequential(
-                nn.Conv2d(c_in, c_out, kernel_size=kernel_size, padding=padding, stride=stride),
-                nn.ReLU(),
-            )
-
-            layers.append(layer)
-            new_size = np.ceil((current_size + 2*padding - (kernel_size - 1))/float(stride))
-            print current_size, new_size
-            current_size = int(new_size)
-
-        self.my_layers = nn.ModuleList(layers)
-        out = current_size * current_size * dims[-1]
-        self.fc = nn.Linear(out, out_dim)
-
-    def forward(self, x):
-        x = x.view(-1, 1, self.grid_shape[0], self.grid_shape[1])
-
-        # The conv.
-        out = x
-        for layer in self.my_layers:
-            out = layer(out)
-
-        # fully connected.
-        out = out.view(out.size(0), -1)
-        out = self.fc(out)
-        return out
-
-    def regularization(self, reg_lambda):
-        return 0.0
-
-class Graph_plus_MLP(nn.Module):
-    def __init__(self, nb_nodes, input_dim, on_cuda=True, dropout=False, training_mode=None, **kwargs):
-        super(Graph_plus_MLP, self).__init__()
-
-        self.graph_network = GraphNetwork(nb_nodes=nb_nodes, input_dim=input_dim, training_mode=training_mode, dropout=dropout,
-                                          on_cuda=on_cuda, **kwargs)
-
-        self.mlp = MLP(input_dim=nb_nodes, channels=[512], training_mode=training_mode,
-                       dropout=dropout, on_cuda=on_cuda)
-
-
-    def forward(self, x):
-        return self.mlp.forward(x) + self.graph_network.forward(x)
-
-    def load_state_dict(self, state_dict):
-        own_state = self.state_dict()
-        for name, param in state_dict.items():
-            if name not in own_state:
-                continue
-            if isinstance(param, nn.Parameter):
-                # backwards compatibility for serialized parameters
-                param = param.data
-            try:
-                own_state[name].copy_(param)
-            except AttributeError as e:
-                pass # because of fucking sparse matrices.
-
-    def regularization(self, reg_lambda):
-        return 0.0
-
-def get_model(seed, nb_class, nb_examples, nb_nodes, model, on_cuda, num_channel, num_layer, use_emb, dropout, training_mode, use_gate, nb_attention_head, graph, dataset, model_state=None, opt=None):
+def get_model(seed, nb_class, nb_examples, nb_nodes, model, on_cuda, num_channel, num_layer, use_emb, dropout, use_gate, nb_attention_head, graph, dataset, model_state=None, opt=None):
     """
     Return a model based on the options.
     :param opt:
@@ -709,28 +510,21 @@ def get_model(seed, nb_class, nb_examples, nb_nodes, model, on_cuda, num_channel
         adj_transform, aggregate_function = graphLayer.get_transform(opt, graph.adj)
         my_model = CGN(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
                        on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
-                       attention_head=nb_attention_head, training_mode=training_mode)
-    elif model == 'cgn+mlp':
-        assert graph is not None
-        adj_transform, aggregate_function = graphLayer.get_transform(opt, graph.adj)
-        my_model = Graph_plus_MLP(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
-                       on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
-                       attention_head=nb_attention_head, training_mode=training_mode)
-
+                       attention_head=nb_attention_head)
 
     elif model == 'lcg':
         assert graph is not None
         adj_transform, aggregate_function = graphLayer.get_transform(opt, graph.adj)
         my_model = LCG(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
                        on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
-                       attention_head=nb_attention_head, training_mode=training_mode)
+                       attention_head=nb_attention_head)
 
     elif model == 'sgc':
         assert graph is not None
         adj_transform, aggregate_function = graphLayer.get_transform(opt, graph.adj)
         my_model = SGC(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
                        on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
-                       attention_head=nb_attention_head, training_mode=training_mode)
+                       attention_head=nb_attention_head)
 
     elif model == 'slr':
         assert graph is not None
@@ -740,18 +534,7 @@ def get_model(seed, nb_class, nb_examples, nb_nodes, model, on_cuda, num_channel
         my_model = LogisticRegression(nb_nodes=nb_nodes, input_dim=1, out_dim=nb_class, on_cuda=on_cuda)
 
     elif model == 'mlp':
-        my_model = MLP(dataset.nb_nodes, [num_channel] * num_layer, nb_class, on_cuda=on_cuda, dropout=dropout, training_mode=training_mode)
-
-    # elif model == 'random':
-    #     my_model = Random(dataset.nb_nodes, [num_channel] * num_layer, dataset.nb_class, on_cuda=on_cuda)
-
-    elif model == 'cnn':
-        assert opt.dataset == 'percolate'
-        assert graph is not None
-        # TODO: to change the shape.
-        grid_shape = int(np.sqrt(graph.adj.shape[0]))
-        grid_shape = [grid_shape, grid_shape]
-        my_model = CNN(input_dim=1, channels=[num_channel] * num_layer, grid_shape=grid_shape, out_dim=nb_class, on_cuda=on_cuda)
+        my_model = MLP(dataset.nb_nodes, [num_channel] * num_layer, nb_class, on_cuda=on_cuda, dropout=dropout)
 
     else:
         raise ValueError("{} is not a valid option!".format(model))

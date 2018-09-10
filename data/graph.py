@@ -8,6 +8,7 @@ import pandas as pd
 import itertools
 import academictorrents as at
 
+
 class Graph(object):
     def __init__(self):
         pass
@@ -90,49 +91,7 @@ class Graph(object):
 
 
 def get_hash(graph):
-    if graph == "kegg":
+    if graph == "regnet":
         return "3c8ac6e7ab6fbf962cedb77192177c58b7518b23"
-    elif graph == "trust":
-        return "8605f22b03ba591bc0eb9907a1f70f7d3758bcd8"
-    elif graph == "pathway":
-        return "0332d23cc9909532b3b2c5ddcc3ac045f3f30ff4"
-    elif graph == "pancan":
+    elif graph == "genemania":
         return "ae2691e4f4f068d32f83797b224eb854b27bd3ee"
-    elif graph == 'merged':
-        return "a8b1bb215a6ab49d6947f666cc7780a66e1b86fe"
-
-
-class EcoliEcocycGraph():
-
-    def __init__(self, opt=None):
-
-        d = pd.read_csv("data/ecocyc-21.5-pathways.col", sep="\t", skiprows=40,header=None)
-        d = d.set_index(0)
-        del d[1]
-        d = d.loc[:,:110] # filter gene ids
-
-        # collect global names for nodes so all adj are aligned
-        node_names = d.as_matrix().reshape(-1).astype(str)
-        node_names = np.unique(node_names[node_names!= "nan"]) # nan removal
-
-        #stores all subgraphs and their pathway names
-        adjs = []
-        adjs_name = []
-        # for each pathway create a graph, add the edges and create a matrix
-        for i, name in enumerate(d.index):
-            G=nx.Graph()
-            G.add_nodes_from(node_names)
-            pathway_genes = np.unique(d.iloc[i].dropna().astype(str).as_matrix())
-            for e1, e2 in itertools.product(pathway_genes, pathway_genes):
-                G.add_edge(e1, e2)
-            adj = nx.to_numpy_matrix(G)
-            adjs.append(adj)
-            adjs_name.append(name)
-
-        #collapse all graphs to one graph
-        adj = np.sum(adjs,axis=0)
-        adj = np.clip(adj,0,1)
-
-        self.adj = adj
-        self.adjs = adjs
-        self.adjs_name = adjs_name

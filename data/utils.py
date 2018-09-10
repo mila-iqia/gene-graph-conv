@@ -105,30 +105,3 @@ def subsample_graph(adj, percentile=100):
 
         to_keep = adj >= threshold  # throw away all the edges that are bigger than what we have.
         return adj * to_keep
-
-
-class InpaintingGraph(object):
-    def __init__(self, graph, keep_original=True):
-        self.graph = graph
-        self.epsilon = 1e-8
-        self.keep_original = keep_original
-
-    def __call__(self, sample):
-
-        # Could do node2vec or something here.
-        inputs, labels = sample
-        nb_nodes = inputs.shape[0]
-
-        to_predict_idx = np.random.randint(nb_nodes)
-
-        to_predict = np.zeros(inputs.shape)
-        to_predict[to_predict_idx] = inputs[to_predict_idx] + self.epsilon
-
-        inputs_supervised = inputs
-        inputs_unsupervised = inputs.copy()
-        inputs_unsupervised[to_predict_idx] = 0.
-
-        if self.keep_original:
-            return np.concatenate([inputs_supervised, inputs_unsupervised], -1), [labels, to_predict]
-        else:
-            return inputs_unsupervised, to_predict
