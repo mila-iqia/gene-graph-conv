@@ -16,8 +16,8 @@ num_buckets=$2
 exp_name=$3
 graph=$4
 
-for bucket in $(seq 1 $num_buckets)
+for bucket_idx in $(seq 1 $num_buckets)
 do
     #sbatch --output $exp_dir"/slurm-%j.out" -x mila00 ./experiments/launch_scripts/launch_one_job.sh $exp $bucket $exp_name $graph
-    ./experiments/launch_scripts/launch_one_job.sh $exp $bucket $exp_name $graph
+    ./experiments/launch_scripts/launch_one_job.sh $exp $bucket_idx $num_buckets $exp_name $graph
 done

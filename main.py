@@ -138,7 +138,6 @@ def main(argv=None):
         start_timer = time.time()
         for no_b, mini in enumerate(train_set):
             inputs, targets = mini['sample'], mini['labels']
-            import pdb; pdb.set_trace()
             inputs = Variable(inputs, requires_grad=False).float()
             #targets = Variable(targets, requires_grad=False).long()
 

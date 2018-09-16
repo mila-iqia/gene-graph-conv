@@ -43,7 +43,6 @@ class GeneDataset(Dataset):
             self.sample_names = pd.DataFrame([])
         self.node_names = np.array(self.file['gene_names'])
         self.df = pd.DataFrame(self.data)
-        import pdb; pdb.set_trace()
         self.df.columns = self.node_names[:len(self.df.columns)]
         self.nb_class = self.nb_class if self.nb_class is not None else 2
         self.label_name = self.node_names[len(self.df.columns)+1:]
