@@ -8,7 +8,7 @@ import torch
 import time
 from torch.autograd import Variable
 from analysis import monitoring
-from analysis.metrics import record_metrics_for_epoch, summarize, record_metrics_mse
+from analysis.metrics import record_metrics_for_epoch, summarize
 import optimization as otim
 import sys
 import time
@@ -34,46 +34,6 @@ from analysis.metrics import record_metrics_for_epoch
 import analysis
 reload(analysis.metrics)
 import os
-
-
-parser = argparse.ArgumentParser()
-parser.add_argument('--gene', default="S100A8", type=str)
-parser.add_argument('--cuda', action='store_true', help='If we want to run on gpu.')
-parser.add_argument('--exp', action='store_true', help='If we want to run on gpu.')
-opt = parser.parse_args()
-
-
-tcgatissue = data.gene_datasets.TCGATissue()
-
-
-opt.seed = 0
-opt.nb_class = None
-opt.nb_examples = None
-opt.nb_nodes = None
-opt.graph = "pathway"
-opt.dataset = tcgatissue
-opt.add_self = True
-opt.norm_adj = True
-opt.add_connectivity = False
-opt.cuda = True
-opt.pool_graph = "ignore"
-
-
-
-
-
-
-
-graph = Graph()
-path = "/data/lisa/data/genomics/graph/pancan-tissue-graph.hdf5"
-graph.load_graph(path)
-#graph.intersection_with(tcgatissue)
-g = nx.from_numpy_matrix(graph.adj)
-mapping = dict(zip(range(0, len(tcgatissue.df.columns)), tcgatissue.df.columns))
-g = nx.relabel_nodes(g, mapping)
-
-
-
 
 def sample_neighbors(g, gene, num_neighbors, include_self=True):
     results = set([])
@@ -146,9 +106,8 @@ class PyTorch(Method):
         self.attention_head = attention_head
         self.l1_loss_lambda = l1_loss_lambda
         self.model_reg_lambda = model_reg_lambda
-        self.training_mode = training_mode
 
-    def loop(self, dataset, seed, train_size, test_size, adj=None):
+    def loop(self, dataset, seed, train_size, test_size, adj=None, opt=None):
 
         X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(dataset.df, dataset.labels, stratify=dataset.labels, train_size=train_size*2, test_size=test_size, random_state=seed)
 
@@ -237,7 +196,7 @@ class PyTorch(Method):
 
 
                 # Compute and print loss
-                crit_loss = optimization.compute_loss(criterion, y_pred, labels, self.training_mode)
+                crit_loss = optimization.compute_loss(criterion, y_pred, labels)
                 model_regularization_loss = model.regularization(self.model_reg_lambda)
                 l1_loss = models.models.setup_l1_loss(model, self.l1_loss_lambda, l1_criterion, opt.cuda)
                 total_loss = crit_loss + model_regularization_loss + l1_loss
@@ -251,30 +210,31 @@ class PyTorch(Method):
 
             auc = {}
             res = []
-            for base_x in range(0,local_X_train.shape[0], self.batch_size):
-                inputs = Variable(local_X_train[base_x:base_x+self.batch_size], requires_grad=False).float()
-                res.append(model(inputs.cuda())[:,1].data.cpu().numpy())
-            auc['train'] = sklearn.metrics.roc_auc_score(local_y_train.numpy(), np.asarray(res).flatten())
+            if opt.cuda:
+                for base_x in range(0,local_X_train.shape[0], self.batch_size):
+                    inputs = Variable(local_X_train[base_x:base_x+self.batch_size], requires_grad=False).float()
+                    res.append(model(inputs.cuda())[:,1].data.cpu().numpy())
+                auc['train'] = sklearn.metrics.roc_auc_score(local_y_train.numpy(), np.asarray(res).flatten())
 
-            res = []
-            for base_x in range(0,local_X_valid.shape[0], self.batch_size):
-                inputs = Variable(local_X_valid[base_x:base_x+self.batch_size], requires_grad=False).float()
-                res.append(model(inputs.cuda())[:,1].data.cpu().numpy())
-            auc['valid'] = sklearn.metrics.roc_auc_score(local_y_valid, np.asarray(res).flatten())
+                res = []
+                for base_x in range(0,local_X_valid.shape[0], self.batch_size):
+                    inputs = Variable(local_X_valid[base_x:base_x+self.batch_size], requires_grad=False).float()
+                    res.append(model(inputs.cuda())[:,1].data.cpu().numpy())
+                auc['valid'] = sklearn.metrics.roc_auc_score(local_y_valid, np.asarray(res).flatten())
 
-            res = []
-            for base_x in range(0,X_test.shape[0], self.batch_size):
-                inputs = Variable(X_test[base_x:base_x+self.batch_size], requires_grad=False).float()
-                res.append(model(inputs.cuda())[:,1].data.cpu().numpy())
-            auc['test'] = sklearn.metrics.roc_auc_score(y_test, np.asarray(res).flatten())
-
+                res = []
+                for base_x in range(0,X_test.shape[0], self.batch_size):
+                    inputs = Variable(X_test[base_x:base_x+self.batch_size], requires_grad=False).float()
+                    res.append(model(inputs.cuda())[:,1].data.cpu().numpy())
+                auc['test'] = sklearn.metrics.roc_auc_score(y_test, np.asarray(res).flatten())
+            else:
+                auc['train'] = sklearn.metrics.roc_auc_score(local_y_train.numpy(), model(Variable(local_X_train.cpu(), requires_grad=False).float())[:,1].cpu().data.numpy())
+                auc['valid'] = sklearn.metrics.roc_auc_score(local_y_valid, model(Variable(local_X_valid.cpu(), requires_grad=False).float())[:,1].cpu().data.numpy())
+                auc['test'] = sklearn.metrics.roc_auc_score(y_test, model(Variable(X_test.cpu(), requires_grad=False).float())[:,1].cpu().data.numpy())
 
             time_this_epoch = time.time() - start_timer
 
 #eval on cpu
-#             auc['train'] = sklearn.metrics.roc_auc_score(local_y_train.numpy(), model(Variable(local_X_train.cpu(), requires_grad=False).float())[:,1].cpu().data.numpy())
-#             auc['valid'] = sklearn.metrics.roc_auc_score(local_y_valid, model(Variable(local_X_valid.cpu(), requires_grad=False).float())[:,1].cpu().data.numpy())
-#             auc['test'] = sklearn.metrics.roc_auc_score(y_test, model(Variable(X_test.cpu(), requires_grad=False).float())[:,1].cpu().data.numpy())
 
             summary = [ t, crit_loss.data[0], auc['train'], auc['valid'], time_this_epoch ]
             summary = "epoch {}, cross_loss: {:.03f}, auc_train: {:0.3f}, auc_valid:{:0.3f}, time: {:.02f} sec".format(*summary)
@@ -291,7 +251,7 @@ class PyTorch(Method):
 
 
 
-def method_comparison(results, dataset, models, gene, search_num_genes, trials, search_train_size, test_size):
+def method_comparison(results, dataset, models, gene, search_num_genes, trials, search_train_size, test_size, g, opt):
 
     dataset = data.gene_datasets.TCGATissue()
     dataset.df = dataset.df - dataset.df.mean()
@@ -304,7 +264,7 @@ def method_comparison(results, dataset, models, gene, search_num_genes, trials, 
         for ex in search_num_genes:
 
             num_genes = ex
-            num_genes = np.min([num_genes, tcgatissue.df.shape[1]])
+            num_genes = np.min([num_genes, dataset.df.shape[1]])
             print ex, num_genes
 
             neighbors = sample_neighbors(g, gene, num_genes, include_self=True)
@@ -330,7 +290,7 @@ def method_comparison(results, dataset, models, gene, search_num_genes, trials, 
                         continue
                     print "doing:", model['key'], "num_genes", num_genes, "train_size", train_size, "seed", seed
 
-                    result = model['method'].loop(dataset=dataset, seed=seed, train_size=train_size, test_size=test_size, adj=neighborhood)
+                    result = model['method'].loop(dataset=dataset, seed=seed, train_size=train_size, test_size=test_size, adj=neighborhood, opt=opt)
 
                     experiment = {"gene_name": gene,
                                   "model": model['key'],
@@ -341,7 +301,10 @@ def method_comparison(results, dataset, models, gene, search_num_genes, trials, 
                                  }
 
                     results["df"] = results["df"].append(experiment, ignore_index=True)
-                    results_file = "experiments/results/fig-5/results_" + str(opt.gene) + '.pkl'
+                    exp_dir = "experiments/results/fig-5/"
+                    if not os.path.isdir(exp_dir):
+                        os.makedirs(exp_dir)
+                    results_file = exp_dir + "results_" + str(opt.gene) + '.pkl'
                     pickle.dump(results, open(results_file, "wb"))
             dataset.df = full_df
 
@@ -350,56 +313,80 @@ def method_comparison(results, dataset, models, gene, search_num_genes, trials, 
 
 
 
-m = [
-#    {'key': 'LR-L1', 'method': SkLearn("LR", penalty=True)},
-#    {'key': 'MLP', 'method': mlp},
-#    {'key': 'DT', 'method': SkLearn("DT")},
-    {'key': 'CGN_lay3_chan64_emb32_dropout', 'method': PyTorch("CGN", num_layer=3,num_channel=64, add_emb=32 )},
-#{'key': 'CGN_3_layer_64_channel_emb_32_dropout', 'method': PyTorch("CGN")},
-# #    {'key': 'wRPL5_CGN_3_layer_64_channel_emb_32_dropout_attn3', 'method': PyTorch("CGN", attention_head=3)},
-#  #{'key': 'wRPL5_CGN_1_layer_32_channel_emb_32_dropout', 'method': PyTorch("CGN", num_layer=1, num_channel=32)},
-#     {'key': 'MLP-dropout', 'method': PyTorch("MLP", dropout=True)},
-#     {'key': 'CGN_2_layer_512_channel_emb_32_dropout', 'method': PyTorch("CGN", num_layer=2, num_channel=512, add_emb=32)},
-#     {'key': 'CGN_3_layer_512_channel_emb_32_dropout', 'method': PyTorch("CGN", num_layer=3, num_channel=512, add_emb=32)},
-#     {'key': 'CGN_1_layer_768_channel_emb_32_dropout', 'method': PyTorch("CGN", num_layer=1, num_channel=768, add_emb=32)},
-#     {'key': 'CGN_2_layer_512_channel_emb_128_dropout', 'method': PyTorch("CGN", num_layer=2, num_channel=512, add_emb=128)},
-#     {'key': 'CGN_2_layer_512_channel_emb_256_dropout', 'method': PyTorch("CGN", num_layer=2, num_channel=512, add_emb=256)},
-#    {'key': 'CGN_2_layer_512_channel_emb_512_dropout', 'method': PyTorch("CGN", num_layer=2, num_channel=512, add_emb=512)},
+def main(argv=None):
 
-    #    {'key': 'MLP_2_chan128', 'method': PyTorch("MLP", dropout=False, num_layer=2, num_channel=128)},
-#    {'key': 'MLP_2_chan256', 'method': PyTorch("MLP", dropout=False, num_layer=2, num_channel=256)},
-    {'key': 'MLP_lay2_chan512_dropout', 'method': PyTorch("MLP", dropout=True, num_layer=2, num_channel=512)},
-     {'key': 'MLP_lay2_chan512', 'method': PyTorch("MLP", dropout=False, num_layer=2, num_channel=512)},
-#    {'key': 'MLP_2_chan1024', 'method': PyTorch("MLP", dropout=False, num_layer=2, num_channel=1024)},
-#    {'key': 'MLP_2', 'method': PyTorch("MLP", dropout=False, num_layer=2)},
-#    {'key': 'MLP_1', 'method': PyTorch("MLP", dropout=False, num_layer=1)},
-#     {'key': 'MLP-dropout-l1-1', 'method': PyTorch("MLP", dropout=True, l1_loss_lambda=1)},
-#     {'key': 'SLR2=lambda1', 'method': PyTorch("SLR", model_reg_lambda=1)},
-#    {'key': 'SLR2=lambda100', 'method': PyTorch("SLR", model_reg_lambda=100)},
-     {'key': 'SLR_lambda1_l11', 'method': PyTorch("SLR", model_reg_lambda=1, l1_loss_lambda=1)},
-#   {'key': 'MLP', 'method': PyTorch("MLP", dropout=False)},
-    ]
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--gene', default="S100A8", type=str)
+    parser.add_argument('--cuda', action="store_true", help='If we want to run on gpu.')
+    parser.add_argument('--exp', action='store_true', help='If we want to run on gpu.')
+    opt = parser.parse_args(argv)
+
+    tcgatissue = data.gene_datasets.TCGATissue()
+
+    opt.seed = 0
+    opt.nb_class = None
+    opt.nb_examples = None
+    opt.nb_nodes = None
+    opt.graph = "pathway"
+    opt.dataset = tcgatissue
+    opt.add_self = True
+    opt.norm_adj = True
+    opt.add_connectivity = False
+    opt.cuda=False
+    if opt.cuda:
+        opt.cuda = True
+    opt.pool_graph = "ignore"
 
 
-import pickle
+    graph = Graph()
+    #path = "/data/lisa/data/genomics/graph/pancan-tissue-graph.hdf5"
+    graph.load_graph(data.graph.get_hash("genemania"))
+    g = nx.from_numpy_matrix(graph.adj)
+    mapping = dict(zip(range(0, len(tcgatissue.df.columns)), tcgatissue.df.columns))
+    g = nx.relabel_nodes(g, mapping)
 
-print opt
-if not os.path.exists("results_" + opt.gene + ".pkl"):
-    results = {"df": pd.DataFrame(columns=['auc','gene_name', 'model', 'num_genes', 'seed', 'train_size'])}
-else:
-    results = pickle.load(open("results_" + opt.gene + ".pkl", "r"))
+    m = [
+    #    {'key': 'LR-L1', 'method': SkLearn("LR", penalty=True)},
+    #    {'key': 'MLP', 'method': mlp},
+    #    {'key': 'DT', 'method': SkLearn("DT")},
+        {'key': 'CGN_lay3_chan64_emb32_dropout', 'method': PyTorch("CGN", num_layer=3,num_channel=64, add_emb=32, cuda=opt.cuda)},
+    #{'key': 'CGN_3_layer_64_channel_emb_32_dropout', 'method': PyTorch("CGN")},
+    # #    {'key': 'wRPL5_CGN_3_layer_64_channel_emb_32_dropout_attn3', 'method': PyTorch("CGN", attention_head=3)},
+    #  #{'key': 'wRPL5_CGN_1_layer_32_channel_emb_32_dropout', 'method': PyTorch("CGN", num_layer=1, num_channel=32)},
+    #     {'key': 'MLP-dropout', 'method': PyTorch("MLP", dropout=True)},
+    #     {'key': 'CGN_2_layer_512_channel_emb_32_dropout', 'method': PyTorch("CGN", num_layer=2, num_channel=512, add_emb=32)},
+    #     {'key': 'CGN_3_layer_512_channel_emb_32_dropout', 'method': PyTorch("CGN", num_layer=3, num_channel=512, add_emb=32)},
+    #     {'key': 'CGN_1_layer_768_channel_emb_32_dropout', 'method': PyTorch("CGN", num_layer=1, num_channel=768, add_emb=32)},
+    #     {'key': 'CGN_2_layer_512_channel_emb_128_dropout', 'method': PyTorch("CGN", num_layer=2, num_channel=512, add_emb=128)},
+    #     {'key': 'CGN_2_layer_512_channel_emb_256_dropout', 'method': PyTorch("CGN", num_layer=2, num_channel=512, add_emb=256)},
+    #    {'key': 'CGN_2_layer_512_channel_emb_512_dropout', 'method': PyTorch("CGN", num_layer=2, num_channel=512, add_emb=512)},
 
+        #    {'key': 'MLP_2_chan128', 'method': PyTorch("MLP", dropout=False, num_layer=2, num_channel=128)},
+    #    {'key': 'MLP_2_chan256', 'method': PyTorch("MLP", dropout=False, num_layer=2, num_channel=256)},
+        {'key': 'MLP_lay2_chan512_dropout', 'method': PyTorch("MLP", dropout=True, num_layer=2, num_channel=512, cuda=opt.cuda)},
+         {'key': 'MLP_lay2_chan512', 'method': PyTorch("MLP", dropout=False, num_layer=2, num_channel=512, cuda=opt.cuda)},
+    #    {'key': 'MLP_2_chan1024', 'method': PyTorch("MLP", dropout=False, num_layer=2, num_channel=1024)},
+    #    {'key': 'MLP_2', 'method': PyTorch("MLP", dropout=False, num_layer=2)},
+    #    {'key': 'MLP_1', 'method': PyTorch("MLP", dropout=False, num_layer=1)},
+    #     {'key': 'MLP-dropout-l1-1', 'method': PyTorch("MLP", dropout=True, l1_loss_lambda=1)},
+    #     {'key': 'SLR2=lambda1', 'method': PyTorch("SLR", model_reg_lambda=1)},
+    #    {'key': 'SLR2=lambda100', 'method': PyTorch("SLR", model_reg_lambda=100)},
+         {'key': 'SLR_lambda1_l11', 'method': PyTorch("SLR", model_reg_lambda=1, l1_loss_lambda=1, cuda=opt.cuda)},
+    #   {'key': 'MLP', 'method': PyTorch("MLP", dropout=False)},
+        ]
 
-#"S100A8
-#RPL5
-#RPS10
+    if not os.path.exists("results_" + opt.gene + ".pkl"):
+        results = {"df": pd.DataFrame(columns=['auc','gene_name', 'model', 'num_genes', 'seed', 'train_size'])}
+    else:
+        results = pickle.load(open("results_" + opt.gene + ".pkl", "r"))
 
-trials = 20
-
-a = method_comparison(results, tcgatissue, m, gene=opt.gene,
-                      search_num_genes=[50, 100,200,300,500,1000,2000,4000,8000,16000],
-                      trials=trials, search_train_size=[50], test_size=1000)
+    trials = 20
+    a = method_comparison(results, tcgatissue, m, gene=opt.gene,
+                          search_num_genes=[50, 100,200,300,500,1000,2000,4000,8000,16000],
+                          trials=trials, search_train_size=[50], test_size=1000, g=g, opt=opt)
 
 #a = method_comparison(results, tcgatissue, m, gene=opt.gene,
 #                      search_num_genes=[100], trials=trials,
 #                      search_train_size=[50, 100, 200, 500, 1000, 2000, 4000], test_size=1000)
+if __name__ == '__main__':
+    main()
