@@ -123,7 +123,7 @@ class PyTorch(Method):
         patience = self.patience
 
         #opt.num_layer = self.num_layer
-        #adj_transform, aggregate_function = models.graphLayer.get_transform(opt, adj)
+        #adj_transform, aggregate_function = models.graphLayer.get_transform(graph.adj, opt.graph, opt.cuda, opt.add_self, opt.add_connectivity, opt.norm_adj, opt.num_layer, opt.pool_graph)
 
         if self.model == "CGN":
             model = models.models.CGN(

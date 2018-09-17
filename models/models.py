@@ -507,21 +507,21 @@ def get_model(seed, nb_class, nb_examples, nb_nodes, model, on_cuda, num_channel
     # TODO: add a bunch of the options
     if model == 'cgn':
         assert graph is not None
-        adj_transform, aggregate_function = graphLayer.get_transform(opt, graph.adj)
+        adj_transform, aggregate_function = graphLayer.get_transform(graph.adj, opt.graph, opt.cuda, opt.add_self, opt.add_connectivity, opt.norm_adj, opt.num_layer, opt.pool_graph)
         my_model = CGN(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
                        on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
                        attention_head=nb_attention_head)
 
     elif model == 'lcg':
         assert graph is not None
-        adj_transform, aggregate_function = graphLayer.get_transform(opt, graph.adj)
+        adj_transform, aggregate_function = graphLayer.get_transform(graph.adj, opt.graph, opt.cuda, opt.add_self, opt.add_connectivity, opt.norm_adj, opt.num_layer, opt.pool_graph)
         my_model = LCG(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
                        on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
                        attention_head=nb_attention_head)
 
     elif model == 'sgc':
         assert graph is not None
-        adj_transform, aggregate_function = graphLayer.get_transform(opt, graph.adj)
+        adj_transform, aggregate_function = graphLayer.get_transform(graph.adj, opt.graph, opt.cuda, opt.add_self, opt.add_connectivity, opt.norm_adj, opt.num_layer, opt.pool_graph)
         my_model = SGC(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
                        on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
                        attention_head=nb_attention_head)

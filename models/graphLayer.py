@@ -229,7 +229,7 @@ class ApprNormalizeLaplacian(object):
 
         # Fill the diagonal
         np.fill_diagonal(adj, 1.)  # TODO: Hummm, think it's a 0.
-        
+
         D = adj.sum(axis=1)
         D_inv = np.diag(1. / np.sqrt(D))
         norm_transform = D_inv.dot(adj).dot(D_inv)
@@ -340,8 +340,8 @@ class SparseMM(torch.autograd.Function):
         if self.needs_input_grad[0]:
             grad_input = torch.mm(self.sparse.t(), grad_output)
         return grad_input
-        
-        
+
+
 class CGNLayer(GraphLayer):
 
     def init_params(self):
@@ -363,7 +363,7 @@ class CGNLayer(GraphLayer):
         # Needs this hack to work: https://discuss.pytorch.org/t/does-pytorch-support-autograd-on-sparse-matrix/6156/7
         #x = D.mm(x.t()).t()
         x = SparseMM(D)(x.t()).t()
-        
+
         x = x.contiguous().view(nb_examples, nb_channels, nb_nodes)
         return x
 
@@ -488,26 +488,25 @@ class SGCLayer(GraphLayer):
         return x
 
 
-def get_transform(opt, adj):
+def get_transform(adj, graph, cuda, add_self=True, add_connectivity=False, norm_adj=True, num_layer=1, pool_graph="ignore"):
 
     """
     Return a list of transform that can be applied to the adjacency matrix.
     :param opt: the options
     :return: The list of transform.
     """
-
     adj_transform = []
-    if opt.add_self:
+    if add_self:
         logging.info("Adding self connection to the graph...")
-        adj_transform += [lambda layer_id: SelfConnection(opt.add_self, please_ignore=False)]  # Add a self connection.
+        adj_transform += [lambda layer_id: SelfConnection(add_self, please_ignore=False)]  # Add a self connection.
 
-    if opt.add_connectivity:
+    if add_connectivity:
         logging.info("Adding the connectivity after each layer...")
         adj_transform += [lambda layer_id: AugmentGraphConnectivity(please_ignore=layer_id == 0)]  # Augmenting the connectivity of each layer.
 
-    if opt.norm_adj:
+    if norm_adj:
         logging.info("Normalizing the graph...")
-        adj_transform += [lambda layer_id: ApprNormalizeLaplacian(processed_file=opt.graph)]  # Normalize the graph
+        adj_transform += [lambda layer_id: ApprNormalizeLaplacian(processed_file=graph)]  # Normalize the graph
 
     #if opt.pool_graph == "ignore":
 #        def get_aggregate(self, layer_id):
@@ -517,12 +516,12 @@ def get_transform(opt, adj):
 
     # Our adj transform method.
     adj_transform = transforms.Compose(adj_transform)
-    agregator = AggregationGraph(adj, opt.num_layer, adj_transform=adj_transform, on_cuda=opt.cuda, cluster_type=opt.pool_graph)  # TODO: pooling and stuff
+    aggregator = AggregationGraph(adj, num_layer, adj_transform=adj_transform, on_cuda=cuda, cluster_type=pool_graph)  # TODO: pooling and stuff
 
     # I don't want the code to be too class dependant, so I'll two a functions instead.
     # 1. A function to get the adj matrix
     # 2. A agregation fonction.
     # For now The only parameter if takes in is the layer id.
-    get_adj = lambda adj, layer_id: agregator.get_adj(adj, layer_id)
-    get_aggregate = lambda layer_id: agregator.get_aggregate(layer_id)
+    get_adj = lambda adj, layer_id: aggregator.get_adj(adj, layer_id)
+    get_aggregate = lambda layer_id: aggregator.get_aggregate(layer_id)
     return get_adj, get_aggregate

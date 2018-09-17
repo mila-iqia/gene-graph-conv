@@ -60,7 +60,7 @@ class MLMethods(Method):
         self.patience = 10
         self.attention_head = 0
 
-    def loop(self, dataset, seed, train_size, test_size, adj=None):
+    def loop(self, dataset, seed, train_size, test_size, adj=None, graph_name=None):
 
         X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(dataset.df, dataset.labels, stratify=dataset.labels, train_size=train_size, test_size=test_size, random_state=seed)
         #split train into valid and train
@@ -82,8 +82,7 @@ class MLMethods(Method):
 
         patience = self.patience
 
-        #opt.num_layer = self.num_layer
-        #adj_transform, aggregate_function = models.graphLayer.get_transform(opt, adj)
+        adj_transform, aggregate_function = models.graphLayer.get_transform(adj, graph_name, self.cuda, num_layer=self.num_layer)
         if self.model == "CGN":
             model = models.CGN(
                     nb_nodes=len(dataset.df.columns),
