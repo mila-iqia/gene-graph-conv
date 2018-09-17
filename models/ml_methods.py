@@ -63,7 +63,6 @@ class MLMethods(Method):
     def loop(self, dataset, seed, train_size, test_size, adj=None):
 
         X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(dataset.df, dataset.labels, stratify=dataset.labels, train_size=train_size, test_size=test_size, random_state=seed)
-        import pdb; pdb.set_trace()
         #split train into valid and train
         if len(set(y_train)) == 1 or len(set(y_test)) == 1:
             return

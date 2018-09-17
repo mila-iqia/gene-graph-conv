@@ -57,6 +57,7 @@ def main(argv=None):
     for gene in genes_to_iter:
         tcgatissue.df = df[:]
         method_comparison(results, tcgatissue, m, gene=gene, num_genes=50, trials=3, train_size=50, test_size=1000, file_to_write=results_file, g=g)
+        tcgatissue.df = df[:]
         method_comparison(results, tcgatissue, m, gene=gene, num_genes=num_all_genes, trials=3, train_size=50, test_size=1000, file_to_write=results_file, g=g)
 
 
