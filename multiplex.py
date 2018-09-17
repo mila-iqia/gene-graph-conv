@@ -1,8 +1,10 @@
 import time
 import pickle
 import argparse
-
+import torch
+from torch.autograd import Variable
 import sklearn, sklearn.model_selection, sklearn.metrics, sklearn.linear_model, sklearn.neural_network, sklearn.tree
+
 import numpy as np
 import matplotlib, matplotlib.pyplot as plt
 import networkx as nx
@@ -13,8 +15,6 @@ import data, data.gene_datasets
 from data.graph import Graph
 from data.utils import split_dataset
 import optimization
-import torch
-from torch.autograd import Variable
 from analysis.metrics import record_metrics_for_epoch
 import analysis
 import sklearn, sklearn.model_selection, sklearn.metrics, sklearn.linear_model, sklearn.neural_network, sklearn.tree

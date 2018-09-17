@@ -1,31 +1,13 @@
-import sys
-import time
-import copy
 import pickle
 import argparse
 import os
 
-from ml_methods import MLMethods
-from scipy.stats import norm
-from itertools import repeat
-import numpy as np
-import matplotlib
-import matplotlib.pyplot as plt
+from models.ml_methods import MLMethods
 import networkx as nx
 import pandas as pd
-import models
-import models.graphLayer
-from models.models import CGN
 import data
 import data.gene_datasets
 from data.graph import Graph, get_hash
-from data.utils import split_dataset
-import optimization
-import torch
-from torch.autograd import Variable
-from analysis.metrics import record_metrics_for_epoch
-import analysis
-import numpy as np
 
 def build_parser():
     parser = argparse.ArgumentParser()
@@ -69,6 +51,9 @@ def main(argv=None):
     df = tcgatissue.df.copy(deep=True)
     genes_to_iter = tcgatissue.df.iloc[:, start:end].columns.difference(results['df']['gene_name'].unique())
     num_all_genes = len(tcgatissue.df.columns)
+
+    m = [{'key': 'MLP', 'method': MLMethods("MLP", dropout=False, cuda=False)}, ]
+
     for gene in genes_to_iter:
         tcgatissue.df = df[:]
         method_comparison(results, tcgatissue, m, gene=gene, num_genes=50, trials=3, train_size=50, test_size=1000, file_to_write=results_file, g=g)
@@ -116,10 +101,6 @@ def method_comparison(results, dataset, models, gene, num_genes, trials, train_s
             if not os.path.isdir(dir):
                 os.makedirs(dir)
             pickle.dump(results, open(file_to_write, "wb"))
-
-
-m = [{'key': 'MLP', 'method': MLMethods("MLP", dropout=False, cuda=False)}, ]
-
 
 
 if __name__ == '__main__':

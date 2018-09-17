@@ -1,3 +1,6 @@
+# File containing ML Methods (PyTorch, SKLearn Wrapper)
+
+import time
 import sklearn
 import sklearn.model_selection
 import sklearn.metrics
@@ -5,34 +8,13 @@ import sklearn.linear_model
 import sklearn.neural_network
 import sklearn.tree
 
-import sys
-import time
-import copy
-import pickle
-import argparse
-import os
-
-from ml_methods import MLMethods
-from scipy.stats import norm
-from itertools import repeat
 import numpy as np
-import matplotlib
-import matplotlib.pyplot as plt
-import networkx as nx
-import pandas as pd
 import models
-import models.graphLayer
-from models.models import CGN
-import data
-import data.gene_datasets
-from data.graph import Graph, get_hash
-from data.utils import split_dataset
+import graphLayer
 import optimization
 import torch
 from torch.autograd import Variable
 from analysis.metrics import record_metrics_for_epoch
-import analysis
-import numpy as np
 
 class Method:
     def __init__(self):
@@ -81,7 +63,7 @@ class MLMethods(Method):
     def loop(self, dataset, seed, train_size, test_size, adj=None):
 
         X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(dataset.df, dataset.labels, stratify=dataset.labels, train_size=train_size, test_size=test_size, random_state=seed)
-
+        import pdb; pdb.set_trace()
         #split train into valid and train
         if len(set(y_train)) == 1 or len(set(y_test)) == 1:
             return
@@ -89,6 +71,7 @@ class MLMethods(Method):
             local_X_train, local_X_valid, local_y_train, local_y_valid = sklearn.model_selection.train_test_split(X_train, y_train, stratify=y_train, train_size=0.60, random_state=seed)
         except Exception:
             return
+
         local_X_train = torch.FloatTensor(np.expand_dims(local_X_train, axis=2))
         local_X_valid = torch.FloatTensor(np.expand_dims(local_X_valid, axis=2))
         X_test = torch.FloatTensor(np.expand_dims(X_test, axis=2))
@@ -102,9 +85,8 @@ class MLMethods(Method):
 
         #opt.num_layer = self.num_layer
         #adj_transform, aggregate_function = models.graphLayer.get_transform(opt, adj)
-
         if self.model == "CGN":
-            model = models.models.CGN(
+            model = models.CGN(
                     nb_nodes=len(dataset.df.columns),
                     input_dim=1,
                     channels=[self.num_channel] * self.num_layer,
@@ -119,21 +101,21 @@ class MLMethods(Method):
                     attention_head=self.attention_head
                     )
         elif self.model == "MLP":
-            model = models.models.MLP(
+            model = models.MLP(
                     len(dataset.df.columns),
                     channels=[self.num_channel] * self.num_layer,
                     out_dim=2,
                     on_cuda=self.cuda,
                     dropout=self.dropout)
         elif self.model == "SLR":
-            model = models.models.SparseLogisticRegression(
+            model = models.SparseLogisticRegression(
                     nb_nodes=len(dataset.df.columns),
                     input_dim=1,
                     adj=adj,
                     out_dim=2,
                     on_cuda=self.cuda)
         elif self.model == "LCG":
-            model = models.models.LCG(
+            model = models.LCG(
                     nb_nodes=len(dataset.df.columns),
                     input_dim=1,
                     channels=[self.num_channel] * self.num_layer,
@@ -148,7 +130,7 @@ class MLMethods(Method):
                     attention_head=nb_attention_head,
                     training_mode=training_mode)
         elif self.model == 'LR':
-            model = models.models.LogisticRegression(
+            model = models.LogisticRegression(
                     nb_nodes=len(dataset.df.columns),
                     input_dim=1,
                     out_dim=2,
