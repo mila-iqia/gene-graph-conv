@@ -90,6 +90,27 @@ class Graph(object):
         self.adj = self.df.as_matrix()
 
 
+def sample_neighbors(g, gene, num_neighbors, include_self=True):
+    results = set([])
+    if include_self:
+        results = set([gene])
+    all_nodes = set(g.nodes)
+    first_degree = set(g.neighbors(gene))
+    second_degree = set()
+    for x in g.neighbors(gene):
+        second_degree = second_degree.union(set(g.neighbors(x)))
+    while len(results) < num_neighbors:
+        if len(first_degree) - len(results) > 0:
+            unique = sorted(first_degree - results)
+            results.add(unique.pop())
+        elif len(second_degree) - len(results) > 0:
+            unique = sorted(second_degree - results)
+            results.add(unique.pop())
+        else:
+            unique = sorted(all_nodes - results)
+            results.add(unique.pop())
+    return results
+
 def get_hash(graph):
     if graph == "regnet":
         return "3c8ac6e7ab6fbf962cedb77192177c58b7518b23"

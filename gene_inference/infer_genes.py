@@ -81,24 +81,3 @@ def infer_all_genes_selective(dataset, graph, method, train_size, test_size, tri
         dataset.df = real_df
 
     return results
-
-def sample_neighbors(g, gene, num_neighbors, include_self=True):
-    results = set([])
-    if include_self:
-        results = set([gene])
-    all_nodes = set(g.nodes)
-    first_degree = set(g.neighbors(gene))
-    second_degree = set()
-    for x in g.neighbors(gene):
-        second_degree = second_degree.union(set(g.neighbors(x)))
-    while len(results) < num_neighbors:
-        if len(first_degree) - len(results) > 0:
-            unique = sorted(first_degree - results)
-            results.add(unique.pop())
-        elif len(second_degree) - len(results) > 0:
-            unique = sorted(second_degree - results)
-            results.add(unique.pop())
-        else:
-            unique = sorted(all_nodes - results)
-            results.add(unique.pop())
-    return results

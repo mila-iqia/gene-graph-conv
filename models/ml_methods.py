@@ -7,14 +7,13 @@ import sklearn.metrics
 import sklearn.linear_model
 import sklearn.neural_network
 import sklearn.tree
-
 import numpy as np
-import models
-import graphLayer
-import optimization
 import torch
+
 from torch.autograd import Variable
-from analysis.metrics import record_metrics_for_epoch
+import models
+import optimization
+
 
 class Method:
     def __init__(self):
@@ -78,26 +77,24 @@ class MLMethods(Method):
         local_y_train = torch.FloatTensor(local_y_train)
 
         criterion = optimization.get_criterion(dataset)
-        l1_criterion = torch.nn.L1Loss(size_average=False)
-
         patience = self.patience
 
         adj_transform, aggregate_function = models.graphLayer.get_transform(adj, graph_name, self.cuda, num_layer=self.num_layer)
         if self.model == "CGN":
             model = models.CGN(
-                    nb_nodes=len(dataset.df.columns),
-                    input_dim=1,
-                    channels=[self.num_channel] * self.num_layer,
-                    adj=adj,
-                    out_dim=2,
-                    on_cuda=self.cuda,
-                    add_emb=self.add_emb,
-                    transform_adj=adj_transform,
-                    aggregate_adj=aggregate_function,
-                    use_gate=self.use_gate,
-                    dropout=self.dropout,
-                    attention_head=self.attention_head
-                    )
+                nb_nodes=len(dataset.df.columns),
+                input_dim=1,
+                channels=[self.num_channel] * self.num_layer,
+                adj=adj,
+                out_dim=2,
+                on_cuda=self.cuda,
+                add_emb=self.add_emb,
+                transform_adj=adj_transform,
+                aggregate_adj=aggregate_function,
+                use_gate=self.use_gate,
+                dropout=self.dropout,
+                attention_head=self.attention_head
+                )
         elif self.model == "MLP":
             model = models.MLP(
                     len(dataset.df.columns),
