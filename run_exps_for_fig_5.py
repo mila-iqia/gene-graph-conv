@@ -15,10 +15,12 @@ from data.graph import Graph, sample_neighbors
 def main(argv=None):
     # Generates the data for figure #5
     parser = argparse.ArgumentParser()
-    parser.add_argument('--gene', default="S100A8", type=str)
+    parser.add_argument('--gene', type=str)
+    parser.add_argument('--trials', type=int, default=20)
     parser.add_argument('--cuda', action="store_true", help='If we want to run on gpu.')
     parser.add_argument('--exp', action='store_true', help='If we want to run on gpu.')
     opt = parser.parse_args(argv)
+
 
     tcgatissue = data.gene_datasets.TCGATissue()
 
@@ -35,6 +37,9 @@ def main(argv=None):
     if opt.cuda:
         opt.cuda = True
     opt.pool_graph = "ignore"
+    genes = ["RPL13", "HLA-B", "S100A9", "IFIT1", "RPL5", "RPS31", "ZFP82", "IL5", "DLGAP2"]
+    if opt.gene:
+        genes = [opt.gene]
 
 
     graph = Graph()
@@ -51,20 +56,23 @@ def main(argv=None):
         {'key': 'SLR_lambda1_l11', 'method': MLMethods("SLR", cuda=opt.cuda)},
         ]
 
-    if not os.path.exists("results_" + opt.gene + ".pkl"):
-        empty_df = pd.DataFrame(columns=['auc','gene_name', 'model', 'num_genes', 'seed', 'train_size'])
-        results = {"df": empty_df}
-    else:
-        results = pickle.load(open("results_" + opt.gene + ".pkl", "r"))
+    for gene in genes:
+        df = tcgatissue.df.copy(deep=True)
 
-    trials = 20
-    method_comparison(results, tcgatissue, methods, gene=opt.gene,
-                      search_num_genes=[50, 100,200,300,500,1000,2000,4000,8000,16000],
-                      trials=trials,
-                      search_train_size=[50],
-                      test_size=1000,
-                      nx_graph=nx_graph,
-                      graph_name=opt.graph)
+        if not os.path.exists("results_" + gene + ".pkl"):
+            empty_df = pd.DataFrame(columns=['auc','gene_name', 'model', 'num_genes', 'seed', 'train_size'])
+            results = {"df": empty_df}
+        else:
+            results = pickle.load(open("results_" + gene + ".pkl", "r"))
+
+        tcgatissue.df = df[:]
+        method_comparison(results, tcgatissue, methods, gene=gene,
+                          search_num_genes=[50, 100,200,300,500,1000,2000,4000,8000,16000],
+                          trials=opt.trials,
+                          search_train_size=[50],
+                          test_size=1000,
+                          nx_graph=nx_graph,
+                          graph_name=opt.graph)
 
 
 def method_comparison(results, dataset, methods, gene, search_num_genes, trials, search_train_size, test_size, nx_graph, graph_name):
