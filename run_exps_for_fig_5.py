@@ -77,10 +77,7 @@ def main(argv=None):
 
 
 def method_comparison(results, dataset, methods, gene, search_num_genes, trials, search_train_size, test_size, nx_graph, graph_name):
-
-    dataset = data.gene_datasets.TCGATissue()
     dataset.df = dataset.df - dataset.df.mean()
-
     mean = dataset.df[gene].mean()
     dataset.labels = [1 if x > mean else 0 for x in dataset.df[gene]]
     full_df = dataset.df.copy(deep=True)
