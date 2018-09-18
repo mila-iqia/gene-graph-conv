@@ -16,9 +16,9 @@ def main(argv=None):
     # Generates the data for figure #5
     parser = argparse.ArgumentParser()
     parser.add_argument('--gene', type=str)
+    parser.add_argument('--graph-path', type=str)
     parser.add_argument('--trials', type=int, default=20)
     parser.add_argument('--cuda', action="store_true", help='If we want to run on gpu.')
-    parser.add_argument('--exp', action='store_true', help='If we want to run on gpu.')
     opt = parser.parse_args(argv)
 
 
@@ -33,9 +33,6 @@ def main(argv=None):
     opt.add_self = True
     opt.norm_adj = True
     opt.add_connectivity = False
-    opt.cuda = False
-    if opt.cuda:
-        opt.cuda = True
     opt.pool_graph = "ignore"
     genes = ["RPL13", "HLA-B", "S100A9", "IFIT1", "RPL5", "RPS31", "ZFP82", "IL5", "DLGAP2"]
     if opt.gene:
@@ -44,7 +41,10 @@ def main(argv=None):
 
     graph = Graph()
     #path = "/data/lisa/data/genomics/graph/pancan-tissue-graph.hdf5"
-    graph.load_graph(data.graph.get_hash(opt.graph))
+    if opt.graph_path:
+        graph.load_graph(opt.graph_path)
+    else:
+        graph.load_graph(data.graph.get_hash(opt.graph))
     nx_graph = nx.from_numpy_matrix(graph.adj)
     mapping = dict(zip(range(0, len(tcgatissue.df.columns)), tcgatissue.df.columns))
     nx_graph = nx.relabel_nodes(nx_graph, mapping)
