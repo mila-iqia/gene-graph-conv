@@ -17,12 +17,14 @@ def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('--gene', type=str)
     parser.add_argument('--graph-path', type=str)
+    parser.add_argument('--tcgatissue-full-path', type=str)
     parser.add_argument('--trials', type=int, default=20)
     parser.add_argument('--cuda', action="store_true", help='If we want to run on gpu.')
     opt = parser.parse_args(argv)
 
-
-    tcgatissue = data.gene_datasets.TCGATissue()
+    data_dir = '/'.join(opt.tcgatissue_full_path.split('/')[:-1])
+    data_file = opt.tcgatissue_full_path.split('/')[-1]
+    tcgatissue = data.gene_datasets.TCGATissue(data_dir=data_dir, data_file=data_file)
 
     opt.seed = 0
     opt.nb_class = None
@@ -40,7 +42,6 @@ def main(argv=None):
 
 
     graph = Graph()
-    #path = "/data/lisa/data/genomics/graph/pancan-tissue-graph.hdf5"
     if opt.graph_path:
         graph.load_graph(opt.graph_path)
     else:
