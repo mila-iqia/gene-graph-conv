@@ -22,9 +22,13 @@ def main(argv=None):
     parser.add_argument('--cuda', action="store_true", help='If we want to run on gpu.')
     opt = parser.parse_args(argv)
 
-    data_dir = '/'.join(opt.tcgatissue_full_path.split('/')[:-1])
-    data_file = opt.tcgatissue_full_path.split('/')[-1]
-    tcgatissue = data.gene_datasets.TCGATissue(data_dir=data_dir, data_file=data_file)
+    if opt.tcgatissue_full_path:
+        data_dir = '/'.join(opt.tcgatissue_full_path.split('/')[:-1])
+        data_file = opt.tcgatissue_full_path.split('/')[-1]
+        tcgatissue = data.gene_datasets.TCGATissue(data_dir=data_dir, data_file=data_file)
+    else:
+        tcgatissue = data.gene_datasets.TCGATissue()
+
 
     opt.seed = 0
     opt.nb_class = None
