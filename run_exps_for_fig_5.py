@@ -17,14 +17,14 @@ def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('--gene', type=str)
     parser.add_argument('--graph-path', type=str)
-    parser.add_argument('--tcgatissue-full-path', type=str)
+    parser.add_argument('--samples-path', type=str)
     parser.add_argument('--trials', type=int, default=20)
     parser.add_argument('--cuda', action="store_true", help='If we want to run on gpu.')
     opt = parser.parse_args(argv)
 
-    if opt.tcgatissue_full_path:
-        data_dir = '/'.join(opt.tcgatissue_full_path.split('/')[:-1])
-        data_file = opt.tcgatissue_full_path.split('/')[-1]
+    if opt.samples_path:
+        data_dir = '/'.join(opt.samples_path.split('/')[:-1])
+        data_file = opt.samples_path.split('/')[-1]
         tcgatissue = data.gene_datasets.TCGATissue(data_dir=data_dir, data_file=data_file)
     else:
         tcgatissue = data.gene_datasets.TCGATissue()
@@ -40,9 +40,6 @@ def main(argv=None):
     opt.norm_adj = True
     opt.add_connectivity = False
     opt.pool_graph = "ignore"
-    genes = ["RPL13", "HLA-B", "S100A9", "IFIT1", "RPL5", "RPS31", "ZFP82", "IL5", "DLGAP2"]
-    if opt.gene:
-        genes = [opt.gene]
 
 
     graph = Graph()
@@ -61,23 +58,22 @@ def main(argv=None):
         {'key': 'SLR_lambda1_l11', 'method': MLMethods("SLR", cuda=opt.cuda)},
         ]
 
-    for gene in genes:
-        df = tcgatissue.df.copy(deep=True)
+    df = tcgatissue.df.copy(deep=True)
 
-        if not os.path.exists("results_" + gene + ".pkl"):
-            empty_df = pd.DataFrame(columns=['auc','gene_name', 'model', 'num_genes', 'seed', 'train_size'])
-            results = {"df": empty_df}
-        else:
-            results = pickle.load(open("results_" + gene + ".pkl", "r"))
+    if not os.path.exists("results_" + opt.gene + ".pkl"):
+        empty_df = pd.DataFrame(columns=['auc','gene_name', 'model', 'num_genes', 'seed', 'train_size'])
+        results = {"df": empty_df}
+    else:
+        results = pickle.load(open("results_" + opt.gene + ".pkl", "r"))
 
-        tcgatissue.df = df[:]
-        method_comparison(results, tcgatissue, methods, gene=gene,
-                          search_num_genes=[50, 100,200,300,500,1000,2000,4000,8000,16000],
-                          trials=opt.trials,
-                          search_train_size=[50],
-                          test_size=1000,
-                          nx_graph=nx_graph,
-                          graph_name=opt.graph)
+    tcgatissue.df = df[:]
+    method_comparison(results, tcgatissue, methods, gene=opt.gene,
+                      search_num_genes=[50, 100,200,300,500,1000,2000,4000,8000,16000],
+                      trials=opt.trials,
+                      search_train_size=[50],
+                      test_size=1000,
+                      nx_graph=nx_graph,
+                      graph_name=opt.graph)
 
 
 def method_comparison(results, dataset, methods, gene, search_num_genes, trials, search_train_size, test_size, nx_graph, graph_name):
