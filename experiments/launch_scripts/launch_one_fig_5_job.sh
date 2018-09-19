@@ -5,7 +5,7 @@ graph_path=$2
 samples_path=$3
 trials=$4
 cuda=$5
-echo $graph_path
+
 for i in "$@"
 do
 case $i in
