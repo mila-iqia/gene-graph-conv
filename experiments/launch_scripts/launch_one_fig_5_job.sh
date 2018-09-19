@@ -41,7 +41,7 @@ if [ $trials ]
 then
     job_to_run=$job_to_run" --trials="$trials;
 fi
-if [ $trials ]
+if [ $samples_path ]
 then
     job_to_run=$job_to_run" --samples-path="$samples_path;
 fi
