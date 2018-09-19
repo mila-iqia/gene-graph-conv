@@ -35,6 +35,6 @@ done
 
 for gene in ${genes[@]}
 do
-    sbatch --output results"/slurm-%gene.out" -x mila00 ./experiments/launch_scripts/launch_one_fig_5_job.sh --gene=$gene --graph-path=$graph_path --samples-path=$samples_path --trials=$trials --cuda=$cuda
+    sbatch --output "experiments/results/slurm-%gene.out" -x mila00 ./experiments/launch_scripts/launch_one_fig_5_job.sh --gene=$gene --graph-path=$graph_path --samples-path=$samples_path --trials=$trials --cuda=$cuda
     #./experiments/launch_scripts/launch_one_fig_5_job.sh --gene=$gene --graph-path=$graph_path --samples-path=$samples_path --trials=$trials --cuda=$cuda
 done
