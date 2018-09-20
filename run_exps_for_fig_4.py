@@ -5,7 +5,7 @@ import argparse
 import os
 import networkx as nx
 import pandas as pd
-
+import numpy as np
 
 from models.ml_methods import MLMethods
 import data
@@ -19,6 +19,7 @@ def build_parser():
     parser.add_argument('--num-buckets', default=0, type=int, help='How many buckets are there?')
     parser.add_argument('--exp-name', default=0, type=str, help='which exp dir is this.')
     parser.add_argument('--graph', default=0, type=str, help='which graph is this.')
+    parser.add_argument('--cuda', action="store_true", help='run on cuda?')
     return parser
 
 
@@ -37,7 +38,7 @@ def main(argv=None):
     graph.load_graph(get_hash(opt.graph))
     nx_graph = nx.from_numpy_matrix(graph.adj)
     mapping = dict(zip(range(0, len(tcgatissue.df.columns)), tcgatissue.df.columns))
-    nx_graph = nx.relabel_nodes(g, mapping)
+    nx_graph = nx.relabel_nodes(nx_graph, mapping)
 
     results_file = "experiments/results/" + opt.exp_name + '/results-' + str(opt.bucket_idx) + '.pkl'
     try:
@@ -55,30 +56,33 @@ def main(argv=None):
     genes_to_iter = tcgatissue.df.iloc[:, start:end].columns.difference(results['df']['gene_name'].unique())
     num_all_genes = len(tcgatissue.df.columns)
 
-    methods = [{'key': 'MLP', 'method': MLMethods("MLP", dropout=False, cuda=False)}, ]
+    methods = [{'key': 'MLP', 'method': MLMethods("MLP", dropout=False, cuda=opt.cuda)}, ]
 
     for gene in genes_to_iter:
         tcgatissue.df = df[:]
-        method_comparison(results, tcgatissue, methods, gene=gene, num_genes=50, trials=3, train_size=50, test_size=1000, file_to_write=results_file, nx_graph=nx_graph)
+        method_comparison(results, tcgatissue, methods, gene=gene, num_genes=50, trials=3, train_size=50, test_size=1000, file_to_write=results_file, nx_graph=nx_graph, graph_name=opt.graph)
         tcgatissue.df = df[:]
-        method_comparison(results, tcgatissue, methods, gene=gene, num_genes=num_all_genes, trials=3, train_size=50, test_size=1000, file_to_write=results_file, nx_graph=nx_graph)
+        method_comparison(results, tcgatissue, methods, gene=gene, num_genes=num_all_genes, trials=3, train_size=50, test_size=1000, file_to_write=results_file, nx_graph=nx_graph, graph_name=opt.graph)
 
 
-def method_comparison(results, dataset, methods, gene, num_genes, trials, train_size, test_size, file_to_write=None, nx_graph=None):
+def method_comparison(results, dataset, methods, gene, num_genes, trials, train_size, test_size, file_to_write=None, nx_graph=None, graph_name=None):
     mean = dataset.df[gene].mean()
     dataset.labels = [1 if x > mean else 0 for x in dataset.df[gene]]
-    if num_genes != len(dataset.df.columns):
-        neighbors = set([gene])
-        neighbors = neighbors.union(set(nx_graph.neighbors(gene)))
-        dataset.df = dataset.df[list(neighbors)]
-
     dataset.df[gene] = 1
     dataset.data = dataset.df.as_matrix()
-    neighborhood = None
+
+
     for method in methods:
+        neighborhood = None
+        if method['key'] != "MLP":
+            neighbors = set([gene])
+            neighbors = neighbors.union(set(nx_graph.neighbors(gene)))
+            dataset.df = dataset.df[list(neighbors)]
+            neighborhood = np.asarray(nx.to_numpy_matrix(nx.Graph(nx_graph.subgraph(neighbors))))
+
         for seed in range(trials):
             already_done = results["df"][(results["df"].gene_name == gene) &
-                                         (results["df"].model == model['key']) &
+                                         (results["df"].model == method['key']) &
                                          (results["df"].num_genes == num_genes) &
                                          (results["df"].seed == seed) &
                                          (results["df"].train_size == train_size)].shape[0] > 0
@@ -87,11 +91,11 @@ def method_comparison(results, dataset, methods, gene, num_genes, trials, train_
                 print "already done:", method['key'], num_genes, seed
                 continue
             print "doing:", method['key'], num_genes, seed
-            result = method['method'].loop(dataset=dataset, seed=seed, train_size=train_size, test_size=test_size, adj=neighborhood)
+            result = method['method'].loop(dataset=dataset, seed=seed, train_size=train_size, test_size=test_size, adj=neighborhood, graph_name=graph_name)
 
             experiment = {
                 "gene_name": gene,
-                "model": model['key'],
+                "model": method['key'],
                 "num_genes": num_genes,
                 "seed": seed,
                 "train_size": train_size,
@@ -101,9 +105,9 @@ def method_comparison(results, dataset, methods, gene, num_genes, trials, train_
             results["df"] = results["df"].append(experiment, ignore_index=True)
             print results
 
-            dir = "/".join(file_to_write.split('/')[0:-1])
-            if not os.path.isdir(dir):
-                os.makedirs(dir)
+            results_dir = "/".join(file_to_write.split('/')[0:-1])
+            if not os.path.isdir(results_dir):
+                os.makedirs(results_dir)
             pickle.dump(results, open(file_to_write, "wb"))
 
 

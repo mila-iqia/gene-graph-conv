@@ -79,8 +79,8 @@ class MLMethods(Method):
         criterion = optimization.get_criterion(dataset)
         patience = self.patience
 
-        adj_transform, aggregate_function = models.graphLayer.get_transform(adj, graph_name, self.cuda, num_layer=self.num_layer)
         if self.model == "CGN":
+            adj_transform, aggregate_function = models.graphLayer.get_transform(adj, graph_name, self.cuda, num_layer=self.num_layer)
             model = models.CGN(
                 nb_nodes=len(dataset.df.columns),
                 input_dim=1,
@@ -110,6 +110,7 @@ class MLMethods(Method):
                     out_dim=2,
                     on_cuda=self.cuda)
         elif self.model == "LCG":
+            adj_transform, aggregate_function = models.graphLayer.get_transform(adj, graph_name, self.cuda, num_layer=self.num_layer)
             model = models.LCG(
                     nb_nodes=len(dataset.df.columns),
                     input_dim=1,
