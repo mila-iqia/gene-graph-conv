@@ -18,7 +18,8 @@ def build_parser():
     parser.add_argument('--bucket-idx', default=0, type=int, help='which bucket is this.')
     parser.add_argument('--num-buckets', default=0, type=int, help='How many buckets are there?')
     parser.add_argument('--exp-name', default=0, type=str, help='which exp dir is this.')
-    parser.add_argument('--graph', default=0, type=str, help='which graph is this.')
+    parser.add_argument('--graph-path', default=0, type=str, help='which graph is this.')
+    parser.add_argument('--samples-path', type=str)
     parser.add_argument('--cuda', action="store_true", help='run on cuda?')
     return parser
 
@@ -33,9 +34,28 @@ def parse_args(argv):
 
 def main(argv=None):
     opt = parse_args(argv)
-    tcgatissue = data.gene_datasets.TCGATissue()
+    opt.seed = 0
+    opt.nb_class = None
+    opt.nb_examples = None
+    opt.nb_nodes = None
+    opt.graph = "genemania"
+    opt.add_self = True
+    opt.norm_adj = True
+    opt.add_connectivity = False
+    opt.pool_graph = "ignore"
+
+    if opt.samples_path:
+        data_dir = '/'.join(opt.samples_path.split('/')[:-1])
+        data_file = opt.samples_path.split('/')[-1]
+        tcgatissue = data.gene_datasets.TCGATissue(data_dir=data_dir, data_file=data_file)
+    else:
+        tcgatissue = data.gene_datasets.TCGATissue()
+
     graph = Graph()
-    graph.load_graph(get_hash(opt.graph))
+    if opt.graph_path:
+        graph.load_graph(opt.graph_path)
+    else:
+        graph.load_graph(data.graph.get_hash(opt.graph))
     nx_graph = nx.from_numpy_matrix(graph.adj)
     mapping = dict(zip(range(0, len(tcgatissue.df.columns)), tcgatissue.df.columns))
     nx_graph = nx.relabel_nodes(nx_graph, mapping)
