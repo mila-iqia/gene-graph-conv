@@ -66,7 +66,6 @@ def main(argv=None):
     except Exception:
         results = {"df": pd.DataFrame(columns=['auc', 'gene_name', 'model', 'num_genes', 'seed', 'train_size'])}
 
-    tcgatissue = data.gene_datasets.TCGATissue()
     tcgatissue.df = tcgatissue.df - tcgatissue.df.mean()
     bucket_size = tcgatissue.df.shape[-1] / opt.num_buckets
     start = opt.bucket_idx - 1 * bucket_size
