@@ -16,10 +16,10 @@ case $i in
     samples_path="${i#*=}"
     ;;
     --exp-name=*)
-    exp_name="${i#=}"
+    exp_name="${i#*=}"
     ;;
     --cuda=*)
-    cuda="${i#=}"
+    cuda="${i#*=}"
     ;;
 esac
 done
