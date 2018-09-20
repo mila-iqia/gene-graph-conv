@@ -12,13 +12,29 @@
 # Pancan => Genemania
 # Kegg => Regnet
 # Get the inputs
-num_buckets=$1
-exp_name=$2
-graph=$3
-cuda=$4
+for i in "$@"
+do
+case $i in
+    --buckets=*)
+    buckets="${i#*=}"
+    ;;
+    --graph-path=*)
+    graph_path="${i#*=}"
+    ;;
+    --samples-path=*)
+    samples_path="${i#*=}"
+    ;;
+    --exp-name=*)
+    exp_name="${i#=}"
+    ;;
+    --cuda=*)
+    cuda="${i#=}"
+    ;;
+esac
+done
 
-for bucket_idx in $(seq 1 $num_buckets)
+for bucket_idx in $(seq 1 $buckets)
 do
     #sbatch --output $exp_dir"/slurm-%j.out" -x mila00 ./experiments/launch_scripts/launch_one_fig_4_job.sh $bucket_idx $num_buckets $exp_name $graph
-    ./experiments/launch_scripts/launch_one_fig_4_job.sh $bucket_idx $num_buckets $exp_name $graph $cuda
+    ./experiments/launch_scripts/launch_one_fig_4_job.sh $bucket_idx $num_buckets $exp_name $graph_path $samples_path $cuda
 done

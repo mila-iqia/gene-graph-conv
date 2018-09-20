@@ -1,11 +1,5 @@
 #!/usr/bin/env bash
 
-gene=$1
-graph_path=$2
-samples_path=$3
-trials=$4
-cuda=$5
-
 for i in "$@"
 do
 case $i in
