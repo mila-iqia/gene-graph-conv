@@ -23,10 +23,8 @@ case $i in
     ;;
 esac
 done
-job_to_run="python -u run_exps_for_fig_4.py --bucket-idx=$bucket_idx --num-buckets=$num_buckets --exp-name=$exp_name --graph-path=$graph_path --samples-path=$samples_path"
 
 job_to_run="python -u run_exps_for_fig_4.py"
-job_to_run=$job_to_run" --gene="$gene
 if [ $cuda ]
 then
     job_to_run=$job_to_run" --cuda ";
