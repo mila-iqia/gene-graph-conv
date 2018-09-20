@@ -6,8 +6,8 @@ case $i in
     --bucket-idx=*)
     bucket_idx="${i#*=}"
     ;;
-    --num_buckets=*)
-    bucket_idx="${i#*=}"
+    --num-buckets=*)
+    num_buckets="${i#*=}"
     ;;
     --graph-path=*)
     graph_path="${i#*=}"
