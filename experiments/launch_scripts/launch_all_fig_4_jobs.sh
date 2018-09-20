@@ -36,5 +36,5 @@ done
 for bucket_idx in $(seq 1 $buckets)
 do
     #sbatch --output $exp_dir"/slurm-%j.out" -x mila00 ./experiments/launch_scripts/launch_one_fig_4_job.sh $bucket_idx $num_buckets $exp_name $graph
-    ./experiments/launch_scripts/launch_one_fig_4_job.sh $bucket_idx $num_buckets $exp_name $graph_path $samples_path $cuda
+    ./experiments/launch_scripts/launch_one_fig_4_job.sh --bucket-idx=$bucket_idx --num-buckets=$num_buckets --exp-name=$exp_name --graph-path=$graph_path --samples-path=$samples_path --cuda=$cuda
 done
