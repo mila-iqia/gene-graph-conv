@@ -23,7 +23,7 @@ case $i in
     ;;
 esac
 done
-
+echo $exp_name
 job_to_run="python -u run_exps_for_fig_4.py"
 if [ $cuda ]
 then
@@ -31,11 +31,11 @@ then
 fi
 if [ $bucket_idx ]
 then
-    job_to_run=$job_to_run"--bucket-idx="$bucket_idx;
+    job_to_run=$job_to_run" --bucket-idx="$bucket_idx;
 fi
 if [ $num_buckets ]
 then
-    job_to_run=$job_to_run"--num-buckets="$num_buckets;
+    job_to_run=$job_to_run" --num-buckets="$num_buckets;
 fi
 if [ $graph_path ]
 then
