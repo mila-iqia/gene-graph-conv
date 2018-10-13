@@ -342,7 +342,7 @@ class SparseMM(torch.autograd.Function):
         return grad_input
 
 
-class GCNLayer(GraphLayer):
+class CGNLayer(GraphLayer):
 
     def init_params(self):
         self.edges = torch.LongTensor(np.array(np.where(self.adj)))  # The list of edges
@@ -488,7 +488,7 @@ class SGCLayer(GraphLayer):
         return x
 
 
-def get_transform(adj, cuda, add_self=True, add_connectivity=False, norm_adj=True, num_layer=1, pool_graph="ignore"):
+def get_transform(adj, graph, cuda, add_self=True, add_connectivity=False, norm_adj=True, num_layer=1, pool_graph="ignore"):
 
     """
     Return a list of transform that can be applied to the adjacency matrix.
@@ -506,14 +506,23 @@ def get_transform(adj, cuda, add_self=True, add_connectivity=False, norm_adj=Tru
 
     if norm_adj:
         logging.info("Normalizing the graph...")
-        adj_transform += [lambda layer_id: ApprNormalizeLaplacian(processed_file=hash(str(adj)))]  # Normalize the graph
+        adj_transform += [lambda layer_id: ApprNormalizeLaplacian(processed_file=graph)]  # Normalize the graph
+
+    #if opt.pool_graph == "ignore":
+#        def get_aggregate(self, layer_id):
+#            return self.aggregates[layer_id]
+#        def get_adj(self, adj, layer_id):
+#            return self.adjs[layer_id]
 
     # Our adj transform method.
     adj_transform = transforms.Compose(adj_transform)
     aggregator = AggregationGraph(adj, num_layer, adj_transform=adj_transform, on_cuda=cuda, cluster_type=pool_graph)  # TODO: pooling and stuff
 
+    # I don't want the code to be too class dependant, so I'll two a functions instead.
     # 1. A function to get the adj matrix
-    # 2. A aggregation function.
+    # 2. A agregation fonction.
+    # For now The only parameter if takes in is the layer id.
+
     get_adj = lambda adj, layer_id: aggregator.get_adj(adj, layer_id)
     get_aggregate = lambda layer_id: aggregator.get_aggregate(layer_id)
     return get_adj, get_aggregate

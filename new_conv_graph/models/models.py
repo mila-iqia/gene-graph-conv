@@ -197,7 +197,7 @@ class LogisticRegression(nn.Module):
 class GraphNetwork(nn.Module):
     def __init__(self, nb_nodes, input_dim, channels, adj, out_dim,
                  on_cuda=True, add_emb=None, transform_adj=None, aggregate_adj=None, prepool_extralayers=0,
-                 graphLayerType=graphLayer.GCNLayer, use_gate=0.0001, dropout=False, attention_head=0, master_nodes=0):
+                 graphLayerType=graphLayer.CGNLayer, use_gate=0.0001, dropout=False, attention_head=0, master_nodes=0):
         super(GraphNetwork, self).__init__()
 
         if transform_adj is None:
@@ -227,7 +227,6 @@ class GraphNetwork(nn.Module):
         self.dims = dims
         for i, [c_in, c_out] in enumerate(zip(dims[:-1], dims[1:])):
             # transformation to apply at each layer.
-
             if self.aggregate_adj is not None:
                 for el in range(self.prepool_extralayers):
                     print "add extra layer before pooling" + str(el)
@@ -280,6 +279,7 @@ class GraphNetwork(nn.Module):
             self.attentionLayer.register_forward_hook(save_computations)  # For monitoringv
 
         logging.info("Done!")
+        # TODO: add all the funky bells and stuff that the old CGN has.
 
         # register grads
         self.grads = {}
@@ -430,9 +430,9 @@ class GraphNetwork(nn.Module):
                 pass # because of fucking sparse matrices.
 
 
-class GCN(GraphNetwork):
+class CGN(GraphNetwork):
     def __init__(self, **kwargs):
-        super(GCN, self).__init__(graphLayerType=graphLayer.GCNLayer, **kwargs)
+        super(CGN, self).__init__(graphLayerType=graphLayer.CGNLayer, **kwargs)
 
 
 class SGC(GraphNetwork):
@@ -504,23 +504,23 @@ def get_model(seed, nb_class, nb_examples, nb_nodes, model, on_cuda, num_channel
     """
 
     # TODO: add a bunch of the options
-    if model == 'gcn':
+    if model == 'cgn':
         assert graph is not None
-        adj_transform, aggregate_function = graphLayer.get_transform(graph.adj, opt.cuda, opt.add_self, opt.add_connectivity, opt.norm_adj, opt.num_layer, opt.pool_graph)
-        my_model = GCN(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
+        adj_transform, aggregate_function = graphLayer.get_transform(graph.adj, opt.graph, opt.cuda, opt.add_self, opt.add_connectivity, opt.norm_adj, opt.num_layer, opt.pool_graph)
+        my_model = CGN(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
                        on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
                        attention_head=nb_attention_head)
 
     elif model == 'lcg':
         assert graph is not None
-        adj_transform, aggregate_function = graphLayer.get_transform(graph.adj, opt.cuda, opt.add_self, opt.add_connectivity, opt.norm_adj, opt.num_layer, opt.pool_graph)
+        adj_transform, aggregate_function = graphLayer.get_transform(graph.adj, opt.graph, opt.cuda, opt.add_self, opt.add_connectivity, opt.norm_adj, opt.num_layer, opt.pool_graph)
         my_model = LCG(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
                        on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
                        attention_head=nb_attention_head)
 
     elif model == 'sgc':
         assert graph is not None
-        adj_transform, aggregate_function = graphLayer.get_transform(graph.adj, opt.cuda, opt.add_self, opt.add_connectivity, opt.norm_adj, opt.num_layer, opt.pool_graph)
+        adj_transform, aggregate_function = graphLayer.get_transform(graph.adj, opt.graph, opt.cuda, opt.add_self, opt.add_connectivity, opt.norm_adj, opt.num_layer, opt.pool_graph)
         my_model = SGC(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
                        on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
                        attention_head=nb_attention_head)
