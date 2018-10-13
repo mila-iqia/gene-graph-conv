@@ -229,7 +229,6 @@ class GraphNetwork(nn.Module):
             # transformation to apply at each layer.
             if self.aggregate_adj is not None:
                 for el in range(self.prepool_extralayers):
-                    print "add extra layer before pooling" + str(el)
                     layer = graphLayerType(adj, c_in, c_in, on_cuda, i, transform_adj=None, aggregate_adj=None)
                     convs.append(layer)
 
