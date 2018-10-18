@@ -9,10 +9,9 @@ import sklearn.neural_network
 import sklearn.tree
 import numpy as np
 import torch
-
 from torch.autograd import Variable
-import models
 
+import models
 
 class Method:
     def __init__(self):
@@ -178,13 +177,13 @@ class MLMethods(Method):
 
             patience = patience - 1
             if patience == 0:
-                self.model.load_state_dict(self.best_model)
-                return self
-            if (max_valid < auc['valid']) and epoch > 5:
+		self.model.load_state_dict(self.best_model)
+		return self
+            if (max_valid <= auc['valid']) and epoch > 5:
                 max_valid = auc['valid']
                 patience = self.start_patience
                 self.best_model = self.model.state_dict().copy()
-        self.model = self.best_model
+	self.model.load_state_dict(self.best_model)
 
     def predict(self, inputs):
         return self.model.forward(inputs)
