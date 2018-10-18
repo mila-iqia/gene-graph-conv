@@ -111,8 +111,8 @@ def sample_neighbors(g, gene, num_neighbors, include_self=True):
             results.add(unique.pop())
     return results
 
-def get_hash(graph):
-    if graph == "regnet":
+def get_at_hash(graph_name):
+    if graph_name == "regnet":
         return "3c8ac6e7ab6fbf962cedb77192177c58b7518b23"
-    elif graph == "genemania":
+    elif graph_name == "genemania":
         return "ae2691e4f4f068d32f83797b224eb854b27bd3ee"

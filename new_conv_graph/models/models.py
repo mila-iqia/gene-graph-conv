@@ -131,7 +131,6 @@ def save_computations(self, input, output):
 class SparseLogisticRegression(nn.Module):
     def __init__(self, nb_nodes, input_dim, adj, out_dim, on_cuda=True):
         super(SparseLogisticRegression, self).__init__()
-
         self.nb_nodes = nb_nodes
         self.input_dim = input_dim
         out_dim = out_dim if out_dim is not None else 2
@@ -413,7 +412,7 @@ class GraphNetwork(nn.Module):
 
         return representation
 
-    # because of fucking sparse matrices.
+    # because of the sparse matrices.
     def load_state_dict(self, state_dict):
 
         own_state = self.state_dict()
@@ -425,8 +424,8 @@ class GraphNetwork(nn.Module):
                 param = param.data
             try:
                 own_state[name].copy_(param)
-            except AttributeError as e:
-                pass # because of fucking sparse matrices.
+            except (AttributeError, RuntimeError):
+                pass # because of the sparse matrices.
 
 
 class CGN(GraphNetwork):
