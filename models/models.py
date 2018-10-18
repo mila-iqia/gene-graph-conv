@@ -131,7 +131,6 @@ def save_computations(self, input, output):
 class SparseLogisticRegression(nn.Module):
     def __init__(self, nb_nodes, input_dim, adj, out_dim, on_cuda=True):
         super(SparseLogisticRegression, self).__init__()
-
         self.nb_nodes = nb_nodes
         self.input_dim = input_dim
         out_dim = out_dim if out_dim is not None else 2
@@ -227,10 +226,8 @@ class GraphNetwork(nn.Module):
         self.dims = dims
         for i, [c_in, c_out] in enumerate(zip(dims[:-1], dims[1:])):
             # transformation to apply at each layer.
-
             if self.aggregate_adj is not None:
                 for el in range(self.prepool_extralayers):
-                    print "add extra layer before pooling" + str(el)
                     layer = graphLayerType(adj, c_in, c_in, on_cuda, i, transform_adj=None, aggregate_adj=None)
                     convs.append(layer)
 
@@ -415,7 +412,7 @@ class GraphNetwork(nn.Module):
 
         return representation
 
-    # because of fucking sparse matrices.
+    # because of the sparse matrices.
     def load_state_dict(self, state_dict):
 
         own_state = self.state_dict()
@@ -427,8 +424,8 @@ class GraphNetwork(nn.Module):
                 param = param.data
             try:
                 own_state[name].copy_(param)
-            except AttributeError as e:
-                pass # because of fucking sparse matrices.
+            except (AttributeError, RuntimeError):
+                pass # because of the sparse matrices.
 
 
 class CGN(GraphNetwork):

@@ -7,6 +7,7 @@ import os
 from torchvision import transforms
 import sklearn
 import sklearn.cluster
+import getpass
 
 
 class PoolGraph(object):
@@ -198,36 +199,16 @@ class ApprNormalizeLaplacian(object):
     """
 
     # TODO: add unittests
-    def __init__(self, processed_dir='/Tmp/',
-                 processed_file=None, unique_id=None, overwrite=False, **kwargs):
-
-        import getpass
-
+    def __init__(self, processed_dir='/Tmp/'):
         self.processed_dir = os.path.join(processed_dir, "ApprNormalizeLaplacian-" + str(getpass.getuser()))
-        self.processed_file = processed_file
-        self.overwrite = overwrite
-        self.unique_id = unique_id
 
     def __call__(self, adj):
-
-        adj = np.array(adj)
         adj_hash = str(hash(str(adj))) + str(adj.shape)
-        processed_path = None
-        if self.processed_dir and self.processed_file:
-            processed_path = os.path.join(self.processed_dir, self.processed_file)
-
-            if not os.path.exists(processed_path):
-                os.makedirs(processed_path)
-
-            processed_path = processed_path + adj_hash + '_{}.npy'.format(self.unique_id)
-
-            if not self.overwrite and os.path.exists(processed_path):
-                logging.info("returning a saved transformation.")
-                return np.load(processed_path)
-
+        processed_path = self.processed_dir + '_{}.npy'.format(adj_hash)
+        if not os.path.exists(self.processed_dir):
+            os.makedirs(self.processed_dir)
         logging.info("Doing the approximation...")
 
-        # Fill the diagonal
         np.fill_diagonal(adj, 1.)  # TODO: Hummm, think it's a 0.
 
         D = adj.sum(axis=1)
@@ -488,7 +469,7 @@ class SGCLayer(GraphLayer):
         return x
 
 
-def get_transform(adj, graph, cuda, add_self=True, add_connectivity=False, norm_adj=True, num_layer=1, pool_graph="ignore"):
+def get_transform(adj, cuda, add_self=True, add_connectivity=False, norm_adj=True, num_layer=1, pool_graph="ignore"):
 
     """
     Return a list of transform that can be applied to the adjacency matrix.
@@ -506,7 +487,7 @@ def get_transform(adj, graph, cuda, add_self=True, add_connectivity=False, norm_
 
     if norm_adj:
         logging.info("Normalizing the graph...")
-        adj_transform += [lambda layer_id: ApprNormalizeLaplacian(processed_file=graph)]  # Normalize the graph
+        adj_transform += [lambda layer_id: ApprNormalizeLaplacian()]  # Normalize the graph
 
     #if opt.pool_graph == "ignore":
 #        def get_aggregate(self, layer_id):
@@ -522,6 +503,7 @@ def get_transform(adj, graph, cuda, add_self=True, add_connectivity=False, norm_
     # 1. A function to get the adj matrix
     # 2. A agregation fonction.
     # For now The only parameter if takes in is the layer id.
+
     get_adj = lambda adj, layer_id: aggregator.get_adj(adj, layer_id)
     get_aggregate = lambda layer_id: aggregator.get_aggregate(layer_id)
     return get_adj, get_aggregate
