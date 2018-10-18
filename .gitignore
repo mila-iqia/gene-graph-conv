@@ -1,5 +1,7 @@
 gene_inference_results/
+/*/datastore/*
 gene_inference/pickles/*
+datastore*
 experiments/experiments/
 *.pyc
 *.Rhistory
