@@ -1,11 +1,12 @@
+""" Our machine learning models """
+
 import torch
 import logging
 import numpy as np
-from itertools import repeat
 from torch.autograd import Variable
 import torch.nn.functional as F
 from torch import nn
-import graphLayer
+import models.graphLayer
 
 
 class EmbeddingLayer(nn.Module):

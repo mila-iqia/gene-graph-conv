@@ -1,6 +1,5 @@
-# File containing ML Methods (PyTorch, SKLearn Wrapper)
+"""A SKLearn-style wrapper around our PyTorch models (like Graph Convolutional Network and SparseLogisticRegression) implemented in models.py"""
 
-import time
 import sklearn
 import sklearn.model_selection
 import sklearn.metrics
@@ -12,6 +11,7 @@ import torch
 from torch.autograd import Variable
 
 import models
+from models.graphLayer import get_transform
 
 class Method:
     def __init__(self):
@@ -25,7 +25,7 @@ class SkLearn(Method):
 
     def loop(self, dataset, seed, train_size, test_size, adj=None):
 
-        X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(dataset.df, dataset.labels, stratify=dataset.labels, train_size=train_size, test_size=test_size, random_state=seed)
+        x_train, x_test, y_train, y_test = sklearn.model_selection.train_test_split(dataset.df, dataset.labels, stratify=dataset.labels, train_size=train_size, test_size=test_size, random_state=seed)
 
         if self.model == "LR":
             model = sklearn.linear_model.LogisticRegression()
@@ -38,8 +38,8 @@ class SkLearn(Method):
         else:
             print "incorrect label"
 
-        model = model.fit(X_train, y_train)
-        return sklearn.metrics.roc_auc_score(y_test, model.predict(X_test))
+        model = model.fit(x_train, y_train)
+        return sklearn.metrics.roc_auc_score(y_test, model.predict(x_test))
 
 
 class MLMethods(Method):
@@ -67,21 +67,24 @@ class MLMethods(Method):
 
     def fit(self, X, y, adj=None):
         self.adj = adj
-        X_train, X_valid, y_train, y_valid = sklearn.model_selection.train_test_split(X, y, stratify=y, train_size=self.train_valid_split, test_size=1-self.train_valid_split, random_state=self.seed)
+        x_train, x_valid, y_train, y_valid = sklearn.model_selection.train_test_split(X, y, stratify=y, train_size=self.train_valid_split, test_size=1-self.train_valid_split, random_state=self.seed)
         # Return if it's all one class
         if len(set(y_train)) == 1 or len(set(y_valid)) == 1:
-            print ("Only one class represented.")
+            print "Only one class represented."
             return
 
-        X_train = torch.FloatTensor(np.expand_dims(X_train, axis=2))
-        X_valid = torch.FloatTensor(np.expand_dims(X_valid, axis=2))
+        # pylint: disable=E1101
+        x_train = torch.FloatTensor(np.expand_dims(x_train, axis=2))
+        x_valid = torch.FloatTensor(np.expand_dims(x_valid, axis=2))
         y_train = torch.FloatTensor(y_train)
+        # pylint: enable=E1101
+
         criterion = torch.nn.CrossEntropyLoss(size_average=True)
 
         if self.model_name == "CGN":
-            adj_transform, aggregate_function = models.graphLayer.get_transform(self.adj, self.cuda, num_layer=self.num_layer)
+            adj_transform, aggregator_fn = get_transform(adj, self.cuda, num_layer=self.num_layer)
             self.model = models.CGN(
-                nb_nodes=X_train.shape[1],
+                nb_nodes=x_train.shape[1],
                 input_dim=1,
                 channels=[self.num_channel] * self.num_layer,
                 adj=self.adj,
@@ -89,7 +92,7 @@ class MLMethods(Method):
                 on_cuda=self.cuda,
                 add_emb=self.add_emb,
                 transform_adj=adj_transform,
-                aggregate_adj=aggregate_function,
+                aggregate_adj=aggregator_fn,
                 use_gate=self.use_gate,
                 dropout=self.dropout,
                 attention_head=self.attention_head,
@@ -97,39 +100,24 @@ class MLMethods(Method):
                 )
         elif self.model_name == "MLP":
             self.model = models.MLP(
-                    input_dim=X_train.shape[1],
-                    channels=[self.num_channel] * self.num_layer,
-                    out_dim=2,
-                    on_cuda=self.cuda,
-                    dropout=self.dropout)
+                input_dim=x_train.shape[1],
+                channels=[self.num_channel] * self.num_layer,
+                out_dim=2,
+                on_cuda=self.cuda,
+                dropout=self.dropout)
         elif self.model_name == "SLR":
             self.model = models.SparseLogisticRegression(
-                    nb_nodes=X_train.shape[1],
-                    input_dim=1,
-                    adj=self.adj,
-                    out_dim=2,
-                    on_cuda=self.cuda)
-        elif self.model_name == "LCG":
-            adj_transform, aggregate_function = models.graphLayer.get_transform(adj, graph_name, self.cuda, num_layer=self.num_layer)
-            self.model = models.LCG(
-                    nb_nodes=X_train.shape[1],
-                    input_dim=1,
-                    channels=[self.num_channel] * self.num_layer,
-                    adj=self.adj,
-                    out_dim=2,
-                    on_cuda=self.cuda,
-                    add_emb=self.add_emb,
-                    transform_adj=adj_transform,
-                    aggregate_adj=aggregate_function,
-                    use_gate=self.use_gate,
-                    dropout=self.dropout,
-                    attention_head=self.nb_attention_head)
+                nb_nodes=x_train.shape[1],
+                input_dim=1,
+                adj=self.adj,
+                out_dim=2,
+                on_cuda=self.cuda)
         elif self.model_name == 'LR':
             self.model = models.LogisticRegression(
-                    nb_nodes=X_train.shape[1],
-                    input_dim=1,
-                    out_dim=2,
-                    on_cuda=self.cuda)
+                nb_nodes=x_train.shape[1],
+                input_dim=1,
+                out_dim=2,
+                on_cuda=self.cuda)
 
         if self.cuda:
             torch.cuda.manual_seed(self.seed)
@@ -140,8 +128,8 @@ class MLMethods(Method):
         max_valid = 0
         patience = self.start_patience
         for epoch in range(0, self.num_epochs):
-            for base_x in range(0, X_train.shape[0], self.batch_size):
-                inputs, labels = X_train[base_x:base_x + self.batch_size], y_train[base_x:base_x + self.batch_size]
+            for i in range(0, x_train.shape[0], self.batch_size):
+                inputs, labels = x_train[i:i + self.batch_size], y_train[i:i + self.batch_size]
 
                 inputs = Variable(inputs, requires_grad=False).float()
                 if self.cuda:
@@ -162,28 +150,28 @@ class MLMethods(Method):
 
             auc = {'train': 0., 'valid': 0.}
             res = []
-            for base_x in range(0, X_train.shape[0], self.batch_size):
-                inputs = Variable(X_train[base_x:base_x + self.batch_size]).float()
+            for i in range(0, x_train.shape[0], self.batch_size):
+                inputs = Variable(x_train[i:i + self.batch_size]).float()
                 res.append(self.model(inputs)[:, 1].data.cpu().numpy())
             y_hat = np.concatenate(res).ravel()
             auc['train'] = sklearn.metrics.roc_auc_score(y_train.numpy(), y_hat)
 
             res = []
-            for base_x in range(0, X_valid.shape[0], self.batch_size):
-                inputs = Variable(X_valid[base_x:base_x + self.batch_size]).float()
+            for i in range(0, x_valid.shape[0], self.batch_size):
+                inputs = Variable(x_valid[i:i + self.batch_size]).float()
                 res.append(self.model(inputs)[:, 1].data.cpu().numpy())
             y_hat = np.concatenate(res).ravel()
             auc['valid'] = sklearn.metrics.roc_auc_score(y_valid, y_hat)
 
             patience = patience - 1
             if patience == 0:
-		self.model.load_state_dict(self.best_model)
-		return self
+                break
             if (max_valid <= auc['valid']) and epoch > 5:
                 max_valid = auc['valid']
                 patience = self.start_patience
                 self.best_model = self.model.state_dict().copy()
-	self.model.load_state_dict(self.best_model)
+        self.model.load_state_dict(self.best_model)
 
     def predict(self, inputs):
+        """ Run the trained model on the inputs"""
         return self.model.forward(inputs)
