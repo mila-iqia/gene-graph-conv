@@ -14,7 +14,7 @@ class GeneDataset(Dataset):
     def __init__(self, data_dir=None, data_file=None, sub_class=None, name=None, seed=None, nb_class=None, nb_examples=None, nb_nodes=None, **kwargs):
         """
         Args:
-            data_file (string): Path to the h5df file.
+            data_file (string): Path to the hdf5 file.
         """
 
         self.sub_class = sub_class
