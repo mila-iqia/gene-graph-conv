@@ -10,8 +10,8 @@ import numpy as np
 import torch
 from torch.autograd import Variable
 
-import models
-from models.graphLayer import get_transform
+from models.model_layers import CGN, SparseLogisticRegression, LogisticRegression, MLP
+from models.graph_layers import get_transform
 
 class Method:
     def __init__(self):
@@ -42,7 +42,7 @@ class SkLearn(Method):
         return sklearn.metrics.roc_auc_score(y_test, model.predict(x_test))
 
 
-class MLMethods(Method):
+class WrappedModel(Method):
 
     def __init__(self, column_names=None, model_name="CGN", num_epochs=100, num_channel=16, num_layer=2, add_emb=8, use_gate=False, dropout=False, cuda=False, seed=0, adj=None, graph_name=None, prepool_extralayers=0):
         self.model_name = model_name
@@ -83,7 +83,7 @@ class MLMethods(Method):
 
         if self.model_name == "CGN":
             adj_transform, aggregator_fn = get_transform(adj, self.cuda, num_layer=self.num_layer)
-            self.model = models.CGN(
+            self.model = CGN(
                 nb_nodes=x_train.shape[1],
                 input_dim=1,
                 channels=[self.num_channel] * self.num_layer,
@@ -99,21 +99,21 @@ class MLMethods(Method):
                 prepool_extralayers=self.prepool_extralayers,
                 )
         elif self.model_name == "MLP":
-            self.model = models.MLP(
+            self.model = MLP(
                 input_dim=x_train.shape[1],
                 channels=[self.num_channel] * self.num_layer,
                 out_dim=2,
                 on_cuda=self.cuda,
                 dropout=self.dropout)
         elif self.model_name == "SLR":
-            self.model = models.SparseLogisticRegression(
+            self.model = SparseLogisticRegression(
                 nb_nodes=x_train.shape[1],
                 input_dim=1,
                 adj=self.adj,
                 out_dim=2,
                 on_cuda=self.cuda)
         elif self.model_name == 'LR':
-            self.model = models.LogisticRegression(
+            self.model = LogisticRegression(
                 nb_nodes=x_train.shape[1],
                 input_dim=1,
                 out_dim=2,

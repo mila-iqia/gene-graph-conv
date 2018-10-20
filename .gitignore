@@ -1,4 +1,5 @@
 gene_inference_results/
+experiments/results/*
 /*/datastore/*
 gene_inference/pickles/*
 datastore*

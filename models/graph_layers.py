@@ -1,13 +1,15 @@
-import torch
+import os
 import logging
-import numpy as np
+import getpass
+
+import torch
 from torch import nn
 from torch.autograd import Variable
-import os
 from torchvision import transforms
 import sklearn
 import sklearn.cluster
-import getpass
+
+import numpy as np
 
 
 class PoolGraph(object):

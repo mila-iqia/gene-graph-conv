@@ -1,22 +1,20 @@
 """ Our machine learning models """
 
-import torch
 import logging
 import numpy as np
+import torch
+from torch import nn
 from torch.autograd import Variable
 import torch.nn.functional as F
-from torch import nn
-import models.graphLayer
+
+from models.graph_layers import CGNLayer, SGCLayer, LCGLayer, get_transform
 
 
 class EmbeddingLayer(nn.Module):
 
     def __init__(self, nb_emb, emb_size=32):
-
         self.emb_size = emb_size
         super(EmbeddingLayer, self).__init__()
-
-        # The embeddings
         self.emb_size = emb_size
         self.emb = nn.Parameter(torch.rand(nb_emb, emb_size))
         self.reset_parameters()
@@ -26,33 +24,23 @@ class EmbeddingLayer(nn.Module):
         return emb
 
     def reset_parameters(self):
-        stdv = 1. / np.sqrt(self.emb.size(1))        # also, reduce the gene dataset to just the first degree neighbors of the target gene
-        #if self.labels.shape != self.labels[:].reshape(-1).shape:
-        #    print "Converting one-hot labels to integers"
-        #    self.labels = np.argmax(self.labels[:], axis=1)
+        stdv = 1. / np.sqrt(self.emb.size(1))
         self.emb.data.uniform_(-stdv, stdv)
 
 
 class AttentionLayer(nn.Module):
 
     def __init__(self, in_dim, nb_attention_head=1):
-
         self.in_dim = in_dim
         self.nb_attention_head = nb_attention_head
         super(AttentionLayer, self).__init__()
-
-        # The view vector.
         self.attn = nn.Linear(self.in_dim, nb_attention_head)
         self.temperature = 1.
 
     def forward(self, x):
-
         nb_examples, nb_nodes, nb_channels = x.size()
-        #x = x.permute(0, 2, 1).contiguous()  # from ex, ch, node -> ex, node, ch
         x = x.view(-1, nb_channels)
 
-        # attn_weights = F.softmax(self.attn(x), dim=1)# Should be able to do that,
-        # I have some problem with pytorch right now, so I'm doing i manually. Also between you and me, the pytorch example for attention sucks.
         attn_weights = torch.exp(self.attn(x)*self.temperature)
         attn_weights = attn_weights.view(nb_examples, nb_nodes, self.nb_attention_head)
         attn_weights = attn_weights / attn_weights.sum(dim=1).unsqueeze(1)  # normalizing
@@ -66,33 +54,21 @@ class AttentionLayer(nn.Module):
 
 
 class SoftPoolingLayer(nn.Module):
-
     def __init__(self, in_dim, nb_attention_head=10):
-
         self.in_dim = in_dim
         self.nb_attention_head = nb_attention_head
         super(SoftPoolingLayer, self).__init__()
-
-        # The view vector.
         self.attn = nn.Linear(self.in_dim, self.nb_attention_head)
         self.temperature = 1.
 
     def forward(self, x):
-
         nb_examples, nb_nodes, nb_channels = x.size()
-        #x = x.permute(0, 2, 1).contiguous()  # from ex, ch, node -> ex, node, ch
         x = x.view(-1, nb_channels)
 
-        # attn_weights = F.softmax(self.attn(x), dim=1)# Should be able to do that,
-        # I have some problem with pytorch right now, so I'm doing i manually. Also between you and me, the pytorch example for attention sucks.
         attn_weights = torch.exp(self.attn(x)*self.temperature)
         attn_weights = attn_weights.view(nb_examples, nb_nodes, self.nb_attention_head)
         attn_weights = attn_weights / attn_weights.sum(dim=1).unsqueeze(1)  # normalizing
         attn_weights = attn_weights.sum(dim=-1)
-
-        #x = x.view(nb_examples, nb_nodes, nb_channels)
-        #attn_applied = x * attn_weights.unsqueeze(-1)
-        #attn_applied = attn_applied.view(nb_examples, -1)
 
         return attn_weights.unsqueeze(-1)
 
@@ -149,7 +125,6 @@ class SparseLogisticRegression(nn.Module):
         logistic_layer = nn.Linear(logistic_in_dim, out_dim)
         logistic_layer.register_forward_hook(save_computations)  # For monitoring
 
-
         self.my_logistic_layers = nn.ModuleList([logistic_layer])  # A lsit to be consistant with the other layer.
 
     def forward(self, x):
@@ -196,8 +171,16 @@ class LogisticRegression(nn.Module):
 
 class GraphNetwork(nn.Module):
     def __init__(self, nb_nodes, input_dim, channels, adj, out_dim,
-                 on_cuda=True, add_emb=None, transform_adj=None, aggregate_adj=None, prepool_extralayers=0,
-                 graphLayerType=graphLayer.CGNLayer, use_gate=0.0001, dropout=False, attention_head=0, master_nodes=0):
+                 on_cuda=True,
+                 add_emb=None,
+                 transform_adj=None,
+                 aggregate_adj=None,
+                 prepool_extralayers=0,
+                 graph_layer_type=CGNLayer,
+                 use_gate=0.0001,
+                 dropout=False,
+                 attention_head=0,
+                 master_nodes=0):
         super(GraphNetwork, self).__init__()
 
         if transform_adj is None:
@@ -208,7 +191,7 @@ class GraphNetwork(nn.Module):
         self.nb_nodes = adj.shape[0]
         self.nb_channels = channels
         self.add_emb = add_emb
-        self.graphLayerType = graphLayerType
+        self.graph_layer_type = graph_layer_type
         self.aggregate_adj = aggregate_adj
         self.dropout = dropout
         self.attention_head = attention_head
@@ -229,10 +212,10 @@ class GraphNetwork(nn.Module):
             # transformation to apply at each layer.
             if self.aggregate_adj is not None:
                 for el in range(self.prepool_extralayers):
-                    layer = graphLayerType(adj, c_in, c_in, on_cuda, i, transform_adj=None, aggregate_adj=None)
+                    layer = graph_layer_type(adj, c_in, c_in, on_cuda, i, transform_adj=None, aggregate_adj=None)
                     convs.append(layer)
 
-            layer = graphLayerType(adj, c_in, c_out, on_cuda, i, transform_adj=transform_adj, aggregate_adj=aggregate_adj)
+            layer = graph_layer_type(adj, c_in, c_out, on_cuda, i, transform_adj=transform_adj, aggregate_adj=aggregate_adj)
             layer.register_forward_hook(save_computations)  # For monitoringv
             convs.append(layer)
             adj = convs[-1].adj
@@ -431,17 +414,17 @@ class GraphNetwork(nn.Module):
 
 class CGN(GraphNetwork):
     def __init__(self, **kwargs):
-        super(CGN, self).__init__(graphLayerType=graphLayer.CGNLayer, **kwargs)
+        super(CGN, self).__init__(graph_layer_type=CGNLayer, **kwargs)
 
 
 class SGC(GraphNetwork):
     def __init__(self, **kwargs):
-        super(SGC, self).__init__(graphLayerType=graphLayer.SGCLayer, **kwargs)
+        super(SGC, self).__init__(graph_layer_type=SGCLayer, **kwargs)
 
 
 class LCG(GraphNetwork):
     def __init__(self, **kwargs):
-        super(LCG, self).__init__(graphLayerType=graphLayer.LCGLayer, **kwargs)
+        super(LCG, self).__init__(graph_layer_type=LCGLayer, **kwargs)
 
 
 class MLP(nn.Module):
@@ -505,21 +488,21 @@ def get_model(seed, nb_class, nb_examples, nb_nodes, model, on_cuda, num_channel
     # TODO: add a bunch of the options
     if model == 'cgn':
         assert graph is not None
-        adj_transform, aggregate_function = graphLayer.get_transform(graph.adj, opt.graph, opt.cuda, opt.add_self, opt.add_connectivity, opt.norm_adj, opt.num_layer, opt.pool_graph)
+        adj_transform, aggregate_function = get_transform(graph.adj, opt.graph, opt.cuda, opt.add_self, opt.add_connectivity, opt.norm_adj, opt.num_layer, opt.pool_graph)
         my_model = CGN(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
                        on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
                        attention_head=nb_attention_head)
 
     elif model == 'lcg':
         assert graph is not None
-        adj_transform, aggregate_function = graphLayer.get_transform(graph.adj, opt.graph, opt.cuda, opt.add_self, opt.add_connectivity, opt.norm_adj, opt.num_layer, opt.pool_graph)
+        adj_transform, aggregate_function = get_transform(graph.adj, opt.graph, opt.cuda, opt.add_self, opt.add_connectivity, opt.norm_adj, opt.num_layer, opt.pool_graph)
         my_model = LCG(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
                        on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
                        attention_head=nb_attention_head)
 
     elif model == 'sgc':
         assert graph is not None
-        adj_transform, aggregate_function = graphLayer.get_transform(graph.adj, opt.graph, opt.cuda, opt.add_self, opt.add_connectivity, opt.norm_adj, opt.num_layer, opt.pool_graph)
+        adj_transform, aggregate_function = get_transform(graph.adj, opt.graph, opt.cuda, opt.add_self, opt.add_connectivity, opt.norm_adj, opt.num_layer, opt.pool_graph)
         my_model = SGC(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
                        on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
                        attention_head=nb_attention_head)
