@@ -7,7 +7,7 @@ from torch import nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 
-from models.graph_layers import CGNLayer, SGCLayer, LCGLayer, get_transform
+from models.graph_layers import GCNLayer, SGCLayer, LCGLayer, get_transform
 
 
 class EmbeddingLayer(nn.Module):
@@ -176,7 +176,7 @@ class GraphNetwork(nn.Module):
                  transform_adj=None,
                  aggregate_adj=None,
                  prepool_extralayers=0,
-                 graph_layer_type=CGNLayer,
+                 graph_layer_type=graph_layers.GCNLayer,
                  use_gate=0.0001,
                  dropout=False,
                  attention_head=0,
@@ -261,9 +261,7 @@ class GraphNetwork(nn.Module):
             self.attentionLayer.register_forward_hook(save_computations)  # For monitoringv
 
         logging.info("Done!")
-        # TODO: add all the funky bells and stuff that the old CGN has.
 
-        # register grads
         self.grads = {}
         def save_grad(name):
             def hook(grad):
@@ -273,16 +271,11 @@ class GraphNetwork(nn.Module):
 
 
     def forward(self, x):
-    # Depending on the training mode, we will call different functions.
-        #import ipdb;
-        #ipdb.set_trace()
-
         nb_examples, nb_nodes, nb_channels = x.size()
         return self.supervised(x)
 
-    def gene_inference(self, x):
-        nb_examples, nb_nodes, nb_channels = x.size()
 
+    def gene_inference(self, x):
         if self.add_emb:
             x = self.emb(x)
             x.register_hook(self.save_grad('emb'))
@@ -313,8 +306,6 @@ class GraphNetwork(nn.Module):
         return x
 
     def semi_supervised(self, x):
-
-        nb_examples, nb_nodes, nb_channels = x.size()
         if self.add_emb:
             x = self.emb(x)
 
@@ -328,7 +319,6 @@ class GraphNetwork(nn.Module):
         return x
 
     def supervised(self, x):
-
         nb_examples, nb_nodes, nb_channels = x.size()
 
         if self.add_emb:
@@ -367,10 +357,6 @@ class GraphNetwork(nn.Module):
         return 0.0
 
     def get_representation(self):
-
-        # TODO: There is a more systematic way to do that with self.named_children or something, but for that we have
-        # to refactor the code first.
-
         def add_rep(layer, name, rep):
             rep[name] = {'input': layer.input[0].cpu().data.numpy(), 'output': layer.output.cpu().data.numpy()}
 
@@ -398,7 +384,6 @@ class GraphNetwork(nn.Module):
 
     # because of the sparse matrices.
     def load_state_dict(self, state_dict):
-
         own_state = self.state_dict()
         for name, param in state_dict.items():
             if name not in own_state:
@@ -412,9 +397,9 @@ class GraphNetwork(nn.Module):
                 pass # because of the sparse matrices.
 
 
-class CGN(GraphNetwork):
+class GCN(GraphNetwork):
     def __init__(self, **kwargs):
-        super(CGN, self).__init__(graph_layer_type=CGNLayer, **kwargs)
+        super(GCN, self).__init__(graph_layer_type=GCNLayer, **kwargs)
 
 
 class SGC(GraphNetwork):
@@ -486,10 +471,10 @@ def get_model(seed, nb_class, nb_examples, nb_nodes, model, on_cuda, num_channel
     """
 
     # TODO: add a bunch of the options
-    if model == 'cgn':
+    if model == 'gcn':
         assert graph is not None
         adj_transform, aggregate_function = get_transform(graph.adj, opt.graph, opt.cuda, opt.add_self, opt.add_connectivity, opt.norm_adj, opt.num_layer, opt.pool_graph)
-        my_model = CGN(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
+        my_model = GCN(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
                        on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
                        attention_head=nb_attention_head)
 

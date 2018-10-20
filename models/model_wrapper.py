@@ -10,7 +10,7 @@ import numpy as np
 import torch
 from torch.autograd import Variable
 
-from models.model_layers import CGN, SparseLogisticRegression, LogisticRegression, MLP
+from models.model_layers import GCN, SparseLogisticRegression, LogisticRegression, MLP
 from models.graph_layers import get_transform
 
 class Method:
@@ -44,7 +44,7 @@ class SkLearn(Method):
 
 class WrappedModel(Method):
 
-    def __init__(self, column_names=None, model_name="CGN", num_epochs=100, num_channel=16, num_layer=2, add_emb=8, use_gate=False, dropout=False, cuda=False, seed=0, adj=None, graph_name=None, prepool_extralayers=0):
+    def __init__(self, column_names=None, model_name="GCN", num_epochs=100, num_channel=16, num_layer=2, add_emb=8, use_gate=False, dropout=False, cuda=False, seed=0, adj=None, graph_name=None, prepool_extralayers=0):
         self.model_name = model_name
         self.column_names = column_names
         self.model = None
@@ -81,9 +81,9 @@ class WrappedModel(Method):
 
         criterion = torch.nn.CrossEntropyLoss(size_average=True)
 
-        if self.model_name == "CGN":
+        if self.model_name == "GCN":
             adj_transform, aggregator_fn = get_transform(adj, self.cuda, num_layer=self.num_layer)
-            self.model = CGN(
+            self.model = GCN(
                 nb_nodes=x_train.shape[1],
                 input_dim=1,
                 channels=[self.num_channel] * self.num_layer,

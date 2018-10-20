@@ -325,7 +325,7 @@ class SparseMM(torch.autograd.Function):
         return grad_input
 
 
-class CGNLayer(GraphLayer):
+class GCNLayer(GraphLayer):
 
     def init_params(self):
         self.edges = torch.LongTensor(np.array(np.where(self.adj)))  # The list of edges
