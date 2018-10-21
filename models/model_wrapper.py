@@ -44,15 +44,15 @@ class SkLearn(Method):
 
 class WrappedModel(Method):
 
-    def __init__(self, column_names=None, model_name="GCN", num_epochs=100, num_channel=16, num_layer=2, add_emb=8, use_gate=False, dropout=False, cuda=False, seed=0, adj=None, graph_name=None, prepool_extralayers=0):
-        self.model_name = model_name
+    def __init__(self, name="GCN", column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=False, dropout=False, cuda=False, seed=0, adj=None, graph_name=None, pooling="ignore", prepool_extralayers=0):
+        self.name = name
         self.column_names = column_names
         self.model = None
         self.batch_size = 10
-        self.num_channel = num_channel
+        self.channels = channels
         self.num_layer = num_layer
-        self.add_emb = add_emb
-        self.use_gate = use_gate
+        self.embedding = embedding
+        self.gating = gating
         self.dropout = dropout
         self.cuda = cuda
         self.num_epochs = num_epochs
@@ -63,6 +63,7 @@ class WrappedModel(Method):
         self.graph_name = graph_name
         self.train_valid_split = 0.8
         self.prepool_extralayers = prepool_extralayers
+        self.pooling = pooling
         self.best_model = None
 
     def fit(self, X, y, adj=None):
@@ -81,43 +82,42 @@ class WrappedModel(Method):
 
         criterion = torch.nn.CrossEntropyLoss(size_average=True)
 
-        if self.model_name == "GCN":
-            adj_transform, aggregator_fn = get_transform(adj, self.cuda, num_layer=self.num_layer)
+        if self.name == "GCN":
+            adj_transform, aggregator_fn = get_transform(adj, self.cuda, num_layer=self.num_layer, pooling=self.pooling)
             self.model = GCN(
-                nb_nodes=x_train.shape[1],
                 input_dim=1,
-                channels=[self.num_channel] * self.num_layer,
+                channels=[self.channels] * self.num_layer,
                 adj=self.adj,
                 out_dim=2,
-                on_cuda=self.cuda,
-                add_emb=self.add_emb,
+                cuda=self.cuda,
+                embedding=self.embedding,
                 transform_adj=adj_transform,
                 aggregate_adj=aggregator_fn,
-                use_gate=self.use_gate,
+                gating=self.gating,
                 dropout=self.dropout,
                 attention_head=self.attention_head,
                 prepool_extralayers=self.prepool_extralayers,
                 )
-        elif self.model_name == "MLP":
+        elif self.name == "MLP":
             self.model = MLP(
                 input_dim=x_train.shape[1],
-                channels=[self.num_channel] * self.num_layer,
+                channels=[self.channels] * self.num_layer,
                 out_dim=2,
-                on_cuda=self.cuda,
+                cuda=self.cuda,
                 dropout=self.dropout)
-        elif self.model_name == "SLR":
+        elif self.name == "SLR":
             self.model = SparseLogisticRegression(
                 nb_nodes=x_train.shape[1],
                 input_dim=1,
                 adj=self.adj,
                 out_dim=2,
-                on_cuda=self.cuda)
-        elif self.model_name == 'LR':
+                cuda=self.cuda)
+        elif self.name == 'LR':
             self.model = LogisticRegression(
                 nb_nodes=x_train.shape[1],
                 input_dim=1,
                 out_dim=2,
-                on_cuda=self.cuda)
+                cuda=self.cuda)
 
         if self.cuda:
             torch.cuda.manual_seed(self.seed)

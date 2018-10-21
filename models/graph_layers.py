@@ -18,13 +18,13 @@ class PoolGraph(object):
     Given x values, a adjacency graph, and a list of value to keep, return the coresponding x.
     """
 
-    def __init__(self, adj, to_keep, please_ignore=False, type='max', on_cuda=False, **kwargs):
+    def __init__(self, adj, to_keep, please_ignore=False, type='max', cuda=False, **kwargs):
 
         self.type = type
         self.please_ignore = please_ignore
         self.adj = adj
         self.to_keep = to_keep
-        self.on_cuda = on_cuda
+        self.cuda = cuda
         self.nb_nodes = self.adj.shape[0]
 
         logging.info("We are keeping {} elements.".format(to_keep.sum()))
@@ -39,7 +39,7 @@ class PoolGraph(object):
 
         adj = Variable(torch.FloatTensor(self.adj), requires_grad=False)
         to_keep = Variable(torch.FloatTensor(self.to_keep.astype(float)), requires_grad=False)
-        if self.on_cuda:
+        if self.cuda:
             adj = adj.cuda()
             to_keep = to_keep.cuda()
 
@@ -66,21 +66,22 @@ class AggregationGraph(object):
     Master Agregator. Will return the agregator function and the adj for each layer of the network.
     """
 
-    def __init__(self, adj, nb_layer, adj_transform=None, on_cuda=False, cluster_type=None, **kwargs):
+    def __init__(self, adj, nb_layer, adj_transform=None, cuda=False, cluster_type=None, **kwargs):
 
         self.nb_layer = nb_layer
         self.adj = adj
-        self.on_cuda = on_cuda
+        self.cuda = cuda
         self.adj_transform = adj_transform
         self.cluster_type = cluster_type
+        self.clustering = None
 
         # Build the hierarchy of clusters.
-        self.init_cluster()  # Compute all the adjs and to_keep variables.
+        self.init_cluster()
 
         # Build the aggregate function
         self.aggregates = []
         for adj, to_keep in zip(self.aggregate_adjs, self.to_keeps):
-            aggregate_adj = PoolGraph(adj=adj, to_keep=to_keep, on_cuda=on_cuda)
+            aggregate_adj = PoolGraph(adj=adj, to_keep=to_keep, cuda=cuda)
             self.aggregates.append(aggregate_adj)
 
     def init_cluster(self):
@@ -112,24 +113,19 @@ class AggregationGraph(object):
         self.aggregate_adjs = all_aggregate_adjs
         self.adjs = all_transformed_adj
 
-    def get_nodes_cluster(self, last_to_keep, layer_id, adj):
-        # TODO: add other kind of clustering (i.e. random, grid, etc.)
-
+    def get_nodes_cluster(self, layer_id, adj):
         nb_nodes = adj.shape[0]
         ids = range(adj.shape[0])
 
-        if self.cluster_type == 'hierarchy':
+        if self.cluster_type == "hierarchy":
             n_clusters = nb_nodes / (2 ** (layer_id + 1))
-            # For a specific layer, return the ids. The merging and stuff's gonna be compute later.
+            # For a specific layer, return the ids. The merging and stuff's gonna be computed later.
             self.clustering = sklearn.cluster.AgglomerativeClustering(n_clusters=n_clusters, affinity='euclidean',
-                                                                      memory='testing123_123', connectivity=(adj > 0.).astype(int),
+                                                                      memory='/Tmp', connectivity=(adj > 0.).astype(int),
                                                                       compute_full_tree='auto', linkage='ward')
-            ids = self.clustering.fit_predict(self.adj)  # all nodes has a cluster.
+            ids = self.clustering.fit_predict(self.adj)  # all nodes have a cluster.
         elif self.cluster_type is None or self.cluster_type == 'ignore':
             pass
-        elif self.cluster_type == 'grid':
-            grid_size = int(np.sqrt(nb_nodes))
-            ids = [1 if (i % grid_size) == 0 else 0 for i in range(nb_nodes)]
         else:
             raise ValueError('Cluster type {} unknown.'.format(self.cluster_type))
 
@@ -137,7 +133,7 @@ class AggregationGraph(object):
 
     def cluster_specific_layer(self, last_to_keep, n_clusters, adj):
         # A cluster for a specific scale.
-        ids = self.get_nodes_cluster(last_to_keep, n_clusters, adj)
+        ids = self.get_nodes_cluster(n_clusters, adj)
         n_clusters = len(set(ids))
 
         clusters = set([])
@@ -162,7 +158,6 @@ class AggregationGraph(object):
         return self.aggregates[layer_id]
 
     def get_adj(self, adj, layer_id):
-
         # To be a bit more consistant we also pass the adj.
         # Here we don't use it.
         return self.adjs[layer_id]
@@ -228,55 +223,12 @@ class ApprNormalizeLaplacian(object):
         return norm_transform
 
 
-class AugmentGraphConnectivity(object):
-
-    def __init__(self, kernel_size=1, please_ignore=False, **kwargs):
-
-        self.kernel_size = kernel_size
-        self.please_ignore = please_ignore
-
-    def __call__(self, adj):
-
-        """
-        Augment the connectivity of the nodes in the graph.
-        :param adj: The adj matrix
-        :param stride: The stride of the pooling. Akin to CNN.
-        :param kernel_size: The size of the neibourhood. Same thing as in CNN.
-        :param please_ignore: We are not doing pruning, this option is to make things more consistant.
-        :return:
-        """
-
-        kernel_size = self.kernel_size
-        please_ignore = self.please_ignore
-
-        # We don't do pruning.
-        if please_ignore:
-            return adj
-        else:
-            print "Pruning the graph."
-
-        # TODO: do it by order of degree, so that we have some garantee
-        degrees = adj.sum(axis=0)
-        degrees = np.argsort(degrees)[::-1]
-
-        current_adj = adj
-        # We link all the neighbour of the neighbour (times kernel_size) to our node.
-        for i in range(kernel_size):
-            current_adj = current_adj.dot(current_adj.T)
-
-        frozen_adj = current_adj.copy()
-
-        new_adj = (frozen_adj > 0).astype(float)
-
-        return new_adj
-
-
 class GraphLayer(nn.Module):
-    def __init__(self, adj, in_dim=1, channels=1, on_cuda=False, id_layer=None,
+    def __init__(self, adj, in_dim=1, channels=1, cuda=False, id_layer=None,
                  transform_adj=None, aggregate_adj=None):
         super(GraphLayer, self).__init__()
         self.my_layers = []
-        self.on_cuda = on_cuda
+        self.cuda = cuda
         self.nb_nodes = adj.shape[0]
         self.in_dim = in_dim
         self.channels = channels
@@ -408,7 +360,7 @@ class LCGLayer(GraphLayer):
         edges = edges.contiguous().view(-1)
         useless_node = Variable(torch.zeros(x.size(0), 1, x.size(2)))
 
-        if self.on_cuda:
+        if self.cuda:
             edges = edges.cuda()
             weights = weights.cuda()
             useless_node = useless_node.cuda()
@@ -425,7 +377,7 @@ class LCGLayer(GraphLayer):
         nb_examples, nb_nodes, nb_channels = x.size()
         edges = Variable(self.super_edges, requires_grad=False)
 
-        if self.on_cuda:
+        if self.cuda:
             edges = edges.cuda()
 
         # DO all the input channel and sum them.
@@ -456,7 +408,7 @@ class SGCLayer(GraphLayer):
 
     def forward(self, x):
         V = self.V
-        if self.on_cuda:
+        if self.cuda:
             V = self.V.cuda()
 
         Vx = torch.matmul(torch.transpose(Variable(V), 0, 1), x)
@@ -471,7 +423,7 @@ class SGCLayer(GraphLayer):
         return x
 
 
-def get_transform(adj, cuda, add_self=True, add_connectivity=False, norm_adj=True, num_layer=1, pool_graph="ignore"):
+def get_transform(adj, cuda, add_self=True, norm_adj=True, num_layer=1, pooling="ignore"):
 
     """
     Return a list of transform that can be applied to the adjacency matrix.
@@ -481,30 +433,14 @@ def get_transform(adj, cuda, add_self=True, add_connectivity=False, norm_adj=Tru
     adj_transform = []
     if add_self:
         logging.info("Adding self connection to the graph...")
-        adj_transform += [lambda layer_id: SelfConnection(add_self, please_ignore=False)]  # Add a self connection.
-
-    if add_connectivity:
-        logging.info("Adding the connectivity after each layer...")
-        adj_transform += [lambda layer_id: AugmentGraphConnectivity(please_ignore=layer_id == 0)]  # Augmenting the connectivity of each layer.
+        adj_transform += [lambda layer_id: SelfConnection(add_self, please_ignore=False)]
 
     if norm_adj:
         logging.info("Normalizing the graph...")
-        adj_transform += [lambda layer_id: ApprNormalizeLaplacian()]  # Normalize the graph
+        adj_transform += [lambda layer_id: ApprNormalizeLaplacian()]
 
-    #if opt.pool_graph == "ignore":
-#        def get_aggregate(self, layer_id):
-#            return self.aggregates[layer_id]
-#        def get_adj(self, adj, layer_id):
-#            return self.adjs[layer_id]
-
-    # Our adj transform method.
     adj_transform = transforms.Compose(adj_transform)
-    aggregator = AggregationGraph(adj, num_layer, adj_transform=adj_transform, on_cuda=cuda, cluster_type=pool_graph)  # TODO: pooling and stuff
-
-    # I don't want the code to be too class dependant, so I'll two a functions instead.
-    # 1. A function to get the adj matrix
-    # 2. A agregation fonction.
-    # For now The only parameter if takes in is the layer id.
+    aggregator = AggregationGraph(adj, num_layer, adj_transform=adj_transform, cuda=cuda, cluster_type=pooling)
 
     get_adj = lambda adj, layer_id: aggregator.get_adj(adj, layer_id)
     get_aggregate = lambda layer_id: aggregator.get_aggregate(layer_id)

@@ -7,7 +7,12 @@ from torch import nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 
-from models.graph_layers import GCNLayer, SGCLayer, LCGLayer, get_transform
+from models.graph_layers import GCNLayer, SGCLayer, LCGLayer
+
+# For Monitoring
+def save_computations(self, input, output):
+    setattr(self, "input", input)
+    setattr(self, "output", output)
 
 
 class EmbeddingLayer(nn.Module):
@@ -74,6 +79,7 @@ class SoftPoolingLayer(nn.Module):
 
 
 class ElementwiseGateLayer(nn.Module):
+
     def __init__(self, id_dim):
         self.in_dim = id_dim
         super(ElementwiseGateLayer, self).__init__()
@@ -88,6 +94,7 @@ class ElementwiseGateLayer(nn.Module):
 
 
 class StaticElementwiseGateLayer(nn.Module):
+
     def __init__(self, id_dim):
         self.in_dim = id_dim
         super(StaticElementwiseGateLayer, self).__init__()
@@ -100,13 +107,9 @@ class StaticElementwiseGateLayer(nn.Module):
         return gate_weights
 
 
-def save_computations(self, input, output):
-    setattr(self, "input", input)
-    setattr(self, "output", output)
-
-
 class SparseLogisticRegression(nn.Module):
-    def __init__(self, nb_nodes, input_dim, adj, out_dim, on_cuda=True):
+
+    def __init__(self, nb_nodes, input_dim, adj, out_dim, cuda=True):
         super(SparseLogisticRegression, self).__init__()
         self.nb_nodes = nb_nodes
         self.input_dim = input_dim
@@ -118,14 +121,14 @@ class SparseLogisticRegression(nn.Module):
 
         self.laplacian = torch.FloatTensor(laplacian)
         self.out_dim = out_dim
-        self.on_cuda = on_cuda
+        self.cuda = cuda
 
         # The logistic layer.
         logistic_in_dim = nb_nodes * input_dim
         logistic_layer = nn.Linear(logistic_in_dim, out_dim)
-        logistic_layer.register_forward_hook(save_computations)  # For monitoring
+        logistic_layer.register_forward_hook(save_computations)
 
-        self.my_logistic_layers = nn.ModuleList([logistic_layer])  # A lsit to be consistant with the other layer.
+        self.my_logistic_layers = nn.ModuleList([logistic_layer])
 
     def forward(self, x):
         nb_examples, nb_nodes, nb_channels = x.size()
@@ -135,7 +138,7 @@ class SparseLogisticRegression(nn.Module):
 
     def regularization(self, reg_lambda):
         laplacian = Variable(self.laplacian, requires_grad=False)
-        if self.on_cuda:
+        if self.cuda:
             laplacian = laplacian.cuda()
         weight = self.my_logistic_layers[-1].weight
         reg = torch.abs(weight).mm(laplacian) * torch.abs(weight)
@@ -143,7 +146,7 @@ class SparseLogisticRegression(nn.Module):
 
 
 class LogisticRegression(nn.Module):
-    def __init__(self, nb_nodes, input_dim, out_dim, on_cuda=True):
+    def __init__(self, nb_nodes, input_dim, out_dim, cuda=True):
         super(LogisticRegression, self).__init__()
 
         self.nb_nodes = nb_nodes
@@ -151,13 +154,13 @@ class LogisticRegression(nn.Module):
         out_dim = out_dim if out_dim is not None else 2
 
         self.out_dim = out_dim
-        self.on_cuda = on_cuda
+        self.cuda = cuda
 
         # The logistic layer.
         logistic_in_dim = nb_nodes * input_dim
         logistic_layer = nn.Linear(logistic_in_dim, out_dim)
-        logistic_layer.register_forward_hook(save_computations)  # For monitoring
-        self.my_logistic_layers = nn.ModuleList([logistic_layer])  # A list to be consistant with the other layer.
+        logistic_layer.register_forward_hook(save_computations)
+        self.my_logistic_layers = nn.ModuleList([logistic_layer])
 
     def forward(self, x):
         nb_examples, nb_nodes, nb_channels = x.size()
@@ -165,19 +168,16 @@ class LogisticRegression(nn.Module):
         x = self.my_logistic_layers[-1](x)
         return x
 
-    def regularization(self, reg_lambda):
-        return 0.0
-
 
 class GraphNetwork(nn.Module):
-    def __init__(self, nb_nodes, input_dim, channels, adj, out_dim,
-                 on_cuda=True,
-                 add_emb=None,
+    def __init__(self, input_dim, channels, adj, out_dim,
+                 cuda=True,
+                 embedding=None,
                  transform_adj=None,
                  aggregate_adj=None,
                  prepool_extralayers=0,
-                 graph_layer_type=graph_layers.GCNLayer,
-                 use_gate=0.0001,
+                 graph_layer_type=None,
+                 gating=0.0001,
                  dropout=False,
                  attention_head=0,
                  master_nodes=0):
@@ -187,80 +187,34 @@ class GraphNetwork(nn.Module):
             transform_adj = []
         self.my_layers = []
         self.out_dim = out_dim if out_dim is not None else 2
-        self.on_cuda = on_cuda
-        self.nb_nodes = adj.shape[0]
-        self.nb_channels = channels
-        self.add_emb = add_emb
+        self.cuda = cuda
+        self.adj = adj
+        self.nb_nodes = self.adj.shape[0]
+        self.channels = channels
+        self.embedding = embedding
         self.graph_layer_type = graph_layer_type
         self.aggregate_adj = aggregate_adj
+        self.transform_adj = transform_adj
         self.dropout = dropout
         self.attention_head = attention_head
         self.master_nodes = master_nodes
         self.prepool_extralayers = prepool_extralayers
+        self.input_dim = input_dim
+        self.gating = gating
 
-        if add_emb:
-            logging.info("Adding node embeddings.")
-            self.emb = EmbeddingLayer(nb_nodes, add_emb)
-            self.emb.register_forward_hook(save_computations)  # For monitoring
-            input_dim = self.emb.emb_size
+        if self.embedding:
+            self.add_embedding_layer()
+            self.input_dim = self.emb.emb_size
+        self.dims = [self.input_dim] + self.channels
 
-        # The graph convolutional layers
-        convs = []
-        dims = [input_dim] + channels
-        self.dims = dims
-        for i, [c_in, c_out] in enumerate(zip(dims[:-1], dims[1:])):
-            # transformation to apply at each layer.
-            if self.aggregate_adj is not None:
-                for el in range(self.prepool_extralayers):
-                    layer = graph_layer_type(adj, c_in, c_in, on_cuda, i, transform_adj=None, aggregate_adj=None)
-                    convs.append(layer)
+        self.add_graph_convolutional_layers()
+        self.add_logistic_layer()
+        self.add_gating_layers()
+        self.add_dropout_layers()
 
-            layer = graph_layer_type(adj, c_in, c_out, on_cuda, i, transform_adj=transform_adj, aggregate_adj=aggregate_adj)
-            layer.register_forward_hook(save_computations)  # For monitoringv
-            convs.append(layer)
-            adj = convs[-1].adj
-
-        self.my_convs = nn.ModuleList(convs)
-
-        # The logistic layer
-        logistic_layer = []
-        if self.attention_head > 0:
-            logistic_in_dim = [self.attention_head * dims[-1]]
-        else:
-            logistic_in_dim = [self.nb_nodes * dims[-1]]
-
-        for d in logistic_in_dim:
-            layer = nn.Linear(d, self.out_dim)
-            layer.register_forward_hook(save_computations)  # For monitoring
-            logistic_layer.append(layer)
-
-            self.my_logistic_layers = nn.ModuleList(logistic_layer)
-
-        # The gating
-        self.use_gate = use_gate
-
-        if use_gate > 0.:
-            gates = []
-            for c_in in dims[1:]:
-                gate = ElementwiseGateLayer(c_in)#SoftPoolingLayer(c_in)
-                gate.register_forward_hook(save_computations)  # For monitoring
-                gates.append(gate)
-            self.gates = nn.ModuleList(gates)
-        else:
-            self.gates = [None] * (len(dims) - 1)
-
-        # Drop out
-        self.my_dropouts = [None] * (len(dims) - 1)
-        if dropout:
-            print "Doing drop-out"
-            self.my_dropouts = nn.ModuleList([torch.nn.Dropout(int(dropout)*min((id_layer+1) / 10., 0.4)) for id_layer in range(len(dims)-1)])
-
-        # Attention
         if self.attention_head:
-            self.attentionLayer = AttentionLayer(dims[-1], attention_head)
-            self.attentionLayer.register_forward_hook(save_computations)  # For monitoringv
-
-        logging.info("Done!")
+            self.attention_layer = AttentionLayer(self.channels[-1], attention_head)
+            self.attention_layer.register_forward_hook(save_computations)
 
         self.grads = {}
         def save_grad(name):
@@ -269,65 +223,64 @@ class GraphNetwork(nn.Module):
             return hook
         self.save_grad = save_grad
 
+    def add_embedding_layer(self):
+        self.emb = EmbeddingLayer(self.nb_nodes, self.embedding)
+        self.emb.register_forward_hook(save_computations)
+
+    def add_dropout_layers(self):
+        self.dropout_layers = [None] * (len(self.dims) - 1)
+        if self.dropout:
+            self.dropout_layers = nn.ModuleList([torch.nn.Dropout(int(self.dropout)*min((id_layer+1) / 10., 0.4)) for id_layer in range(len(self.dims)-1)])
+
+    def add_graph_convolutional_layers(self):
+        convs = []
+        for i, [c_in, c_out] in enumerate(zip(self.dims[:-1], self.dims[1:])):
+            # transformation to apply at each layer.
+            if self.aggregate_adj is not None:
+                for extra_layer in range(self.prepool_extralayers):
+                    layer = self.graph_layer_type(self.adj, c_in, c_in, self.cuda, i, transform_adj=None, aggregate_adj=None)
+                    convs.append(layer)
+
+            layer = self.graph_layer_type(self.adj, c_in, c_out, self.cuda, i, transform_adj=self.transform_adj, aggregate_adj=self.aggregate_adj)
+            layer.register_forward_hook(save_computations)
+            convs.append(layer)
+        self.conv_layers = nn.ModuleList(convs)
+
+    def add_gating_layers(self):
+        if self.gating > 0.:
+            gating_layers = []
+            for c_in in self.channels:
+                gate = ElementwiseGateLayer(c_in)
+                gate.register_forward_hook(save_computations)
+                gating_layers.append(gate)
+            self.gating_layers = nn.ModuleList(gating_layers)
+        else:
+            self.gating_layers = [None] * (len(self.dims) - 1)
+
+    def add_logistic_layer(self):
+        logistic_layer = []
+        if self.attention_head > 0:
+            logistic_in_dim = [self.attention_head * self.dims[-1]]
+        else:
+            logistic_in_dim = [self.nb_nodes * self.dims[-1]]
+
+        for d in logistic_in_dim:
+            layer = nn.Linear(d, self.out_dim)
+            layer.register_forward_hook(save_computations)
+            logistic_layer.append(layer)
+
+            self.my_logistic_layers = nn.ModuleList(logistic_layer)
 
     def forward(self, x):
         nb_examples, nb_nodes, nb_channels = x.size()
-        return self.supervised(x)
 
-
-    def gene_inference(self, x):
-        if self.add_emb:
+        if self.embedding:
             x = self.emb(x)
             x.register_hook(self.save_grad('emb'))
 
-        for i, [layer, dropout] in enumerate(zip(self.my_convs, self.my_dropouts)):
+        for i, [layer, gate, dropout] in enumerate(zip(self.conv_layers, self.gating_layers, self.dropout_layers)):
 
-            x = layer(x)
-            x = F.relu(x)  # + old_x
-            x.register_hook(self.save_grad('layer_{}'.format(i)))
-
-
-            if dropout is not None:
-                id_to_keep = dropout(torch.FloatTensor(np.ones((x.size(0), x.size(1))))).unsqueeze(2)
-                if self.on_cuda:
-                    id_to_keep = id_to_keep.cuda()
-
-                x = x * id_to_keep
-
-        # Do attention pooling here
-        if self.attention_head:
-            x, attn = self.attentionLayer(x)
-            x = self.last_inference_layer(x)
-        else:
-            x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
-            x = self.last_inference_layer(x)
-            x = x.permute(0, 2, 1).contiguous()  # from ex, ch, node -> ex, node, ch
-
-        return x
-
-    def semi_supervised(self, x):
-        if self.add_emb:
-            x = self.emb(x)
-
-        for i, layer in enumerate(self.my_convs):
-            x = layer(x)
-            x = F.relu(x)
-
-        x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
-        x = self.last_semi_layer(x)
-        x = x.permute(0, 2, 1).contiguous()  # from ex, ch, node -> ex, node, ch
-        return x
-
-    def supervised(self, x):
-        nb_examples, nb_nodes, nb_channels = x.size()
-
-        if self.add_emb:
-            x = self.emb(x)
-            x.register_hook(self.save_grad('emb'))
-
-        for i, [layer, gate, dropout] in enumerate(zip(self.my_convs, self.gates, self.my_dropouts)):
-
-            if self.use_gate > 0.:
+            if self.gating > 0.:
                 x = layer(x)
                 g = gate(x)
                 x = g * x
@@ -340,21 +293,18 @@ class GraphNetwork(nn.Module):
 
             if dropout is not None:
                 id_to_keep = dropout(torch.FloatTensor(np.ones((x.size(0), x.size(1))))).unsqueeze(2)
-                if self.on_cuda:
+                if self.cuda:
                     id_to_keep = id_to_keep.cuda()
 
                 x = x * id_to_keep
 
         # Do attention pooling here
         if self.attention_head:
-            x, attn = self.attentionLayer(x)
+            x = self.attention_layer(x)[0]
 
         x = self.my_logistic_layers[-1](x.view(nb_examples, -1))
         x.register_hook(self.save_grad('logistic'))
         return x
-
-    def regularization(self, reg_lambda):
-        return 0.0
 
     def get_representation(self):
         def add_rep(layer, name, rep):
@@ -365,9 +315,9 @@ class GraphNetwork(nn.Module):
         if self.add_emb:
             add_rep(self.emb, 'emb', representation)
 
-        for i, [layer, gate] in enumerate(zip(self.my_convs, self.gates)):
+        for i, [layer, gate] in enumerate(zip(self.conv_layers, self.gating_layers)):
 
-            if self.use_gate > 0.:
+            if self.gating > 0.:
                 add_rep(layer, 'layer_{}'.format(i), representation)
                 add_rep(gate, 'gate_{}'.format(i), representation)
 
@@ -377,8 +327,8 @@ class GraphNetwork(nn.Module):
         add_rep(self.my_logistic_layers[-1], 'logistic', representation)
 
         if self.attention_head:
-            representation['attention'] = {'input': self.attentionLayer.input[0].cpu().data.numpy(),
-                         'output': [self.attentionLayer.output[0].cpu().data.numpy(), self.attentionLayer.output[1].cpu().data.numpy()]}
+            representation['attention'] = {'input': self.attention_layer.input[0].cpu().data.numpy(),
+                         'output': [self.attention_layer.output[0].cpu().data.numpy(), self.attention_layer.output[1].cpu().data.numpy()]}
 
         return representation
 
@@ -413,14 +363,14 @@ class LCG(GraphNetwork):
 
 
 class MLP(nn.Module):
-    def __init__(self, input_dim, channels, out_dim=None, on_cuda=True, dropout=False):
+    def __init__(self, input_dim, channels, out_dim=None, cuda=True, dropout=False):
         super(MLP, self).__init__()
         out_dim = out_dim if out_dim is not None else 2
         input_dim = input_dim if input_dim is not None else 2
 
         self.my_layers = []
         self.out_dim = out_dim
-        self.on_cuda = on_cuda
+        self.cuda = cuda
         self.dropout = dropout
 
         dims = [input_dim] + channels
@@ -439,7 +389,6 @@ class MLP(nn.Module):
 
         self.my_dropout = None
         if dropout:
-            print "Doing Drop-out"
             self.my_dropout = torch.nn.Dropout(0.5)
 
         logging.info("Done!")
@@ -456,80 +405,3 @@ class MLP(nn.Module):
         x = self.last_layer(x.view(nb_examples, -1))
 
         return x
-
-    def regularization(self, reg_lambda):
-        return 0.0
-
-
-def get_model(seed, nb_class, nb_examples, nb_nodes, model, on_cuda, num_channel, num_layer, use_emb, dropout, use_gate, nb_attention_head, graph, dataset, model_state=None, opt=None):
-    """
-    Return a model based on the options.
-    :param opt:
-    :param dataset:
-    :param nb_class:
-    :return:
-    """
-
-    # TODO: add a bunch of the options
-    if model == 'gcn':
-        assert graph is not None
-        adj_transform, aggregate_function = get_transform(graph.adj, opt.graph, opt.cuda, opt.add_self, opt.add_connectivity, opt.norm_adj, opt.num_layer, opt.pool_graph)
-        my_model = GCN(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
-                       on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
-                       attention_head=nb_attention_head)
-
-    elif model == 'lcg':
-        assert graph is not None
-        adj_transform, aggregate_function = get_transform(graph.adj, opt.graph, opt.cuda, opt.add_self, opt.add_connectivity, opt.norm_adj, opt.num_layer, opt.pool_graph)
-        my_model = LCG(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
-                       on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
-                       attention_head=nb_attention_head)
-
-    elif model == 'sgc':
-        assert graph is not None
-        adj_transform, aggregate_function = get_transform(graph.adj, opt.graph, opt.cuda, opt.add_self, opt.add_connectivity, opt.norm_adj, opt.num_layer, opt.pool_graph)
-        my_model = SGC(nb_nodes=dataset.nb_nodes, input_dim=1, channels=[num_channel] * num_layer, adj=graph.adj, out_dim=nb_class,
-                       on_cuda=on_cuda, add_emb=use_emb, transform_adj=adj_transform, aggregate_adj=aggregate_function, use_gate=use_gate, dropout=dropout,
-                       attention_head=nb_attention_head)
-
-    elif model == 'slr':
-        assert graph is not None
-        my_model = SparseLogisticRegression(nb_nodes=nb_nodes, input_dim=1, adj=graph.adj, out_dim=nb_class, on_cuda=on_cuda)
-
-    elif model == 'lr':
-        my_model = LogisticRegression(nb_nodes=nb_nodes, input_dim=1, out_dim=nb_class, on_cuda=on_cuda)
-
-    elif model == 'mlp':
-        my_model = MLP(dataset.nb_nodes, [num_channel] * num_layer, nb_class, on_cuda=on_cuda, dropout=dropout)
-
-    else:
-        raise ValueError("{} is not a valid option!".format(model))
-
-    if model_state is not None:
-        init_state_dict = my_model.state_dict()
-        init_state_dict.update(model_state)
-        my_model.load_state_dict(init_state_dict)
-
-    return my_model
-
-
-def setup_l1_loss(my_model, l1_loss_lambda, l1_criterion, on_cuda):
-    l1_loss = 0
-    if hasattr(my_model, 'my_logistic_layers'):
-        l1_loss += calculate_l1_loss(my_model.my_logistic_layers.parameters(), l1_loss_lambda, l1_criterion, on_cuda)
-    if hasattr(my_model, 'my_layers') and len(my_model.my_layers) > 0 and type(my_model.my_layers[0]) == torch.nn.modules.linear.Linear:
-        l1_loss += calculate_l1_loss(my_model.my_layers[0].parameters(), l1_loss_lambda, l1_criterion, on_cuda)
-    if hasattr(my_model, 'last_layer') and type(my_model.last_layer) == torch.nn.modules.linear.Linear:
-        l1_loss += calculate_l1_loss(my_model.last_layer.parameters(), l1_loss_lambda, l1_criterion, on_cuda)
-    return l1_loss
-
-
-def calculate_l1_loss(param_generator, l1_loss_lambda, l1_criterion, on_cuda):
-    l1_loss = 0
-    for param in param_generator:
-        if on_cuda:
-            l1_target = Variable(torch.FloatTensor(param.size()).zero_()).cuda()
-        else:
-            l1_target = Variable(torch.FloatTensor(param.size()).zero_())
-        l1_loss += l1_criterion(param, l1_target)
-    return l1_loss * l1_loss_lambda
