@@ -10,8 +10,8 @@ import numpy as np
 import torch
 from torch.autograd import Variable
 
-from models.model_layers import GCN, SparseLogisticRegression, LogisticRegression, MLP
-from models.graph_layers import get_transform
+from model_layers import GCN, SparseLogisticRegression, LogisticRegression, MLP
+from graph_layers import get_transform
 
 class Method:
     def __init__(self):

@@ -7,7 +7,7 @@ from torch import nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 
-from models.graph_layers import GCNLayer, SGCLayer, LCGLayer
+from graph_layers import GCNLayer, SGCLayer, LCGLayer
 
 # For Monitoring
 def save_computations(self, input, output):
