@@ -152,14 +152,18 @@ class WrappedModel(Method):
             res = []
             for i in range(0, x_train.shape[0], self.batch_size):
                 inputs = Variable(x_train[i:i + self.batch_size]).float()
-                res.append(self.model(inputs)[:, 1].data.cpu().numpy())
+                if self.on_cuda:
+		    inputs = inputs.cuda()
+		res.append(self.model(inputs)[:, 1].data.cpu().numpy())
             y_hat = np.concatenate(res).ravel()
             auc['train'] = sklearn.metrics.roc_auc_score(y_train.numpy(), y_hat)
 
             res = []
             for i in range(0, x_valid.shape[0], self.batch_size):
                 inputs = Variable(x_valid[i:i + self.batch_size]).float()
-                res.append(self.model(inputs)[:, 1].data.cpu().numpy())
+                if self.on_cuda:
+		    inputs = inputs.cuda()
+		res.append(self.model(inputs)[:, 1].data.cpu().numpy())
             y_hat = np.concatenate(res).ravel()
             auc['valid'] = sklearn.metrics.roc_auc_score(y_valid, y_hat)
 
