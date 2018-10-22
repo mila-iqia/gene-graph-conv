@@ -1,4 +1,4 @@
-"""A SKLearn-style wrapper around our PyTorch models (like Graph Convolutional Network and SparseLogisticRegression) implemented in models.py"""
+self.on_cuda"""A SKLearn-style wrapper around our PyTorch models (like Graph Convolutional Network and SparseLogisticRegression) implemented in models.py"""
 
 import sklearn
 import sklearn.model_selection
@@ -54,7 +54,7 @@ class WrappedModel(Method):
         self.embedding = embedding
         self.gating = gating
         self.dropout = dropout
-        self.cuda = cuda
+        self.on_cuda = cuda
         self.num_epochs = num_epochs
         self.start_patience = 10
         self.attention_head = 0
@@ -83,13 +83,13 @@ class WrappedModel(Method):
         criterion = torch.nn.CrossEntropyLoss(size_average=True)
 
         if self.name == "GCN":
-            adj_transform, aggregator_fn = get_transform(adj, self.cuda, num_layer=self.num_layer, pooling=self.pooling)
+            adj_transform, aggregator_fn = get_transform(adj, self.on_cuda, num_layer=self.num_layer, pooling=self.pooling)
             self.model = GCN(
                 input_dim=1,
                 channels=[self.channels] * self.num_layer,
                 adj=self.adj,
                 out_dim=2,
-                cuda=self.cuda,
+                cuda=self.on_cuda,
                 embedding=self.embedding,
                 transform_adj=adj_transform,
                 aggregate_adj=aggregator_fn,
@@ -103,7 +103,7 @@ class WrappedModel(Method):
                 input_dim=x_train.shape[1],
                 channels=[self.channels] * self.num_layer,
                 out_dim=2,
-                cuda=self.cuda,
+                cuda=self.on_cuda,
                 dropout=self.dropout)
         elif self.name == "SLR":
             self.model = SparseLogisticRegression(
@@ -111,15 +111,15 @@ class WrappedModel(Method):
                 input_dim=1,
                 adj=self.adj,
                 out_dim=2,
-                cuda=self.cuda)
+                cuda=self.on_cuda)
         elif self.name == 'LR':
             self.model = LogisticRegression(
                 nb_nodes=x_train.shape[1],
                 input_dim=1,
                 out_dim=2,
-                cuda=self.cuda)
+                cuda=self.on_cuda)
 
-        if self.cuda:
+        if self.on_cuda:
             torch.cuda.manual_seed(self.seed)
             torch.cuda.manual_seed_all(self.seed)
             self.model.cuda()
@@ -132,7 +132,7 @@ class WrappedModel(Method):
                 inputs, labels = x_train[i:i + self.batch_size], y_train[i:i + self.batch_size]
 
                 inputs = Variable(inputs, requires_grad=False).float()
-                if self.cuda:
+                if self.on_cuda:
                     inputs = inputs.cuda()
                     labels = labels.cuda()
 
