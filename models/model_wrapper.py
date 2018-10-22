@@ -46,6 +46,7 @@ class WrappedModel(Method):
 
     def __init__(self, name="GCN", column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=False, dropout=False, cuda=False, seed=0, adj=None, graph_name=None, pooling="ignore", prepool_extralayers=0):
         self.name = name
+        self.model_type = self.name.split("_")[0]
         self.column_names = column_names
         self.model = None
         self.batch_size = 10
@@ -82,7 +83,7 @@ class WrappedModel(Method):
 
         criterion = torch.nn.CrossEntropyLoss(size_average=True)
 
-        if self.name == "GCN":
+        if self.model_type == "GCN":
             adj_transform, aggregator_fn = get_transform(adj, self.on_cuda, num_layer=self.num_layer, pooling=self.pooling)
             self.model = GCN(
                 input_dim=1,
@@ -98,21 +99,21 @@ class WrappedModel(Method):
                 attention_head=self.attention_head,
                 prepool_extralayers=self.prepool_extralayers,
                 )
-        elif self.name == "MLP":
+        elif self.model_type == "MLP":
             self.model = MLP(
                 input_dim=x_train.shape[1],
                 channels=[self.channels] * self.num_layer,
                 out_dim=2,
                 cuda=self.on_cuda,
                 dropout=self.dropout)
-        elif self.name == "SLR":
+        elif self.model_type == "SLR":
             self.model = SparseLogisticRegression(
                 nb_nodes=x_train.shape[1],
                 input_dim=1,
                 adj=self.adj,
                 out_dim=2,
                 cuda=self.on_cuda)
-        elif self.name == 'LR':
+        elif self.model_type == 'LR':
             self.model = LogisticRegression(
                 nb_nodes=x_train.shape[1],
                 input_dim=1,
@@ -153,8 +154,8 @@ class WrappedModel(Method):
             for i in range(0, x_train.shape[0], self.batch_size):
                 inputs = Variable(x_train[i:i + self.batch_size]).float()
                 if self.on_cuda:
-		    inputs = inputs.cuda()
-		res.append(self.model(inputs)[:, 1].data.cpu().numpy())
+                    inputs = inputs.cuda()
+                res.append(self.model(inputs)[:, 1].data.cpu().numpy())
             y_hat = np.concatenate(res).ravel()
             auc['train'] = sklearn.metrics.roc_auc_score(y_train.numpy(), y_hat)
 
@@ -162,8 +163,8 @@ class WrappedModel(Method):
             for i in range(0, x_valid.shape[0], self.batch_size):
                 inputs = Variable(x_valid[i:i + self.batch_size]).float()
                 if self.on_cuda:
-		    inputs = inputs.cuda()
-		res.append(self.model(inputs)[:, 1].data.cpu().numpy())
+                    inputs = inputs.cuda()
+                res.append(self.model(inputs)[:, 1].data.cpu().numpy())
             y_hat = np.concatenate(res).ravel()
             auc['valid'] = sklearn.metrics.roc_auc_score(y_valid, y_hat)
 
