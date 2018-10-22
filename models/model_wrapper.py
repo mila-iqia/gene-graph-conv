@@ -1,4 +1,4 @@
-self.on_cuda"""A SKLearn-style wrapper around our PyTorch models (like Graph Convolutional Network and SparseLogisticRegression) implemented in models.py"""
+"""A SKLearn-style wrapper around our PyTorch models (like Graph Convolutional Network and SparseLogisticRegression) implemented in models.py"""
 
 import sklearn
 import sklearn.model_selection

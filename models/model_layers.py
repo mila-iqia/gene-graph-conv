@@ -121,7 +121,7 @@ class SparseLogisticRegression(nn.Module):
 
         self.laplacian = torch.FloatTensor(laplacian)
         self.out_dim = out_dim
-        self.cuda = cuda
+        self.on_cuda = cuda
 
         # The logistic layer.
         logistic_in_dim = nb_nodes * input_dim
@@ -138,7 +138,7 @@ class SparseLogisticRegression(nn.Module):
 
     def regularization(self, reg_lambda):
         laplacian = Variable(self.laplacian, requires_grad=False)
-        if self.cuda:
+        if self.on_cuda:
             laplacian = laplacian.cuda()
         weight = self.my_logistic_layers[-1].weight
         reg = torch.abs(weight).mm(laplacian) * torch.abs(weight)
@@ -154,7 +154,7 @@ class LogisticRegression(nn.Module):
         out_dim = out_dim if out_dim is not None else 2
 
         self.out_dim = out_dim
-        self.cuda = cuda
+        self.on_cuda = cuda
 
         # The logistic layer.
         logistic_in_dim = nb_nodes * input_dim
@@ -187,7 +187,7 @@ class GraphNetwork(nn.Module):
             transform_adj = []
         self.my_layers = []
         self.out_dim = out_dim if out_dim is not None else 2
-        self.cuda = cuda
+        self.on_cuda = cuda
         self.adj = adj
         self.nb_nodes = self.adj.shape[0]
         self.channels = channels
@@ -238,10 +238,10 @@ class GraphNetwork(nn.Module):
             # transformation to apply at each layer.
             if self.aggregate_adj is not None:
                 for extra_layer in range(self.prepool_extralayers):
-                    layer = self.graph_layer_type(self.adj, c_in, c_in, self.cuda, i, transform_adj=None, aggregate_adj=None)
+                    layer = self.graph_layer_type(self.adj, c_in, c_in, self.on_cuda, i, transform_adj=None, aggregate_adj=None)
                     convs.append(layer)
 
-            layer = self.graph_layer_type(self.adj, c_in, c_out, self.cuda, i, transform_adj=self.transform_adj, aggregate_adj=self.aggregate_adj)
+            layer = self.graph_layer_type(self.adj, c_in, c_out, self.on_cuda, i, transform_adj=self.transform_adj, aggregate_adj=self.aggregate_adj)
             layer.register_forward_hook(save_computations)
             convs.append(layer)
         self.conv_layers = nn.ModuleList(convs)
@@ -293,7 +293,7 @@ class GraphNetwork(nn.Module):
 
             if dropout is not None:
                 id_to_keep = dropout(torch.FloatTensor(np.ones((x.size(0), x.size(1))))).unsqueeze(2)
-                if self.cuda:
+                if self.on_cuda:
                     id_to_keep = id_to_keep.cuda()
 
                 x = x * id_to_keep
@@ -370,7 +370,7 @@ class MLP(nn.Module):
 
         self.my_layers = []
         self.out_dim = out_dim
-        self.cuda = cuda
+        self.on_cuda = cuda
         self.dropout = dropout
 
         dims = [input_dim] + channels
