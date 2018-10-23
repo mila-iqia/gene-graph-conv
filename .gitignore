@@ -1,4 +1,5 @@
 gene_inference_results/
+.ipynb_checkpoints
 experiments/results/*
 /*/datastore/*
 gene_inference/pickles/*
