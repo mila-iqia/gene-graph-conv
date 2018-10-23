@@ -14,12 +14,13 @@ Additionally, you'll need a gene interaction graph to construct your Graph Convo
 
 <img src="./img/HDF5_graph_format.png" alt="HDF5Format">
 
-Once you've done this, you can instantiate your gene graph 
-```gene_graph = GeneInteractionGraph(graph_path)```
+Once you've done this, you can instantiate your gene graph:
+`gene_graph = GeneInteractionGraph(graph_path)`
 This will load your graph into a dataframe labelled with the gene names, and turn that into a NetworkX graph.
 
 You can also load in your dataset like this: 
-```dataset = datasets.GeneDataset(file_path="datastore/TCGA_tissue_ppi.hdf5")```
+
+`dataset = datasets.GeneDataset(file_path="datastore/TCGA_tissue_ppi.hdf5")`
 
 Now you're ready to use our models!
 
@@ -27,13 +28,16 @@ If you look in `models/model_wrapper.py` you will find a class called WrappedMod
 
 We instantiate our graph convolutional model like this:
 
-```gcn = WrappedModel(name="GCN_lay20_chan32_emb32_dropout", cuda=True, num_layer=4, channels=32, embedding=32, prepool_extralayers=5, pooling="ignore")```
+`gcn = WrappedModel(name="GCN_lay20_chan32_emb32_dropout", cuda=True, num_layer=4, channels=32, embedding=32, prepool_extralayers=5, pooling="ignore")`
 
 Then we can train it like this:
-```gcn.fit(X_train, y_train, adj=neighborhood)```
+
+`gcn.fit(X_train, y_train, adj=neighborhood)`
+
 where `X` is (all or part of) your gene expression dataset, `y` are your labels for those samples, and `neighborhood` is a NetworkX graph containing the genes in `X`.
 
 And use it like this:
-```y_hat = gcn.predict(X_test, y_test)```
+
+`y_hat = gcn.predict(X_test, y_test)`
 
 And that's about it! We're excited about this project, available to support it, and will continue development. Don't hesitate to reach out by email.
