@@ -133,6 +133,7 @@ class AggregationGraph(object):
 
     def cluster_specific_layer(self, last_to_keep, n_clusters, adj):
         # A cluster for a specific scale.
+
         ids = self.get_nodes_cluster(n_clusters, adj)
         n_clusters = len(set(ids))
 

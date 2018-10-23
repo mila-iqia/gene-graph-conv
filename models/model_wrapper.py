@@ -17,31 +17,6 @@ class Method:
     def __init__(self):
         pass
 
-
-class SkLearn(Method):
-    def __init__(self, model, penalty=False):
-        self.model = model
-        self.penalty = penalty
-
-    def loop(self, dataset, seed, train_size, test_size, adj=None):
-
-        x_train, x_test, y_train, y_test = sklearn.model_selection.train_test_split(dataset.df, dataset.labels, stratify=dataset.labels, train_size=train_size, test_size=test_size, random_state=seed)
-
-        if self.model == "LR":
-            model = sklearn.linear_model.LogisticRegression()
-            if self.penalty:
-                model = sklearn.linear_model.LogisticRegression(penalty='l1', tol=0.0001)
-        elif self.model == "DT":
-            model = sklearn.tree.DecisionTreeClassifier()
-        elif self.model == "MLP":
-            model = sklearn.neural_network.MLPClassifier(hidden_layer_sizes=(32, 3), learning_rate_init=0.001, early_stopping=False,  max_iter=1000)
-        else:
-            print "incorrect label"
-
-        model = model.fit(x_train, y_train)
-        return sklearn.metrics.roc_auc_score(y_test, model.predict(x_test))
-
-
 class WrappedModel(Method):
 
     def __init__(self, name="GCN", column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=False, dropout=False, cuda=False, seed=0, adj=None, graph_name=None, pooling="ignore", prepool_extralayers=0):
@@ -70,10 +45,6 @@ class WrappedModel(Method):
     def fit(self, X, y, adj=None):
         self.adj = adj
         x_train, x_valid, y_train, y_valid = sklearn.model_selection.train_test_split(X, y, stratify=y, train_size=self.train_valid_split, test_size=1-self.train_valid_split, random_state=self.seed)
-        # Return if it's all one class
-        if len(set(y_train)) == 1 or len(set(y_valid)) == 1:
-            print "Only one class represented."
-            return
 
         # pylint: disable=E1101
         x_train = torch.FloatTensor(np.expand_dims(x_train, axis=2))
