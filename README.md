@@ -8,11 +8,11 @@ There are two notebooks in the repository called fig-4.ipynb and fig-5.ipynb. Wi
 
 You will see that the interface to our library is simple (like SKLearn with fit and predict functions) and extensible. To use your own gene dataset, you will need to format it as an HDF5 file like this:
 
-<img src="./img/HDF5_dataset_format.png" alt="HDF5Format">
+<img src="./data/img/HDF5_dataset_format.png" alt="HDF5Format">
 
 Additionally, you'll need a gene interaction graph to construct your Graph Convolutional Network. Its format should be:
 
-<img src="./img/HDF5_graph_format.png" alt="HDF5Format">
+<img src="./data/img/HDF5_graph_format.png" alt="HDF5Format">
 
 Once you've done this, you can instantiate your gene graph:
 `gene_graph = GeneInteractionGraph(graph_path)`
