@@ -13,12 +13,11 @@ class GeneInteractionGraph(object):
     """
     def __init__(self, path):
         h5_file = h5py.File(at.get(path))
-        self.adj = np.array(h5_file['graph_data']).astype('float32')
         self.node_names = np.array(h5_file['gene_names'])
-        self.df = pd.DataFrame(np.array(self.adj))
+        self.df = pd.DataFrame(np.array(np.array(h5_file['graph_data']).astype('float32')))
         self.df.columns = self.node_names
         self.df.index = self.node_names
-        self.nx_graph = nx.from_numpy_matrix(self.adj)
+        self.nx_graph = nx.from_pandas_adjacency(self.df)
 
     @classmethod
     def get_at_hash(cls, graph_name):
@@ -32,10 +31,11 @@ class GeneInteractionGraph(object):
 
     def first_degree(self, gene):
         neighbors = set([gene])
+        # If the node is not in the graph, we will just return that node
         try:
             neighbors = neighbors.union(set(self.nx_graph.neighbors(gene)))
         except Exception as e:
-            print(e)
+            #print(e)
             pass
         neighborhood = np.asarray(nx.to_numpy_matrix(self.nx_graph.subgraph(neighbors)))
         return neighbors, neighborhood
