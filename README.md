@@ -1,4 +1,4 @@
-# Gene Expression Convolutions
+# Gene Graph Convolutions
 
 ### Francis Dutil*, Joseph Paul Cohen*, Martin Weiss, Georgy Derevyanko, Yoshua Bengio
 
