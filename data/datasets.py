@@ -1,90 +1,41 @@
+import h5py
+import pandas as pd
 import numpy as np
 from torch.utils.data import Dataset
-import graph
-from graph import Graph
+import academictorrents as at
 
 
-class Dataset(Dataset):
-    def __init__(self, name, seed, nb_class, nb_examples, nb_nodes, nb_master_nodes=0):
+class GeneDataset(Dataset):
+    """Gene Expression Dataset."""
 
-        self.name = name
-        self.seed = seed
-        self.nb_class = nb_class
+    def __init__(self, file_path=None, at_hash=None, nb_class=2, nb_examples=None):
         self.nb_examples = nb_examples
-        self.nb_nodes = nb_nodes
-        self.load_data()
-        self.df = self.df - self.df.mean(0)
-        self.nb_master_nodes = nb_master_nodes
+        self.nb_class = nb_class
+        if at_hash:
+            file_path = at.get(at_hash)
+        self.file = h5py.File(file_path, 'r')
+        self.nb_examples = nb_examples
+        self.data = np.array(self.file['expression_data'][:self.nb_examples])
+        self.nb_nodes = self.data.shape[1]
+        self.labels = self.file['labels_data']
+        self.sample_names = self.file['sample_names']
+        self.node_names = np.array(self.file['gene_names'])
+        self.df = pd.DataFrame(self.data)
+        self.df.columns = self.node_names[:len(self.df.columns)]
+        self.label_name = self.node_names[len(self.df.columns)+1:]
 
-        for master in range(nb_master_nodes):
-            self.df.insert(0, 'master_{}'.format(master), 1.)
-
-
-        self.data = self.df.as_matrix()
-
-    def load_data(self):
-        raise NotImplementedError()
-
-    def labels_name(self, l):
-        raise NotImplementedError()
-
-    def __getitem__(self, idx):
-        raise NotImplementedError()
-
-    def __len__(self):
-        return self.data.shape[0]
-
-    def get_adj(self):
-        return self.adj
-
-
-class RandomDataset(Dataset):
-
-    """
-    A random dataset for debugging purposes
-    """
-
-    def __init__(self, seed, nb_class=None, nb_examples=None, nb_nodes=None):
-        nb_class = nb_class if nb_class is not None else 2
-        nb_examples = nb_examples if nb_examples is not None else 100
-        nb_nodes = nb_nodes if nb_nodes is not None else 100
-        super(RandomDataset, self).__init__(name='RandomDataset', seed=seed, nb_class=nb_class, nb_examples=nb_examples, nb_nodes=nb_nodes)
-
-    def load_data(self):
-        np.random.seed(self.seed)
-
-        # Generating the data
-        self.data = np.random.randn(self.nb_examples, self.nb_nodes, 1)
-        self.labels = (np.sum(self.data, axis=1) > 0.)[:, 0].astype(np.long)  # try to predict if the sum. is > than 0.
+        if self.labels.shape != self.labels[:].reshape(-1).shape:
+            print "Converting one-hot labels to integers"
+            self.labels = np.argmax(self.labels[:], axis=1)
 
     def __getitem__(self, idx):
         sample = self.data[idx]
-        sample = [sample, self.labels[idx]]
+        sample = np.expand_dims(sample, axis=-1)
+        label = self.labels[idx]
+        sample = {'sample': sample, 'labels': label}
         return sample
 
     def labels_name(self, l):
-        labels = {0: 'neg', 'neg': 0, 'pos': 1, 1: 'pos'}
-        return labels[l]
-
-
-class PercolateDataset(Dataset):
-
-    """
-    A random dataset where the goal if to find if we can percolate from one side of the graph to the other.
-    """
-
-    def __init__(self, opt):
-        super(PercolateDataset, self).__init__(name='PercolateDataset', opt=opt)
-
-    def load_data(self):
-        return
-
-    def __getitem__(self, idx):
-        sample = self.data[idx]
-        sample = np.expand_dims(sample, -1)  # Addin a dim for the channels\
-        sample = {'sample': sample, 'labels': self.labels[idx]}
-        return sample
-
-    def labels_name(self, l):
-        labels = {0: 'neg', 'neg': 0, 'pos': 1, 1: 'pos'}
-        return labels[l]
+        if type(self.label_name[str(l)]) == np.ndarray:
+            return self.label_name[str(l)][0]
+        return self.label_name[str(l)]
