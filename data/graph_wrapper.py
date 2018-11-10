@@ -18,10 +18,26 @@ class GeneInteractionGraph(object):
         raise NotImplementedError
 
     def first_degree(self, gene):
-        raise NotImplementedError
+        neighbors = set([gene])
+        # If the node is not in the graph, we will just return that node
+        try:
+            neighbors = neighbors.union(set(self.nx_graph.neighbors(gene)))
+        except Exception as e:
+            #print(e)
+            pass
+        neighborhood = np.asarray(nx.to_numpy_matrix(self.nx_graph.subgraph(neighbors)))
+        return neighbors, neighborhood
 
     def bfs_sample_neighbors(self, gene, num_neighbors, include_self=True):
-        raise NotImplementedError
+        results = set([])
+        if include_self:
+            results = set([gene])
+        bfs = nx.bfs_edges(self.nx_graph, gene)
+        for _, sink in bfs:
+            if len(results) == num_neighbors:
+                break
+            results.add(sink)
+        return results
 
 class RegNetGraph(GeneInteractionGraph):
     def __init__(self):
@@ -36,27 +52,6 @@ class RegNetGraph(GeneInteractionGraph):
         self.df.index = self.node_names
         self.nx_graph = nx.from_pandas_adjacency(self.df)
 
-    def first_degree(self, gene):
-        neighbors = set([gene])
-        # If the node is not in the graph, we will just return that node
-        try:
-            neighbors = neighbors.union(set(self.nx_graph.neighbors(gene)))
-        except Exception as e:
-            #print(e)
-            pass
-        neighborhood = np.asarray(nx.to_numpy_matrix(self.nx_graph.subgraph(neighbors)))
-        return neighbors, neighborhood
-
-    def bfs_sample_neighbors(self, gene, num_neighbors, include_self=True):
-        results = set([])
-        if include_self:
-            results = set([gene])
-        bfs = nx.bfs_edges(self.nx_graph, gene)
-        for _, sink in bfs:
-            if len(results) == num_neighbors:
-                break
-            results.add(sink)
-        return results
 
 class GeneManiaGraph(GeneInteractionGraph):
     def __init__(self):
@@ -71,28 +66,6 @@ class GeneManiaGraph(GeneInteractionGraph):
         self.df.columns = self.node_names
         self.df.index = self.node_names
         self.nx_graph = nx.from_pandas_adjacency(self.df)
-
-    def first_degree(self, gene):
-        neighbors = set([gene])
-        # If the node is not in the graph, we will just return that node
-        try:
-            neighbors = neighbors.union(set(self.nx_graph.neighbors(gene)))
-        except Exception as e:
-            #print(e)
-            pass
-        neighborhood = np.asarray(nx.to_numpy_matrix(self.nx_graph.subgraph(neighbors)))
-        return neighbors, neighborhood
-
-    def bfs_sample_neighbors(self, gene, num_neighbors, include_self=True):
-        results = set([])
-        if include_self:
-            results = set([gene])
-        bfs = nx.bfs_edges(self.nx_graph, gene)
-        for _, sink in bfs:
-            if len(results) == num_neighbors:
-                break
-            results.add(sink)
-        return results
 
 
 class EcoliEcocycGraph(GeneInteractionGraph):
