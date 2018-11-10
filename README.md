@@ -8,23 +8,44 @@ This is a research codebase developed to incorporate gene interaction graphs as 
 
 There are two notebooks in the repository called fig-4.ipynb and fig-5.ipynb. Within them you will find a training loop that generates figures 4 and 5 from [our paper](https://arxiv.org/pdf/1806.06975.pdf) published at the Workshop on Computational Biology at ICML 2018. I would recommend starting there.
 
-You will see that the interface to our models is simple (like SKLearn with fit and predict functions) and extensible. The gene graph and dataset loaders are still sub-optimal. We will be modifying them soon to be more user-friendly. Right now you need to use an HDF5 file with a format defined below. 
+You will see that the interface to our models is simple (like SKLearn with fit and predict functions) and extensible. The gene graph and dataset loaders are pretty simple too. 
 
-To use your own gene dataset, you will need to format it as an HDF5 file like this:
+Let's start by loading your gene expression dataset. Here's an abstract class stored in `data/datasets.py`. You're going to want to subclass it and implement the load_data method and the `__getitem__` method.
 
-<img src="./data/img/HDF5_dataset_format.png" alt="HDF5Format">
+```class GeneDataset(Dataset):
+    """Gene Expression Dataset."""
+    def __init__(self):
+        self.load_data()
 
-Additionally, you'll need a gene interaction graph to construct your Graph Convolutional Network. Its format should be:
+    def load_data(self):
+        raise NotImplementedError()
 
-<img src="./data/img/HDF5_graph_format.png" alt="HDF5Format">
+    def __getitem__(self, idx):
+        raise NotImplementedError()
+```
 
-Once you've done this, you can instantiate your gene graph:
-`gene_graph = GeneInteractionGraph(graph_path)`
-This will load your graph into a dataframe labelled with the gene names, and turn that into a NetworkX graph.
+There are a few important attributes your dataset class will want to set in the load_data method. The most important ones are a pandas dataframe, `df` with genes as columns (with gene names as column names) and patient samples as rows. Your dataset should also have a labels attribute with a label for each row in `df`. Finally, a data attribute should contain the same data as your `df`, but in the form of a numpy array. If you are confused, look at the `TCGADataset` that we load in our notebooks for an example. As for the `__getitem__` function on your dataset, it just returns samples of this form: `{'sample': sample, 'labels': label}`.
 
-You can also load in your dataset like this: 
+Additionally, you'll need a gene interaction graph to construct your Graph Convolutional Network. These live in `data/graph_wrapper.py`. Its format should be:
+```
+class GeneInteractionGraph(object):
+    """ This class manages the data pertaining to the relationships between genes.
+        It has an nx_graph, and some helper functions.
+    """
+    def __init__(self):
+        self.load_data()
 
-`dataset = datasets.GeneDataset(file_path="datastore/TCGA_tissue_ppi.hdf5")`
+    def load_data(self):
+        raise NotImplementedError
+
+    def first_degree(self, gene):
+      ...
+    
+    def first_degree(self, gene):
+      ...
+```
+
+Again, you'll want to subclass the `GeneInteractionGraph` and implement the `load_data` method. The 3 key attributes of your graph are: `node_names` which contain the names of your genes, `df` which is a pandas dataframe containing your adjacency matrix with node_names set as column names and the index, and `nx_graph` which is a networkx object created from the dataframe.
 
 Now you're ready to use our models!
 
