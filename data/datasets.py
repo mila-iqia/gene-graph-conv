@@ -43,7 +43,7 @@ class TCGADataset(GeneDataset):
         self.label_name = self.node_names[len(self.df.columns)+1:]
 
         if self.labels.shape != self.labels[:].reshape(-1).shape:
-            print "Converting one-hot labels to integers"
+            print("Converting one-hot labels to integers")
             self.labels = np.argmax(self.labels[:], axis=1)
 
     def __getitem__(self, idx):
