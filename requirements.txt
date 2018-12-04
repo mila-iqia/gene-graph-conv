@@ -1,0 +1,10 @@
+h5py
+pandas
+torch
+torchvision
+numpy
+sklearn
+networkx
+academictorrents
+matplotlib
+jupyter
