@@ -54,7 +54,7 @@ class TCGADataset(GeneDataset):
         return sample
 
 
-class CustomDataset(GeneDataset):
+class DatasetFromCSV(GeneDataset):
     def __init__(self, name, expr_path, label_path, label_name):
         self.name = name
         self.expr_path = expr_path
