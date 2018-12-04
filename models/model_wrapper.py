@@ -49,7 +49,7 @@ class WrappedModel(Method):
         # pylint: disable=E1101
         x_train = torch.FloatTensor(np.expand_dims(x_train, axis=2))
         x_valid = torch.FloatTensor(np.expand_dims(x_valid, axis=2))
-        y_train = torch.FloatTensor(y_train)
+        y_train = torch.FloatTensor(y_train.values)
         # pylint: enable=E1101
 
         criterion = torch.nn.CrossEntropyLoss(size_average=True)

@@ -24,14 +24,14 @@ class GeneDataset(Dataset):
 
 
 class TCGADataset(GeneDataset):
-    def __init__(self, nb_examples=None):
-        self.at_hash = "4070a45bc7dd69584f33e86ce193a2c903f0776d"
+    def __init__(self, nb_examples=None, at_hash_or_path="4070a45bc7dd69584f33e86ce193a2c903f0776d"):
+        self.at_hash_or_path = at_hash_or_path
         self.nb_examples = nb_examples # In case you don't want to load the whole dataset from disk
         super(TCGADataset, self).__init__()
 
     def load_data(self):
         # You could replace the value of self.hash with a path to a local copy of your graph and AT can handle that.
-        self.file_path = at.get(self.at_hash)
+        self.file_path = at.get(self.at_hash_or_path)
         self.file = h5py.File(self.file_path, 'r')
         self.data = np.array(self.file['expression_data'][:self.nb_examples])
         self.nb_nodes = self.data.shape[1]
