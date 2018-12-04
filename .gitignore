@@ -1,3 +1,4 @@
+.python-version
 gene_inference_results/
 .ipynb_checkpoints
 experiments/results/*

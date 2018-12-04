@@ -30,7 +30,7 @@ class TCGADataset(GeneDataset):
         super(TCGADataset, self).__init__()
 
     def load_data(self):
-        # You could replace the value of self.hash with a path to a local copy of your graph and AT can handle that.
+        # You could replace the value of self.at_hash_or_path with a path to a local copy of your graph and AT can handle that.
         self.file_path = at.get(self.at_hash_or_path)
         self.file = h5py.File(self.file_path, 'r')
         self.data = np.array(self.file['expression_data'][:self.nb_examples])
@@ -53,6 +53,38 @@ class TCGADataset(GeneDataset):
         sample = {'sample': sample, 'labels': label}
         return sample
 
+
+class DatasetFromCSV(GeneDataset):
+    def __init__(self, name, expr_path, label_path, label_name):
+        self.name = name
+        self.expr_path = expr_path
+        self.label_path = label_path
+        self.label_name = label_name
+        super(CustomDataset, self).__init__()
+
+    def load_data(self):
+        # Load expression and label files, samples as rows and genes/label names as columns
+        separators = {'.tsv' : '\t', '.txt': '\t', '.csv': ','}
+        sep = separators[os.path.splitext(self.expr_path)[1]]
+        self.df = pd.read_csv(self.expr_path, sep=sep, index_col=0)
+        sep = separators[os.path.splitext(self.label_path)[1]]
+        self.lab = pd.read_csv(self.label_path, sep=sep, index_col=0)
+        self.node_names = self.df.columns.values
+        self.sample_names =  self.df.index.values
+        self.nb_nodes = self.df.shape[1]
+        self.data = self.df.values
+        self.labels = self.lab[self.label_name].values
+
+    def __getitem__(self, idx):
+        # label : class of the sample, # sample for all genes
+        sample = self.df.iloc[idx,:].values
+        sample = np.expand_dims(sample, axis=-1)
+        label = self.labels[idx]
+        sample = {'sample': sample, 'labels': label}
+        return sample
+
+    def __len__(self):
+        pass
 
 class EcoliDataset(GeneDataset):
     def __init__(self):
