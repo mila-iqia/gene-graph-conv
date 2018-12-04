@@ -55,7 +55,7 @@ class RegNetGraph(GeneInteractionGraph):
 
 class GeneManiaGraph(GeneInteractionGraph):
     def __init__(self):
-        self.at_hash = "ae2691e4f4f068d32f83797b224eb854b27bd3ee"
+        self.at_hash = "2b7e470d87a017be3826ef6ec55893f3a61f5af7"
         super(GeneManiaGraph, self).__init__()
 
     def load_data(self):
