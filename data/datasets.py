@@ -9,7 +9,7 @@ import pandas as pd
 import numpy as np
 from torch.utils.data import Dataset
 import academictorrents as at
-
+import utils
 
 class GeneDataset(Dataset):
     """Gene Expression Dataset."""
@@ -55,25 +55,33 @@ class TCGADataset(GeneDataset):
 
 
 class DatasetFromCSV(GeneDataset):
-    def __init__(self, name, expr_path, label_path, label_name):
+    def __init__(self, name, expr_path, label_path, label_name=None):
         self.name = name
         self.expr_path = expr_path
         self.label_path = label_path
         self.label_name = label_name
-        super(CustomDataset, self).__init__()
+        super(DatasetFromCSV, self).__init__()
 
     def load_data(self):
         # Load expression and label files, samples as rows and genes/label names as columns
         separators = {'.tsv' : '\t', '.txt': '\t', '.csv': ','}
-        sep = separators[os.path.splitext(self.expr_path)[1]]
+        sep = utils.get_file_separator(self.expr_path)
         self.df = pd.read_csv(self.expr_path, sep=sep, index_col=0)
-        sep = separators[os.path.splitext(self.label_path)[1]]
+
+        sep = utils.get_file_separator(self.label_path)
         self.lab = pd.read_csv(self.label_path, sep=sep, index_col=0)
+
         self.node_names = self.df.columns.values
         self.sample_names =  self.df.index.values
         self.nb_nodes = self.df.shape[1]
         self.data = self.df.values
-        self.labels = self.lab[self.label_name].values
+
+        if self.label_name in self.lab.columns:
+            self.labels_ = self.lab[self.label_name].values
+            self.labels = pd.Categorical(self.labels_).codes
+        else : 
+            self.labels_ = []
+            self.labels = []
 
     def __getitem__(self, idx):
         # label : class of the sample, # sample for all genes

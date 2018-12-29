@@ -11,3 +11,7 @@ def record_result(results, experiment, filename):
     pickle.dump(results, open(filename, "wb"))
     return results
 
+def get_file_separator(filename):
+    separators = {'.tsv' : '\t', '.txt': '\t', '.csv': ','}
+    sep = separators[os.path.splitext(filename.replace('.gz', ''))[-1]]
+    return sep
