@@ -52,7 +52,7 @@ class WrappedModel(Method):
         y_train = torch.FloatTensor(y_train.values)
         # pylint: enable=E1101
 
-        criterion = torch.nn.CrossEntropyLoss(reduction='elementwise_mean')
+        criterion = torch.nn.CrossEntropyLoss(reduction='mean')
 
         if self.model_type == "GCN":
             adj_transform, aggregator_fn = get_transform(adj, self.on_cuda, num_layer=self.num_layer, pooling=self.pooling)
