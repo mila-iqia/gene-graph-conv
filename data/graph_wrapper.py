@@ -40,34 +40,23 @@ class GeneInteractionGraph(object):
         return results
 
 class RegNetGraph(GeneInteractionGraph):
-    def __init__(self, at_hash="3c8ac6e7ab6fbf962cedb77192177c58b7518b23", datastore=""):
+    def __init__(self, at_hash="dbc0a21b88f7086fff76644a5f47e4094e8715dd", datastore=""):
         self.at_hash = at_hash
         self.datastore = datastore
         super(RegNetGraph, self).__init__()
 
     def load_data(self):
-        h5_file = h5py.File(at.get(self.at_hash, datastore=self.datastore))
-        self.node_names = np.array(h5_file['gene_names'])
-        self.df = pd.DataFrame(np.array(np.array(h5_file['graph_data']).astype('float32')))
-        self.df.columns = self.node_names
-        self.df.index = self.node_names
-        self.nx_graph = nx.from_pandas_adjacency(self.df)
+        self.nx_graph = nx.readwrite.gpickle.read_gpickle(at.get("dbc0a21b88f7086fff76644a5f47e4094e8715dd", datastore=""))
 
 
 class GeneManiaGraph(GeneInteractionGraph):
-    def __init__(self, at_hash="2b7e470d87a017be3826ef6ec55893f3a61f5af7", datastore=""):
+    def __init__(self, at_hash="b124541555a65bd6dcd3833403aee4fae01a2d99", datastore=""):
         self.at_hash = at_hash
         self.datastore = datastore
         super(GeneManiaGraph, self).__init__()
 
     def load_data(self):
-        # You could replace the value of self.hash with a path to a local copy of your graph and AT can handle that.
-        h5_file = h5py.File(at.get(self.at_hash, datastore=self.datastore))
-        self.node_names = np.array(h5_file['gene_names'])
-        self.df = pd.DataFrame(np.array(np.array(h5_file['graph_data']).astype('float32')))
-        self.df.columns = self.node_names
-        self.df.index = self.node_names
-        self.nx_graph = nx.from_pandas_adjacency(self.df)
+        self.nx_graph = nx.readwrite.gpickle.read_gpickle(at.get(self.at_hash, datastore=self.datastore))
 
 
 class EcoliEcocycGraph(GeneInteractionGraph):

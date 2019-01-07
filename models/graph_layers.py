@@ -281,7 +281,6 @@ class SparseMM(torch.autograd.Function):
 class GCNLayer(GraphLayer):
 
     def init_params(self):
-        import pdb; pdb.set_trace()
         self.edges = torch.LongTensor(np.array(np.where(self.adj)))  # The list of edges
         flat_adj = self.adj.flatten()[np.where(self.adj.flatten())]  # get the value
         flat_adj = torch.FloatTensor(flat_adj)

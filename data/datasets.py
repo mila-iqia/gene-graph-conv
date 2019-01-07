@@ -33,13 +33,12 @@ class TCGADataset(GeneDataset):
     def load_data(self):
         self.file_path = at.get(self.at_hash, datastore=self.datastore)
         self.file = h5py.File(self.file_path, 'r')
-        self.data = np.array(self.file['expression_data'][:self.nb_examples])
-        self.nb_nodes = self.data.shape[1]
         self.labels = self.file['labels_data']
         self.sample_names = self.file['sample_names']
         self.node_names = np.array(self.file['gene_names']).astype("str")
-        self.df = pd.DataFrame(self.data)
+        self.df = pd.DataFrame(np.array(self.file['expression_data'][:self.nb_examples]))
         self.df.columns = self.node_names[:len(self.df.columns)]
+        self.nb_nodes = self.df.shape[1]
         self.label_name = self.node_names[len(self.df.columns)+1:]
 
         if self.labels.shape != self.labels[:].reshape(-1).shape:
@@ -47,7 +46,7 @@ class TCGADataset(GeneDataset):
             self.labels = np.argmax(self.labels[:], axis=1)
 
     def __getitem__(self, idx):
-        sample = self.data[idx]
+        sample = np.array(self.df.iloc[idx])
         sample = np.expand_dims(sample, axis=-1)
         label = self.labels[idx]
         sample = {'sample': sample, 'labels': label}
@@ -72,7 +71,6 @@ class DatasetFromCSV(GeneDataset):
         self.node_names = self.df.columns.values
         self.sample_names =  self.df.index.values
         self.nb_nodes = self.df.shape[1]
-        self.data = self.df.values
         self.labels = self.lab[self.label_name].values
 
     def __getitem__(self, idx):
@@ -144,15 +142,14 @@ class EcoliDataset(GeneDataset):
         expressions = np.nan_to_num(expressions)
 
         # Make the imported data accessible on the dataset object
-        self.data = expressions
-        self.nb_nodes = self.data.shape[1]
+        self.df = pd.DataFrame(expressions)
+        self.df.columns = self.node_names
+        self.nb_nodes = self.df.shape[1]
         self.sample_names = contrasts
         self.node_names = genes
-        self.df = pd.DataFrame(self.data)
-        self.df.columns = self.node_names
 
     def __getitem__(self, idx):
-        sample = self.data[idx]
+        sample = self.df.iloc[idx]
         sample = np.expand_dims(sample, axis=-1)
         label = self.labels[idx]
         sample = [sample, label]

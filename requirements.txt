@@ -5,6 +5,6 @@ torchvision
 numpy
 sklearn
 networkx
-academictorrents>=2.1.4
+academictorrents>=2.1.5
 matplotlib
 jupyter
