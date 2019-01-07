@@ -107,73 +107,11 @@ class StaticElementwiseGateLayer(nn.Module):
         return gate_weights
 
 
-class SparseLogisticRegression(nn.Module):
-
-    def __init__(self, nb_nodes, input_dim, adj, out_dim, cuda=True):
-        super(SparseLogisticRegression, self).__init__()
-        self.nb_nodes = nb_nodes
-        self.input_dim = input_dim
-        out_dim = out_dim if out_dim is not None else 2
-
-        np.fill_diagonal(adj, 0.)
-        D = adj.sum(0) + 1e-5
-        laplacian = np.eye(D.shape[0]) - np.diag((D**-0.5)).dot(adj).dot(np.diag((D**-0.5)))
-
-        self.laplacian = torch.FloatTensor(laplacian)
-        self.out_dim = out_dim
-        self.on_cuda = cuda
-
-        # The logistic layer.
-        logistic_in_dim = nb_nodes * input_dim
-        logistic_layer = nn.Linear(logistic_in_dim, out_dim)
-        logistic_layer.register_forward_hook(save_computations)
-
-        self.my_logistic_layers = nn.ModuleList([logistic_layer])
-
-    def forward(self, x):
-        nb_examples, nb_nodes, nb_channels = x.size()
-        x = x.view(nb_examples, -1)
-        x = self.my_logistic_layers[-1](x)
-        return x
-
-    def regularization(self, reg_lambda):
-        laplacian = Variable(self.laplacian, requires_grad=False)
-        if self.on_cuda:
-            laplacian = laplacian.cuda()
-        weight = self.my_logistic_layers[-1].weight
-        reg = torch.abs(weight).mm(laplacian) * torch.abs(weight)
-        return reg.sum() * reg_lambda
-
-
-class LogisticRegression(nn.Module):
-    def __init__(self, nb_nodes, input_dim, out_dim, cuda=True):
-        super(LogisticRegression, self).__init__()
-
-        self.nb_nodes = nb_nodes
-        self.input_dim = input_dim
-        out_dim = out_dim if out_dim is not None else 2
-
-        self.out_dim = out_dim
-        self.on_cuda = cuda
-
-        # The logistic layer.
-        logistic_in_dim = nb_nodes * input_dim
-        logistic_layer = nn.Linear(logistic_in_dim, out_dim)
-        logistic_layer.register_forward_hook(save_computations)
-        self.my_logistic_layers = nn.ModuleList([logistic_layer])
-
-    def forward(self, x):
-        nb_examples, nb_nodes, nb_channels = x.size()
-        x = x.view(nb_examples, -1)
-        x = self.my_logistic_layers[-1](x)
-        return x
-
-
-class GraphNetwork(nn.Module):
+class GraphModel(nn.Module):
     def __init__(self, input_dim, channels, adj, out_dim,
                  cuda=True,
                  embedding=None,
-                 transform_adj=None,
+                 adj_transforms=None,
                  aggregate_adj=None,
                  prepool_extralayers=0,
                  graph_layer_type=None,
@@ -181,10 +119,10 @@ class GraphNetwork(nn.Module):
                  dropout=False,
                  attention_head=0,
                  master_nodes=0):
-        super(GraphNetwork, self).__init__()
+        super(GraphModel, self).__init__()
 
-        if transform_adj is None:
-            transform_adj = []
+        if adj_transforms is None:
+            adj_transforms = []
         self.my_layers = []
         self.out_dim = out_dim if out_dim is not None else 2
         self.on_cuda = cuda
@@ -194,7 +132,7 @@ class GraphNetwork(nn.Module):
         self.embedding = embedding
         self.graph_layer_type = graph_layer_type
         self.aggregate_adj = aggregate_adj
-        self.transform_adj = transform_adj
+        self.adj_transforms = adj_transforms
         self.dropout = dropout
         self.attention_head = attention_head
         self.master_nodes = master_nodes
@@ -238,10 +176,10 @@ class GraphNetwork(nn.Module):
             # transformation to apply at each layer.
             if self.aggregate_adj is not None:
                 for extra_layer in range(self.prepool_extralayers):
-                    layer = self.graph_layer_type(self.adj, c_in, c_in, self.on_cuda, i, transform_adj=None, aggregate_adj=None)
+                    layer = self.graph_layer_type(self.adj, c_in, c_in, self.on_cuda, i, adj_transforms=None, aggregate_adj=None)
                     convs.append(layer)
 
-            layer = self.graph_layer_type(self.adj, c_in, c_out, self.on_cuda, i, transform_adj=self.transform_adj, aggregate_adj=self.aggregate_adj)
+            layer = self.graph_layer_type(self.adj, c_in, c_out, self.on_cuda, i, adj_transforms=self.adj_transforms, aggregate_adj=self.aggregate_adj)
             layer.register_forward_hook(save_computations)
             convs.append(layer)
         self.conv_layers = nn.ModuleList(convs)
@@ -347,61 +285,16 @@ class GraphNetwork(nn.Module):
                 pass # because of the sparse matrices.
 
 
-class GCN(GraphNetwork):
+class GCN(GraphModel):
     def __init__(self, **kwargs):
         super(GCN, self).__init__(graph_layer_type=GCNLayer, **kwargs)
 
 
-class SGC(GraphNetwork):
+class SGC(GraphModel):
     def __init__(self, **kwargs):
         super(SGC, self).__init__(graph_layer_type=SGCLayer, **kwargs)
 
 
-class LCG(GraphNetwork):
+class LCG(GraphModel):
     def __init__(self, **kwargs):
         super(LCG, self).__init__(graph_layer_type=LCGLayer, **kwargs)
-
-
-class MLP(nn.Module):
-    def __init__(self, input_dim, channels, out_dim=None, cuda=True, dropout=False):
-        super(MLP, self).__init__()
-        out_dim = out_dim if out_dim is not None else 2
-        input_dim = input_dim if input_dim is not None else 2
-
-        self.my_layers = []
-        self.out_dim = out_dim
-        self.on_cuda = cuda
-        self.dropout = dropout
-
-        dims = [input_dim] + channels
-
-        logging.info("Constructing the network...")
-        layers = []
-        for c_in, c_out in zip(dims[:-1], dims[1:]):
-            layer = nn.Linear(c_in, c_out)
-            layers.append(layer)
-        self.my_layers = nn.ModuleList(layers)
-
-        if channels:
-            self.last_layer = nn.Linear(channels[-1], out_dim)
-        else:
-            self.last_layer = nn.Linear(input_dim, out_dim)
-
-        self.my_dropout = None
-        if dropout:
-            self.my_dropout = torch.nn.Dropout(0.5)
-
-        logging.info("Done!")
-
-    def forward(self, x):
-        nb_examples, nb_nodes, nb_channels = x.size()
-        x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
-        for layer in self.my_layers:
-            x = F.relu(layer(x.view(nb_examples, -1)))  # or relu, sigmoid...
-
-            if self.dropout:
-                x = self.my_dropout(x)
-
-        x = self.last_layer(x.view(nb_examples, -1))
-
-        return x

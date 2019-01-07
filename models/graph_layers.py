@@ -63,15 +63,15 @@ class PoolGraph(object):
 class AggregationGraph(object):
 
     """
-    Master Agregator. Will return the agregator function and the adj for each layer of the network.
+    Master Aggregator. Will return the aggregator function and the adj for each layer of the network.
     """
 
-    def __init__(self, adj, nb_layer, adj_transform=None, cuda=False, cluster_type=None, **kwargs):
+    def __init__(self, adj, nb_layer, adj_transforms=None, cuda=False, cluster_type=None, **kwargs):
 
         self.nb_layer = nb_layer
         self.adj = adj
         self.cuda = cuda
-        self.adj_transform = adj_transform
+        self.adj_transforms = adj_transforms
         self.cluster_type = cluster_type
         self.clustering = None
 
@@ -98,8 +98,8 @@ class AggregationGraph(object):
         # For each layer, build the adjs and the nodes to keep.
         for no_layer in range(self.nb_layer):
 
-            if self.adj_transform:  # Transform the adj if necessary.
-                current_adj = self.adj_transform(no_layer)(current_adj)
+            if self.adj_transforms:  # Transform the adj if necessary.
+                current_adj = self.adj_transforms(no_layer)(current_adj)
 
             all_transformed_adj.append(current_adj)
 
@@ -121,7 +121,7 @@ class AggregationGraph(object):
             n_clusters = nb_nodes / (2 ** (layer_id + 1))
             # For a specific layer, return the ids. The merging and stuff's gonna be computed later.
             self.clustering = sklearn.cluster.AgglomerativeClustering(n_clusters=n_clusters, affinity='euclidean',
-                                                                      memory='/Tmp', connectivity=(adj > 0.).astype(int),
+                                                                      memory='/tmp', connectivity=(adj > 0.).astype(int),
                                                                       compute_full_tree='auto', linkage='ward')
             ids = self.clustering.fit_predict(self.adj)  # all nodes have a cluster.
         elif self.cluster_type is None or self.cluster_type == 'ignore':
@@ -197,7 +197,7 @@ class ApprNormalizeLaplacian(object):
     """
 
     # TODO: add unittests
-    def __init__(self, processed_dir='/Tmp/'):
+    def __init__(self, processed_dir='/tmp/'):
         self.processed_dir = os.path.join(processed_dir, "ApprNormalizeLaplacian-" + str(getpass.getuser()))
 
     def __call__(self, adj):
@@ -226,7 +226,7 @@ class ApprNormalizeLaplacian(object):
 
 class GraphLayer(nn.Module):
     def __init__(self, adj, in_dim=1, channels=1, cuda=False, id_layer=None,
-                 transform_adj=None, aggregate_adj=None):
+                 adj_transforms=None, aggregate_adj=None):
         super(GraphLayer, self).__init__()
         self.my_layers = []
         self.cuda = cuda
@@ -234,12 +234,12 @@ class GraphLayer(nn.Module):
         self.in_dim = in_dim
         self.channels = channels
         self.id_layer = id_layer
-        self.transform_adj = transform_adj  # How to transform the adj matrix.
+        self.adj_transforms = adj_transforms  # How to transform the adj matrix.
         self.aggregate_adj = aggregate_adj
 
-        if self.transform_adj is not None:
+        if self.adj_transforms is not None:
             logging.info("Transforming the adj matrix")
-            adj = self.transform_adj(adj, id_layer)
+            adj = self.adj_transforms(adj, id_layer)
         self.adj = adj
 
         if self.aggregate_adj is not None:
@@ -281,6 +281,7 @@ class SparseMM(torch.autograd.Function):
 class GCNLayer(GraphLayer):
 
     def init_params(self):
+        import pdb; pdb.set_trace()
         self.edges = torch.LongTensor(np.array(np.where(self.adj)))  # The list of edges
         flat_adj = self.adj.flatten()[np.where(self.adj.flatten())]  # get the value
         flat_adj = torch.FloatTensor(flat_adj)
@@ -431,17 +432,17 @@ def get_transform(adj, cuda, add_self=True, norm_adj=True, num_layer=1, pooling=
     :param opt: the options
     :return: The list of transform.
     """
-    adj_transform = []
+    adj_transforms = []
     if add_self:
         logging.info("Adding self connection to the graph...")
-        adj_transform += [lambda layer_id: SelfConnection(add_self, please_ignore=False)]
+        adj_transforms += [lambda layer_id: SelfConnection(add_self, please_ignore=False)]
 
     if norm_adj:
         logging.info("Normalizing the graph...")
-        adj_transform += [lambda layer_id: ApprNormalizeLaplacian()]
+        adj_transforms += [lambda layer_id: ApprNormalizeLaplacian()]
 
-    adj_transform = transforms.Compose(adj_transform)
-    aggregator = AggregationGraph(adj, num_layer, adj_transform=adj_transform, cuda=cuda, cluster_type=pooling)
+    adj_transforms = transforms.Compose(adj_transforms)
+    aggregator = AggregationGraph(adj, num_layer, adj_transforms=adj_transforms, cuda=cuda, cluster_type=pooling)
 
     get_adj = lambda adj, layer_id: aggregator.get_adj(adj, layer_id)
     get_aggregate = lambda layer_id: aggregator.get_aggregate(layer_id)

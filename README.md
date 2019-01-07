@@ -49,11 +49,11 @@ Again, you'll want to subclass the `GeneInteractionGraph` and implement the `loa
 
 Now you're ready to use our models!
 
-If you look in `models/model_wrapper.py` you will find a class called WrappedModel. This class provides a nice interface to our graph convolution code (which is in `models/model_layers.py` and `models/graph_layers.py`). 
+If you look in `models/model_wrapper.py` you will find a class called Model. This class provides a nice interface to our graph convolution code (which is in `models/model_layers.py` and `models/graph_layers.py`). 
 
 We instantiate our graph convolutional model like this:
 
-`gcn = WrappedModel(name="GCN_lay20_chan32_emb32_dropout", cuda=True, num_layer=4, channels=32, embedding=32, prepool_extralayers=5, pooling="ignore")`
+`gcn = Model(name="GCN_lay20_chan32_emb32_dropout", cuda=True, num_layer=4, channels=32, embedding=32, prepool_extralayers=5, pooling="ignore")`
 
 Then we can train it like this:
 

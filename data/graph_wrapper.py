@@ -40,12 +40,13 @@ class GeneInteractionGraph(object):
         return results
 
 class RegNetGraph(GeneInteractionGraph):
-    def __init__(self, at_hash_or_path="3c8ac6e7ab6fbf962cedb77192177c58b7518b23"):
-        self.at_hash_or_path = at_hash_or_path
+    def __init__(self, at_hash="3c8ac6e7ab6fbf962cedb77192177c58b7518b23", datastore=""):
+        self.at_hash = at_hash
+        self.datastore = datastore
         super(RegNetGraph, self).__init__()
 
     def load_data(self):
-        h5_file = h5py.File(at.get(self.at_hash_or_path))
+        h5_file = h5py.File(at.get(self.at_hash, datastore=self.datastore))
         self.node_names = np.array(h5_file['gene_names'])
         self.df = pd.DataFrame(np.array(np.array(h5_file['graph_data']).astype('float32')))
         self.df.columns = self.node_names
@@ -54,13 +55,14 @@ class RegNetGraph(GeneInteractionGraph):
 
 
 class GeneManiaGraph(GeneInteractionGraph):
-    def __init__(self, at_hash_or_path="2b7e470d87a017be3826ef6ec55893f3a61f5af7"):
-        self.at_hash_or_path = at_hash_or_path
+    def __init__(self, at_hash="2b7e470d87a017be3826ef6ec55893f3a61f5af7", datastore=""):
+        self.at_hash = at_hash
+        self.datastore = datastore
         super(GeneManiaGraph, self).__init__()
 
     def load_data(self):
         # You could replace the value of self.hash with a path to a local copy of your graph and AT can handle that.
-        h5_file = h5py.File(at.get(self.at_hash_or_path))
+        h5_file = h5py.File(at.get(self.at_hash, datastore=self.datastore))
         self.node_names = np.array(h5_file['gene_names'])
         self.df = pd.DataFrame(np.array(np.array(h5_file['graph_data']).astype('float32')))
         self.df.columns = self.node_names
