@@ -118,7 +118,7 @@ class AggregationGraph(object):
         ids = range(adj.shape[0])
 
         if self.cluster_type == "hierarchy":
-            n_clusters = nb_nodes / (2 ** (layer_id + 1))
+            n_clusters = int(nb_nodes / (2 ** (layer_id + 1)))
             # For a specific layer, return the ids. The merging and stuff's gonna be computed later.
             self.clustering = sklearn.cluster.AgglomerativeClustering(n_clusters=n_clusters, affinity='euclidean',
                                                                       memory='/tmp', connectivity=(adj > 0.).astype(int),
@@ -244,8 +244,6 @@ class GraphLayer(nn.Module):
 
         if self.aggregate_adj is not None:
             self.aggregate_adj = self.aggregate_adj(id_layer)
-        #self.to_keep = self.aggregate_adj.to_keep
-
         self.init_params()
 
     def init_params(self):
@@ -289,8 +287,8 @@ class GCNLayer(GraphLayer):
         logging.info("Constructing the sparse matrix...")
         sparse_adj = torch.sparse.FloatTensor(self.edges, flat_adj, torch.Size([self.nb_nodes, self.nb_nodes]))  # .to_dense()
         self.register_buffer('sparse_adj', sparse_adj)
-        self.linear = nn.Conv1d(self.in_dim, self.channels/2, 1, bias=True)  # something to be done with the stride?
-        self.eye_linear = nn.Conv1d(self.in_dim, self.channels/2, 1, bias=True)
+        self.linear = nn.Conv1d(in_channels=self.in_dim, out_channels=int(self.channels/2), kernel_size=1, bias=True)  # something to be done with the stride?
+        self.eye_linear = nn.Conv1d(in_channels=self.in_dim, out_channels=int(self.channels/2), kernel_size=1, bias=True)
 
     def _adj_mul(self, x, D):
         nb_examples, nb_channels, nb_nodes = x.size()
@@ -306,7 +304,6 @@ class GCNLayer(GraphLayer):
     def forward(self, x):
 
         x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
-
         adj = Variable(self.sparse_adj, requires_grad=False)
 
         eye_x = self.eye_linear(x)

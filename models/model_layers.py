@@ -108,7 +108,7 @@ class StaticElementwiseGateLayer(nn.Module):
 
 
 class GraphModel(nn.Module):
-    def __init__(self, input_dim, channels, adj, out_dim,
+    def __init__(self, in_dim, channels, adj, out_dim,
                  cuda=True,
                  embedding=None,
                  adj_transforms=None,
@@ -137,13 +137,13 @@ class GraphModel(nn.Module):
         self.attention_head = attention_head
         self.master_nodes = master_nodes
         self.prepool_extralayers = prepool_extralayers
-        self.input_dim = input_dim
+        self.in_dim = in_dim
         self.gating = gating
 
         if self.embedding:
             self.add_embedding_layer()
-            self.input_dim = self.emb.emb_size
-        self.dims = [self.input_dim] + self.channels
+            self.in_dim = self.emb.emb_size
+        self.dims = [self.in_dim] + self.channels
 
         self.add_graph_convolutional_layers()
         self.add_logistic_layer()

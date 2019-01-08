@@ -28,8 +28,8 @@ class Model(nn.Module):
     def __init__(self, name=None, column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=0.0001, dropout=False, cuda=False, seed=0, adj=None, graph_name=None, pooling="ignore", prepool_extralayers=0):
         self.name = name
         self.column_names = column_names
-        self.channels = channels
         self.num_layer = num_layer
+        self.channels = [channels] * self.num_layer
         self.embedding = embedding
         self.gating = gating
         self.dropout = dropout
@@ -130,9 +130,8 @@ class MLP(Model):
 
     def setup_layers(self):
         out_dim = 2
-        channels = [self.channels] * self.num_layer
-        input_dim = len(self.X.keys())
-        dims = [input_dim] + channels
+        in_dim = len(self.X.keys())
+        dims = [in_dim] + self.channels
         logging.info("Constructing the network...")
 
         layers = []
@@ -141,10 +140,10 @@ class MLP(Model):
             layers.append(layer)
         self.my_layers = nn.ModuleList(layers)
 
-        if channels:
-            self.last_layer = nn.Linear(channels[-1], out_dim)
+        if self.channels:
+            self.last_layer = nn.Linear(self.channels[-1], out_dim)
         else:
-            self.last_layer = nn.Linear(input_dim, out_dim)
+            self.last_layer = nn.Linear(in_dim, out_dim)
 
         self.my_dropout = torch.nn.Dropout(0.5) if self.dropout else None
         logging.info("Done!")
@@ -165,16 +164,16 @@ class SLR(Model):
 
     def setup_layers(self):
         self.nb_nodes = len(self.X.keys())
-        self.input_dim = 1
+        self.in_dim = 1
         self.out_dim = 2
 
-        np.fill_diagonal(adj, 0.)
-        D = adj.sum(0) + 1e-5
-        laplacian = np.eye(D.shape[0]) - np.diag((D**-0.5)).dot(adj).dot(np.diag((D**-0.5)))
+        np.fill_diagonal(self.adj, 0.)
+        D = self.adj.sum(0) + 1e-5
+        laplacian = np.eye(D.shape[0]) - np.diag((D**-0.5)).dot(self.adj).dot(np.diag((D**-0.5)))
         self.laplacian = torch.FloatTensor(laplacian)
 
         # The logistic layer.
-        logistic_in_dim = self.nb_nodes * self.input_dim
+        logistic_in_dim = self.nb_nodes * self.in_dim
         logistic_layer = nn.Linear(logistic_in_dim, self.out_dim)
         logistic_layer.register_forward_hook(save_computations)
         self.my_logistic_layers = nn.ModuleList([logistic_layer])
@@ -199,12 +198,12 @@ class LR(Model):
 
     def setup_layers(self):
         self.nb_nodes = len(self.X.keys())
-        self.input_dim = 1
+        self.in_dim = 1
         self.out_dim = 2
 
         # The logistic layer.
-        logistic_in_dim = nb_nodes * input_dim
-        logistic_layer = nn.Linear(logistic_in_dim, out_dim)
+        logistic_in_dim = self.nb_nodes * self.in_dim
+        logistic_layer = nn.Linear(logistic_in_dim, self.out_dim)
         logistic_layer.register_forward_hook(save_computations)
         self.my_logistic_layers = nn.ModuleList([logistic_layer])
 
@@ -308,20 +307,19 @@ class GraphModel(Model):
 
     def setup_layers(self):
         adj_transforms, aggregate_adj = get_transform(self.adj, self.on_cuda, num_layer=self.num_layer, pooling=self.pooling)
-
-        self.my_layers = []
-        self.out_dim = 2
-        self.nb_nodes = self.adj.shape[0]
-        self.channels = [self.channels] * self.num_layer
         self.aggregate_adj = aggregate_adj
         self.adj_transforms = adj_transforms
+
+        self.my_layers = []
         self.master_nodes = 0
-        self.input_dim = 1
+        self.in_dim = 1
+        self.out_dim = 2
+        self.nb_nodes = self.adj.shape[0]
 
         if self.embedding:
             self.add_embedding_layer()
-            self.input_dim = self.emb.emb_size
-        self.dims = [self.input_dim] + self.channels
+            self.in_dim = self.emb.emb_size
+        self.dims = [self.in_dim] + self.channels
 
         self.add_graph_convolutional_layers()
         self.add_logistic_layer()
@@ -329,7 +327,7 @@ class GraphModel(Model):
         self.add_dropout_layers()
 
         if self.attention_head:
-            self.attention_layer = AttentionLayer(self.channels[-1], attention_head)
+            self.attention_layer = AttentionLayer(self.channels[-1], self.attention_head)
             self.attention_layer.register_forward_hook(save_computations)
 
         self.grads = {}
@@ -354,7 +352,7 @@ class GraphModel(Model):
             # transformation to apply at each layer.
             if self.aggregate_adj is not None:
                 for extra_layer in range(self.prepool_extralayers):
-                    layer = self.graph_layer_type(self.adj, c_in, c_in, self.on_cuda, i, adj_transforms=None, aggregate_adj=None)
+                    layer = self.graph_layer_type(self.adj, c_in, c_out, self.on_cuda, i, adj_transforms=None, aggregate_adj=None)
                     convs.append(layer)
 
             layer = self.graph_layer_type(self.adj, c_in, c_out, self.on_cuda, i, adj_transforms=self.adj_transforms, aggregate_adj=self.aggregate_adj)
@@ -465,9 +463,5 @@ class GraphModel(Model):
 
 class GCN(GraphModel):
     def __init__(self, **kwargs):
-        super(GCN, self).__init__(**kwargs)
-
-    def setup_layers(self):
         self.graph_layer_type = GCNLayer
-        super(GCN, self).setup_layers()
-        return model
+        super(GCN, self).__init__(**kwargs)

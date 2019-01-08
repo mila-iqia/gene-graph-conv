@@ -29,15 +29,16 @@ class GeneInteractionGraph(object):
         return neighbors, neighborhood
 
     def bfs_sample_neighbors(self, gene, num_neighbors, include_self=True):
-        results = set([])
+        neighbors = set([])
         if include_self:
-            results = set([gene])
+            neighbors = set([gene])
         bfs = nx.bfs_edges(self.nx_graph, gene)
         for _, sink in bfs:
-            if len(results) == num_neighbors:
+            if len(neighbors) == num_neighbors:
                 break
-            results.add(sink)
-        return results
+            neighbors.add(sink)
+        neighborhood = np.asarray(nx.to_numpy_matrix(self.nx_graph.subgraph(neighbors)))
+        return neighbors, neighborhood
 
 class RegNetGraph(GeneInteractionGraph):
     def __init__(self, at_hash="dbc0a21b88f7086fff76644a5f47e4094e8715dd", datastore=""):
