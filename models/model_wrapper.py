@@ -62,7 +62,6 @@ class Model(nn.Module):
         self.adj = None
         self.X = None
 
-        import pdb; pdb.set_trace()
         x_train, x_valid, y_train, y_valid = sklearn.model_selection.train_test_split(X, y, stratify=y, train_size=self.train_valid_split, test_size=1-self.train_valid_split, random_state=self.seed)
 
         # pylint: disable=E1101

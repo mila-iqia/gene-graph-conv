@@ -10,6 +10,8 @@ import sklearn
 import sklearn.cluster
 from joblib import Memory
 import numpy as np
+import hashlib
+
 
 def cluster_wrapper(n_clusters, adj, current_adj):
     ids = sklearn.cluster.AgglomerativeClustering(n_clusters=n_clusters, affinity='euclidean',
@@ -53,12 +55,6 @@ class PoolGraph(object):
         x_shape = x.size()
 
         if self.type == 'max':
-            # xs = x.view(-1, x.size(-1))
-            # import pdb; pdb.set_trace()
-            # max_value = []
-            # for j in range(adj.shape[0]):
-            #     neighbors = adj[:, j].nonzero()
-            #     max_value.append(xs.t()[neighbors].max(dim=0)[0])
             max_value = (x.view(-1, x.size(-1), 1) * adj).max(dim=1)[0]
         elif self.type == 'mean':
             max_value = (x.view(-1, x.size(-1), 1) * adj).mean(dim=1)
@@ -69,8 +65,6 @@ class PoolGraph(object):
 
         retn = max_value * to_keep  # Zero out The one that we don't care about.
         retn = retn.view(x_shape).permute(0, 2, 1).contiguous()  # put back in ex, node, channel
-        #import pdb; pdb.set_trace()
-
         return retn
 
 
@@ -92,6 +86,7 @@ class AggregationGraph(object):
         cached_cluster = memory.cache(cluster_wrapper)
         # Build the hierarchy of clusters.
         # Cluster multi-scale everything
+
         all_to_keep = []  # At each agregation, which node to keep.
         all_aggregate_adjs = []  # At each agregation, which node are connected to whom.
         all_transformed_adj = []  # At each layer, the transformed adj (normalized, etc.
@@ -106,8 +101,6 @@ class AggregationGraph(object):
 
             nb_nodes = current_adj.shape[0]
             ids = range(current_adj.shape[0])
-            import time
-            print("before cached_cluster: " + str(time.time()))
             if self.cluster_type == "hierarchy":
                 n_clusters = int(nb_nodes / (2 ** (layer_id + 1)))
                 ids = cached_cluster(n_clusters, self.adj, current_adj)
@@ -115,10 +108,6 @@ class AggregationGraph(object):
             clusters = set([])
             to_keep = np.zeros((current_adj.shape[0],))
             cluster_adj = np.zeros((n_clusters, self.adj.shape[0]))
-            print("current_adj.sum(): " + str(current_adj.sum()))
-            print("adj.sum(): " + str(adj.sum()))
-            print("n_clusters.sum(): " + str(n_clusters))
-            print("after cached_cluster: " + str(time.time()))
 
             for i, cluster in enumerate(ids):
                 if to_keep[i] == 1.:  # To keep a node, it had to be a centroid of a previous layer. Otherwise it might not work.
@@ -143,7 +132,7 @@ class AggregationGraph(object):
         # Build the aggregate function
         self.aggregates = []
         for adj, to_keep in zip(self.aggregate_adjs, self.to_keeps):
-            aggregate_adj = PoolGraph(adj=adj, to_keep=to_keep, cuda=cuda, please_ignore=True)
+            aggregate_adj = PoolGraph(adj=adj, to_keep=to_keep, cuda=cuda, please_ignore=False)
             self.aggregates.append(aggregate_adj)
 
 
@@ -193,7 +182,8 @@ class ApprNormalizeLaplacian(object):
         self.processed_dir = os.path.join(processed_dir, "ApprNormalizeLaplacian-" + str(getpass.getuser()))
 
     def __call__(self, adj):
-        adj_hash = str(hash(str(adj))) + str(adj.shape)
+        b = adj.view(np.uint8)
+        adj_hash = hashlib.sha1(b).hexdigest() + str(adj.shape)
         processed_path = self.processed_dir + '_{}.npy'.format(adj_hash)
         if os.path.isfile(processed_path):
             return np.load(processed_path)
