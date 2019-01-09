@@ -29,16 +29,20 @@ class GeneInteractionGraph(object):
         return neighbors, neighborhood
 
     def bfs_sample_neighbors(self, gene, num_neighbors, include_self=True):
-        neighbors = set([])
+        neighbors = nx.OrderedGraph()
         if include_self:
-            neighbors = set([gene])
+            neighbors.add_node(gene)
         bfs = nx.bfs_edges(self.nx_graph, gene)
-        for _, sink in bfs:
-            if len(neighbors) == num_neighbors:
+        for u, v in bfs:
+            if neighbors.number_of_nodes() == num_neighbors:
                 break
-            neighbors.add(sink)
-        neighborhood = np.asarray(nx.to_numpy_matrix(self.nx_graph.subgraph(neighbors)))
-        return neighbors, neighborhood
+            neighbors.add_node(v)
+
+        for node in neighbors.nodes():
+            for u, v, d in self.nx_graph.edges(node, data="weight"):
+                if neighbors.has_node(u) and neighbors.has_node(v):
+                    neighbors.add_weighted_edges_from([(u, v, d)])
+        return neighbors
 
 class RegNetGraph(GeneInteractionGraph):
     def __init__(self, at_hash="dbc0a21b88f7086fff76644a5f47e4094e8715dd", datastore=""):
@@ -47,7 +51,7 @@ class RegNetGraph(GeneInteractionGraph):
         super(RegNetGraph, self).__init__()
 
     def load_data(self):
-        self.nx_graph = nx.readwrite.gpickle.read_gpickle(at.get("dbc0a21b88f7086fff76644a5f47e4094e8715dd", datastore=""))
+        self.nx_graph = nx.OrderedGraph(nx.readwrite.gpickle.read_gpickle(at.get("dbc0a21b88f7086fff76644a5f47e4094e8715dd", datastore=self.datastore)))
 
 
 class GeneManiaGraph(GeneInteractionGraph):
@@ -57,7 +61,7 @@ class GeneManiaGraph(GeneInteractionGraph):
         super(GeneManiaGraph, self).__init__()
 
     def load_data(self):
-        self.nx_graph = nx.readwrite.gpickle.read_gpickle(at.get(self.at_hash, datastore=self.datastore))
+        self.nx_graph = nx.OrderedGraph(nx.readwrite.gpickle.read_gpickle("genemania.pkl"))
 
 
 class EcoliEcocycGraph(GeneInteractionGraph):

@@ -1,15 +1,21 @@
 import os
+import time
 import logging
 import getpass
-
 import torch
 from torch import nn
 from torch.autograd import Variable
 from torchvision import transforms
 import sklearn
 import sklearn.cluster
-
+from joblib import Memory
 import numpy as np
+
+def cluster_wrapper(n_clusters, adj, current_adj):
+    ids = sklearn.cluster.AgglomerativeClustering(n_clusters=n_clusters, affinity='euclidean',
+                                                         memory='/tmp', connectivity=(current_adj > 0.).astype(bool),
+                                                         compute_full_tree='auto', linkage='ward').fit_predict(adj.astype("float32"))
+    return ids
 
 
 class PoolGraph(object):
@@ -47,6 +53,12 @@ class PoolGraph(object):
         x_shape = x.size()
 
         if self.type == 'max':
+            # xs = x.view(-1, x.size(-1))
+            # import pdb; pdb.set_trace()
+            # max_value = []
+            # for j in range(adj.shape[0]):
+            #     neighbors = adj[:, j].nonzero()
+            #     max_value.append(xs.t()[neighbors].max(dim=0)[0])
             max_value = (x.view(-1, x.size(-1), 1) * adj).max(dim=1)[0]
         elif self.type == 'mean':
             max_value = (x.view(-1, x.size(-1), 1) * adj).mean(dim=1)
@@ -57,6 +69,8 @@ class PoolGraph(object):
 
         retn = max_value * to_keep  # Zero out The one that we don't care about.
         retn = retn.view(x_shape).permute(0, 2, 1).contiguous()  # put back in ex, node, channel
+        #import pdb; pdb.set_trace()
+
         return retn
 
 
@@ -73,87 +87,65 @@ class AggregationGraph(object):
         self.cuda = cuda
         self.adj_transforms = adj_transforms
         self.cluster_type = cluster_type
-        self.clustering = None
-
+        location = './cachedir'
+        memory = Memory(location, verbose=0)
+        cached_cluster = memory.cache(cluster_wrapper)
         # Build the hierarchy of clusters.
-        self.init_cluster()
-
-        # Build the aggregate function
-        self.aggregates = []
-        for adj, to_keep in zip(self.aggregate_adjs, self.to_keeps):
-            aggregate_adj = PoolGraph(adj=adj, to_keep=to_keep, cuda=cuda)
-            self.aggregates.append(aggregate_adj)
-
-    def init_cluster(self):
         # Cluster multi-scale everything
-        nb_nodes = self.adj.shape[0]
-        to_keep = np.ones((nb_nodes,))
-
         all_to_keep = []  # At each agregation, which node to keep.
         all_aggregate_adjs = []  # At each agregation, which node are connected to whom.
         all_transformed_adj = []  # At each layer, the transformed adj (normalized, etc.
-
         current_adj = self.adj.copy()
 
         # For each layer, build the adjs and the nodes to keep.
-        for no_layer in range(self.nb_layer):
-
+        for layer_id in range(self.nb_layer):
             if self.adj_transforms:  # Transform the adj if necessary.
-                current_adj = self.adj_transforms(no_layer)(current_adj)
+                current_adj = self.adj_transforms(layer_id)(current_adj)
 
             all_transformed_adj.append(current_adj)
 
-            to_keep, adj = self.cluster_specific_layer(to_keep, no_layer, np.array(current_adj))
-            all_to_keep.append(to_keep)
-            all_aggregate_adjs.append(adj)
+            nb_nodes = current_adj.shape[0]
+            ids = range(current_adj.shape[0])
+            import time
+            print("before cached_cluster: " + str(time.time()))
+            if self.cluster_type == "hierarchy":
+                n_clusters = int(nb_nodes / (2 ** (layer_id + 1)))
+                ids = cached_cluster(n_clusters, self.adj, current_adj)
+            n_clusters = len(set(ids))
+            clusters = set([])
+            to_keep = np.zeros((current_adj.shape[0],))
+            cluster_adj = np.zeros((n_clusters, self.adj.shape[0]))
+            print("current_adj.sum(): " + str(current_adj.sum()))
+            print("adj.sum(): " + str(adj.sum()))
+            print("n_clusters.sum(): " + str(n_clusters))
+            print("after cached_cluster: " + str(time.time()))
 
-            current_adj = adj
+            for i, cluster in enumerate(ids):
+                if to_keep[i] == 1.:  # To keep a node, it had to be a centroid of a previous layer. Otherwise it might not work.
+                    if cluster not in clusters:
+                        clusters.add(cluster)
+                        to_keep[i] = 1.
+                cluster_adj[cluster] += current_adj[i]  # The centroid is the merged of all the adj of all the nodes inside it.
+
+            # rewrite the adj matrix.
+            new_adj = np.zeros((current_adj.shape[0], current_adj.shape[0]))
+            for i, cluster in enumerate(ids):
+                new_adj[i] += (cluster_adj[cluster] > 0.).astype(int)
+
+            all_to_keep.append(to_keep)
+            all_aggregate_adjs.append(new_adj)
+            current_adj = new_adj
 
         self.to_keeps = all_to_keep
         self.aggregate_adjs = all_aggregate_adjs
         self.adjs = all_transformed_adj
 
-    def get_nodes_cluster(self, layer_id, adj):
-        nb_nodes = adj.shape[0]
-        ids = range(adj.shape[0])
+        # Build the aggregate function
+        self.aggregates = []
+        for adj, to_keep in zip(self.aggregate_adjs, self.to_keeps):
+            aggregate_adj = PoolGraph(adj=adj, to_keep=to_keep, cuda=cuda, please_ignore=True)
+            self.aggregates.append(aggregate_adj)
 
-        if self.cluster_type == "hierarchy":
-            n_clusters = int(nb_nodes / (2 ** (layer_id + 1)))
-            # For a specific layer, return the ids. The merging and stuff's gonna be computed later.
-            self.clustering = sklearn.cluster.AgglomerativeClustering(n_clusters=n_clusters, affinity='euclidean',
-                                                                      memory='/tmp', connectivity=(adj > 0.).astype(int),
-                                                                      compute_full_tree='auto', linkage='ward')
-            ids = self.clustering.fit_predict(self.adj)  # all nodes have a cluster.
-        elif self.cluster_type is None or self.cluster_type == 'ignore':
-            pass
-        else:
-            raise ValueError('Cluster type {} unknown.'.format(self.cluster_type))
-
-        return ids
-
-    def cluster_specific_layer(self, last_to_keep, n_clusters, adj):
-        # A cluster for a specific scale.
-
-        ids = self.get_nodes_cluster(n_clusters, adj)
-        n_clusters = len(set(ids))
-
-        clusters = set([])
-        to_keep = np.zeros((adj.shape[0],))
-        cluster_adj = np.zeros((n_clusters, self.adj.shape[0]))
-
-        for i, cluster in enumerate(ids):
-            if last_to_keep[i] == 1.:  # To keep a node, it had to be a centroid of a previous layer. Otherwise it might not work.
-                if cluster not in clusters:
-                    clusters.add(cluster)
-                    to_keep[i] = 1.
-
-            cluster_adj[cluster] += adj[i]  # The centroid is the merged of all the adj of all the nodes inside it.
-
-        new_adj = np.zeros((adj.shape[0], adj.shape[0]))  # rewrite the adj matrix.
-        for i, cluster in enumerate(ids):
-            new_adj[i] += (cluster_adj[cluster] > 0.).astype(int)
-
-        return to_keep, new_adj
 
     def get_aggregate(self, layer_id):
         return self.aggregates[layer_id]
@@ -203,12 +195,12 @@ class ApprNormalizeLaplacian(object):
     def __call__(self, adj):
         adj_hash = str(hash(str(adj))) + str(adj.shape)
         processed_path = self.processed_dir + '_{}.npy'.format(adj_hash)
-        if not os.path.exists(self.processed_dir):
-            os.makedirs(self.processed_dir)
+        if os.path.isfile(processed_path):
+            return np.load(processed_path)
+
         logging.info("Doing the approximation...")
 
         np.fill_diagonal(adj, 1.)  # TODO: Hummm, think it's a 0.
-
         D = adj.sum(axis=1)
         D_inv = np.diag(1. / np.sqrt(D))
         norm_transform = D_inv.dot(adj).dot(D_inv)
@@ -216,6 +208,8 @@ class ApprNormalizeLaplacian(object):
         logging.info("Done!")
 
         # saving the processed approximation
+        if not os.path.exists(self.processed_dir):
+            os.makedirs(self.processed_dir)
         if processed_path:
             logging.info("Saving the approximation in {}".format(processed_path))
             np.save(processed_path, norm_transform)
@@ -302,7 +296,6 @@ class GCNLayer(GraphLayer):
         return x
 
     def forward(self, x):
-
         x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
         adj = Variable(self.sparse_adj, requires_grad=False)
 

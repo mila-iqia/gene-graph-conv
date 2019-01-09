@@ -47,11 +47,22 @@ class Model(nn.Module):
         self.best_model = None
         super(Model, self).__init__()
 
+        torch.manual_seed(self.seed)
+        if self.on_cuda:
+            torch.cuda.manual_seed(self.seed)
+            torch.cuda.manual_seed_all(self.seed)
+            self.cuda()
+
+
     def fit(self, X, y, adj=None):
         self.adj = adj
         self.X = X
         self.setup_layers()
+        # Cleanup these vars, todo refactor them from setup_layers()
+        self.adj = None
+        self.X = None
 
+        import pdb; pdb.set_trace()
         x_train, x_valid, y_train, y_valid = sklearn.model_selection.train_test_split(X, y, stratify=y, train_size=self.train_valid_split, test_size=1-self.train_valid_split, random_state=self.seed)
 
         # pylint: disable=E1101
@@ -61,11 +72,6 @@ class Model(nn.Module):
         # pylint: enable=E1101
 
         criterion = torch.nn.CrossEntropyLoss(reduction='mean')
-
-        if self.on_cuda:
-            torch.cuda.manual_seed(self.seed)
-            torch.cuda.manual_seed_all(self.seed)
-            self.cuda()
 
         optimizer = torch.optim.Adam(self.parameters(), lr=0.001, weight_decay=0.0001)
         max_valid = 0
@@ -109,7 +115,9 @@ class Model(nn.Module):
                 res.append(self(inputs)[:, 1].data.cpu().numpy())
             y_hat = np.concatenate(res).ravel()
             auc['valid'] = sklearn.metrics.roc_auc_score(y_valid, y_hat)
-
+            print(auc)
+            print("y_pred:" + str(y_pred))
+            print("labels:"+str(labels))
             patience = patience - 1
             if patience == 0:
                 break
@@ -310,7 +318,6 @@ class GraphModel(Model):
         self.aggregate_adj = aggregate_adj
         self.adj_transforms = adj_transforms
 
-        self.my_layers = []
         self.master_nodes = 0
         self.in_dim = 1
         self.out_dim = 2
