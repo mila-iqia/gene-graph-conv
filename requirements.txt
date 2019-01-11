@@ -8,3 +8,4 @@ networkx
 academictorrents>=2.1.5
 matplotlib
 jupyter
+joblib

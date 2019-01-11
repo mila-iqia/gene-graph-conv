@@ -1,6 +1,7 @@
 """A SKLearn-style wrapper around our PyTorch models (like Graph Convolutional Network and SparseLogisticRegression) implemented in models.py"""
 
 import logging
+import time
 import sklearn
 import sklearn.model_selection
 import sklearn.metrics
@@ -25,7 +26,7 @@ class Method:
 
 class Model(nn.Module):
 
-    def __init__(self, name=None, column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=0.0001, dropout=False, cuda=False, seed=0, adj=None, graph_name=None, pooling="ignore", prepool_extralayers=0):
+    def __init__(self, name=None, column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=0.0001, dropout=False, cuda=False, seed=0, adj=None, graph_name=None, pooling="ignore", prepool_extralayers=0, state_dict=""):
         self.name = name
         self.column_names = column_names
         self.num_layer = num_layer
@@ -52,7 +53,8 @@ class Model(nn.Module):
             torch.cuda.manual_seed(self.seed)
             torch.cuda.manual_seed_all(self.seed)
             self.cuda()
-
+        if state_dict:
+            self.load_state_dict(state_dict)
 
     def fit(self, X, y, adj=None):
         self.adj = adj
@@ -75,6 +77,7 @@ class Model(nn.Module):
         optimizer = torch.optim.Adam(self.parameters(), lr=0.001, weight_decay=0.0001)
         max_valid = 0
         patience = self.start_patience
+        start_time = time.time()
         for epoch in range(0, self.num_epochs):
             for i in range(0, x_train.shape[0], self.batch_size):
                 inputs, labels = x_train[i:i + self.batch_size], y_train[i:i + self.batch_size]
@@ -114,17 +117,18 @@ class Model(nn.Module):
                 res.append(self(inputs)[:, 1].data.cpu().numpy())
             y_hat = np.concatenate(res).ravel()
             auc['valid'] = sklearn.metrics.roc_auc_score(y_valid, y_hat)
-            print(auc)
-            print("y_pred:" + str(y_pred))
-            print("labels:"+str(labels))
+            # print("epoch: " + str(epoch) + ", " + str(auc))
             patience = patience - 1
             if patience == 0:
                 break
-            if (max_valid <= auc['valid']) and epoch > 5:
+            if (max_valid < auc['valid']) and epoch > 5:
                 max_valid = auc['valid']
                 patience = self.start_patience
                 self.best_model = self.state_dict().copy()
+        print(time.time()-start_time)
         self.load_state_dict(self.best_model)
+        #torch.save(self.best_model, "temp.mdl")
+        self.best_model = None
 
     def predict(self, inputs):
         """ Run the trained model on the inputs"""
@@ -342,6 +346,9 @@ class GraphModel(Model):
                 self.grads[name] = grad.data.cpu().numpy()
             return hook
         self.save_grad = save_grad
+
+        if self.on_cuda:
+            self.cuda()
 
     def add_embedding_layer(self):
         self.emb = EmbeddingLayer(self.nb_nodes, self.embedding)

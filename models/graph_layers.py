@@ -45,17 +45,23 @@ class PoolGraph(object):
         if self.please_ignore:
             return x
 
+        x = x.permute(0, 2, 1).contiguous()  # put in ex, channel, node
+        original_x_shape = x.size()
         adj = Variable(torch.FloatTensor(self.adj), requires_grad=False)
         to_keep = Variable(torch.FloatTensor(self.to_keep.astype(float)), requires_grad=False)
+
         if self.cuda:
             adj = adj.cuda()
             to_keep = to_keep.cuda()
 
-        x = x.permute(0, 2, 1).contiguous()  # put in ex, channel, node
-        x_shape = x.size()
 
         if self.type == 'max':
-            max_value = (x.view(-1, x.size(-1), 1) * adj).max(dim=1)[0]
+            temp = []
+            start = time.time()
+            for i in range(x.shape[0]):
+                for j in range(x.shape[1]):
+                    temp.append((x[i][j].view(1, -1, 1) * adj).max(dim=1)[0].cpu())
+            max_value = torch.stack(temp).cuda()
         elif self.type == 'mean':
             max_value = (x.view(-1, x.size(-1), 1) * adj).mean(dim=1)
         elif self.type == 'strip':
@@ -64,7 +70,7 @@ class PoolGraph(object):
             raise ValueError()
 
         retn = max_value * to_keep  # Zero out The one that we don't care about.
-        retn = retn.view(x_shape).permute(0, 2, 1).contiguous()  # put back in ex, node, channel
+        retn = retn.view(original_x_shape).permute(0, 2, 1).contiguous()  # put back in ex, node, channel
         return retn
 
 
@@ -90,6 +96,7 @@ class AggregationGraph(object):
         all_to_keep = []  # At each agregation, which node to keep.
         all_aggregate_adjs = []  # At each agregation, which node are connected to whom.
         all_transformed_adj = []  # At each layer, the transformed adj (normalized, etc.
+        last_to_keep = np.ones((self.adj.shape[0]))
         current_adj = self.adj.copy()
 
         # For each layer, build the adjs and the nodes to keep.
@@ -110,7 +117,7 @@ class AggregationGraph(object):
             cluster_adj = np.zeros((n_clusters, self.adj.shape[0]))
 
             for i, cluster in enumerate(ids):
-                if to_keep[i] == 1.:  # To keep a node, it had to be a centroid of a previous layer. Otherwise it might not work.
+                if last_to_keep[i] == 1.:  # To keep a node, it had to be a centroid of a previous layer. Otherwise it might not work.
                     if cluster not in clusters:
                         clusters.add(cluster)
                         to_keep[i] = 1.
@@ -183,6 +190,7 @@ class ApprNormalizeLaplacian(object):
 
     def __call__(self, adj):
         b = adj.view(np.uint8)
+        import pdb; pdb.set_trace()
         adj_hash = hashlib.sha1(b).hexdigest() + str(adj.shape)
         processed_path = self.processed_dir + '_{}.npy'.format(adj_hash)
         if os.path.isfile(processed_path):
