@@ -6,8 +6,10 @@ import torch
 from torch import nn
 from torch.autograd import Variable
 from torchvision import transforms
+from scipy import sparse
 import sklearn
 import sklearn.cluster
+import joblib
 from joblib import Memory
 import numpy as np
 import hashlib
@@ -47,7 +49,7 @@ class PoolGraph(object):
 
         x = x.permute(0, 2, 1).contiguous()  # put in ex, channel, node
         original_x_shape = x.size()
-        adj = Variable(torch.FloatTensor(self.adj), requires_grad=False)
+        adj = Variable(torch.FloatTensor(self.adj.todense()), requires_grad=False)
         to_keep = Variable(torch.FloatTensor(self.to_keep.astype(float)), requires_grad=False)
 
         if self.cuda:
@@ -104,7 +106,7 @@ class AggregationGraph(object):
             if self.adj_transforms:  # Transform the adj if necessary.
                 current_adj = self.adj_transforms(layer_id)(current_adj)
 
-            all_transformed_adj.append(current_adj)
+            all_transformed_adj.append(sparse.csr_matrix(current_adj))
 
             nb_nodes = current_adj.shape[0]
             ids = range(current_adj.shape[0])
@@ -129,7 +131,7 @@ class AggregationGraph(object):
                 new_adj[i] += (cluster_adj[cluster] > 0.).astype(int)
 
             all_to_keep.append(to_keep)
-            all_aggregate_adjs.append(new_adj)
+            all_aggregate_adjs.append(sparse.csr_matrix(new_adj))
             current_adj = new_adj
 
         self.to_keeps = all_to_keep
@@ -189,19 +191,18 @@ class ApprNormalizeLaplacian(object):
         self.processed_dir = os.path.join(processed_dir, "ApprNormalizeLaplacian-" + str(getpass.getuser()))
 
     def __call__(self, adj):
-        b = adj.view(np.uint8)
-        import pdb; pdb.set_trace()
-        adj_hash = hashlib.sha1(b).hexdigest() + str(adj.shape)
-        processed_path = self.processed_dir + '_{}.npy'.format(adj_hash)
+        adj_sparse = sparse.csr_matrix(adj)
+        adj_hash = joblib.hash(adj_sparse) + str(adj.shape)
+        processed_path = self.processed_dir + '_{}.npz'.format(adj_hash)
         if os.path.isfile(processed_path):
-            return np.load(processed_path)
-
+            return sparse.load_npz(processed_path)
         logging.info("Doing the approximation...")
 
         np.fill_diagonal(adj, 1.)  # TODO: Hummm, think it's a 0.
         D = adj.sum(axis=1)
         D_inv = np.diag(1. / np.sqrt(D))
-        norm_transform = D_inv.dot(adj).dot(D_inv)
+        D_inv_sparse = sparse.csr_matrix(D_inv)
+        norm_transform = D_inv_sparse.dot(adj_sparse).dot(D_inv_sparse)
 
         logging.info("Done!")
 
@@ -210,9 +211,8 @@ class ApprNormalizeLaplacian(object):
             os.makedirs(self.processed_dir)
         if processed_path:
             logging.info("Saving the approximation in {}".format(processed_path))
-            np.save(processed_path, norm_transform)
+            sparse.save_npz(processed_path, norm_transform)
             logging.info("Done!")
-
         return norm_transform
 
 
@@ -233,7 +233,7 @@ class GraphLayer(nn.Module):
             logging.info("Transforming the adj matrix")
             adj = self.adj_transforms(adj, id_layer)
         self.adj = adj
-
+        import pdb; pdb.set_trace()
         if self.aggregate_adj is not None:
             self.aggregate_adj = self.aggregate_adj(id_layer)
         self.init_params()
@@ -271,13 +271,9 @@ class SparseMM(torch.autograd.Function):
 class GCNLayer(GraphLayer):
 
     def init_params(self):
-        self.edges = torch.LongTensor(np.array(np.where(self.adj)))  # The list of edges
-        flat_adj = self.adj.flatten()[np.where(self.adj.flatten())]  # get the value
-        flat_adj = torch.FloatTensor(flat_adj)
-
-        # Constructing a sparse matrix
+        self.edges = torch.LongTensor(np.array(self.adj.nonzero()))
         logging.info("Constructing the sparse matrix...")
-        sparse_adj = torch.sparse.FloatTensor(self.edges, flat_adj, torch.Size([self.nb_nodes, self.nb_nodes]))  # .to_dense()
+        sparse_adj = torch.sparse.FloatTensor(self.edges, torch.FloatTensor(self.adj.data), torch.Size([self.nb_nodes, self.nb_nodes]))  # .to_dense()
         self.register_buffer('sparse_adj', sparse_adj)
         self.linear = nn.Conv1d(in_channels=self.in_dim, out_channels=int(self.channels/2), kernel_size=1, bias=True)  # something to be done with the stride?
         self.eye_linear = nn.Conv1d(in_channels=self.in_dim, out_channels=int(self.channels/2), kernel_size=1, bias=True)
