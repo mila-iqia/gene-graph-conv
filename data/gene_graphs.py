@@ -45,23 +45,23 @@ class GeneInteractionGraph(object):
         return neighbors
 
 class RegNetGraph(GeneInteractionGraph):
-    def __init__(self, at_hash="dbc0a21b88f7086fff76644a5f47e4094e8715dd", datastore=""):
+    def __init__(self, at_hash="e109e087a8fc8aec45bae3a74a193922ce27fc58", datastore=""):
         self.at_hash = at_hash
         self.datastore = datastore
         super(RegNetGraph, self).__init__()
 
     def load_data(self):
-        self.nx_graph = nx.OrderedGraph(nx.readwrite.gpickle.read_gpickle(at.get("dbc0a21b88f7086fff76644a5f47e4094e8715dd", datastore=self.datastore)))
+        self.nx_graph = nx.OrderedGraph(nx.readwrite.gpickle.read_gpickle(at.get(self.at_hash, datastore=self.datastore)))
 
 
 class GeneManiaGraph(GeneInteractionGraph):
-    def __init__(self, at_hash="b124541555a65bd6dcd3833403aee4fae01a2d99", datastore=""):
+    def __init__(self, at_hash="5adbacb0b7ea663ac4a7758d39250a1bd28c5b40", datastore=""):
         self.at_hash = at_hash
         self.datastore = datastore
         super(GeneManiaGraph, self).__init__()
 
     def load_data(self):
-        self.nx_graph = nx.OrderedGraph(nx.readwrite.gpickle.read_gpickle("genemania.pkl"))
+        self.nx_graph = nx.OrderedGraph(nx.readwrite.gpickle.read_gpickle(at.get(self.at_hash, datastore=self.datastore)))
 
 
 class EcoliEcocycGraph(GeneInteractionGraph):

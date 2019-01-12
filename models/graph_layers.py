@@ -12,14 +12,6 @@ import sklearn.cluster
 import joblib
 from joblib import Memory
 import numpy as np
-import hashlib
-
-
-def cluster_wrapper(n_clusters, adj, current_adj):
-    ids = sklearn.cluster.AgglomerativeClustering(n_clusters=n_clusters, affinity='euclidean',
-                                                         memory='/tmp', connectivity=(current_adj > 0.).astype(bool),
-                                                         compute_full_tree='auto', linkage='ward').fit_predict(adj.astype("float32"))
-    return ids
 
 
 class PoolGraph(object):
@@ -56,7 +48,6 @@ class PoolGraph(object):
             adj = adj.cuda()
             to_keep = to_keep.cuda()
 
-
         if self.type == 'max':
             temp = []
             start = time.time()
@@ -89,9 +80,7 @@ class AggregationGraph(object):
         self.cuda = cuda
         self.adj_transforms = adj_transforms
         self.cluster_type = cluster_type
-        location = './cachedir'
-        memory = Memory(location, verbose=0)
-        cached_cluster = memory.cache(cluster_wrapper)
+
         # Build the hierarchy of clusters.
         # Cluster multi-scale everything
 
@@ -112,7 +101,16 @@ class AggregationGraph(object):
             ids = range(current_adj.shape[0])
             if self.cluster_type == "hierarchy":
                 n_clusters = int(nb_nodes / (2 ** (layer_id + 1)))
-                ids = cached_cluster(n_clusters, self.adj, current_adj)
+                temp_sparse_adj = sparse.csr_matrix(adj)
+                adj_hash = joblib.hash(temp_sparse_adj.data.tostring()) + joblib.hash(temp_sparse_adj.indices.tostring()) + joblib.hash(sparse.csr_matrix(current_adj).data.tostring()) + joblib.hash(sparse.csr_matrix(current_adj).indices.tostring()) + str(n_clusters)
+                processed_path = "/tmp/" + '{}.npy'.format(adj_hash)
+                if os.path.isfile(processed_path):
+                    ids = np.load(processed_path)
+                else:
+                    ids = sklearn.cluster.AgglomerativeClustering(n_clusters=n_clusters, affinity='euclidean',
+                                                                         memory='/tmp', connectivity=(current_adj > 0.).astype(bool),
+                                                                         compute_full_tree='auto', linkage='ward').fit_predict(adj.astype("float32"))
+                    np.save(processed_path, np.array(ids))
             n_clusters = len(set(ids))
             clusters = set([])
             to_keep = np.zeros((current_adj.shape[0],))
@@ -233,7 +231,6 @@ class GraphLayer(nn.Module):
             logging.info("Transforming the adj matrix")
             adj = self.adj_transforms(adj, id_layer)
         self.adj = adj
-        import pdb; pdb.set_trace()
         if self.aggregate_adj is not None:
             self.aggregate_adj = self.aggregate_adj(id_layer)
         self.init_params()
@@ -273,7 +270,8 @@ class GCNLayer(GraphLayer):
     def init_params(self):
         self.edges = torch.LongTensor(np.array(self.adj.nonzero()))
         logging.info("Constructing the sparse matrix...")
-        sparse_adj = torch.sparse.FloatTensor(self.edges, torch.FloatTensor(self.adj.data), torch.Size([self.nb_nodes, self.nb_nodes]))  # .to_dense()
+        data = self.adj.data if type(self.adj) == sparse.csr.csr_matrix else self.adj.flatten()[np.where(self.adj.flatten())]
+        sparse_adj = torch.sparse.FloatTensor(self.edges, torch.FloatTensor(data), torch.Size([self.nb_nodes, self.nb_nodes]))  # .to_dense()
         self.register_buffer('sparse_adj', sparse_adj)
         self.linear = nn.Conv1d(in_channels=self.in_dim, out_channels=int(self.channels/2), kernel_size=1, bias=True)  # something to be done with the stride?
         self.eye_linear = nn.Conv1d(in_channels=self.in_dim, out_channels=int(self.channels/2), kernel_size=1, bias=True)

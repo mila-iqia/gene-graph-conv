@@ -20,10 +20,6 @@ def save_computations(self, input, output):
     setattr(self, "input", input)
     setattr(self, "output", output)
 
-class Method:
-    def __init__(self):
-        pass
-
 class Model(nn.Module):
 
     def __init__(self, name=None, column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=0.0001, dropout=False, cuda=False, seed=0, adj=None, graph_name=None, pooling="ignore", prepool_extralayers=0, state_dict=""):
@@ -73,7 +69,6 @@ class Model(nn.Module):
         # pylint: enable=E1101
 
         criterion = torch.nn.CrossEntropyLoss(reduction='mean')
-
         optimizer = torch.optim.Adam(self.parameters(), lr=0.001, weight_decay=0.0001)
         max_valid = 0
         patience = self.start_patience
@@ -117,7 +112,7 @@ class Model(nn.Module):
                 res.append(self(inputs)[:, 1].data.cpu().numpy())
             y_hat = np.concatenate(res).ravel()
             auc['valid'] = sklearn.metrics.roc_auc_score(y_valid, y_hat)
-            # print("epoch: " + str(epoch) + ", " + str(auc))
+            print("epoch: " + str(epoch) + ", " + str(auc))
             patience = patience - 1
             if patience == 0:
                 break
@@ -127,7 +122,6 @@ class Model(nn.Module):
                 self.best_model = self.state_dict().copy()
         print(time.time()-start_time)
         self.load_state_dict(self.best_model)
-        #torch.save(self.best_model, "temp.mdl")
         self.best_model = None
 
     def predict(self, inputs):

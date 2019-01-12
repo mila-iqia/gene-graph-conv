@@ -26,7 +26,7 @@ Let's start by loading your gene expression dataset. Here's an abstract class st
 
 There are a few important attributes your dataset class will want to set in the load_data method. The most important ones are a pandas dataframe, `df` with genes as columns (with gene names as column names) and patient samples as rows. Your dataset should also have a labels attribute with a label for each row in `df`. Finally, a data attribute should contain the same data as your `df`, but in the form of a numpy array. If you are confused, look at the `TCGADataset` that we load in our notebooks for an example. As for the `__getitem__` function on your dataset, it just returns samples of this form: `{'sample': sample, 'labels': label}`.
 
-Additionally, you'll need a gene interaction graph to construct your Graph Convolutional Network. These live in `data/graph_wrapper.py`. Its format should be:
+Additionally, you'll need a gene interaction graph to construct your Graph Convolutional Network. These live in `data/gene_graphs.py`. Its format should be:
 ```
 class GeneInteractionGraph(object):
     """ This class manages the data pertaining to the relationships between genes.
