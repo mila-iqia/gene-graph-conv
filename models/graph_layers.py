@@ -108,8 +108,8 @@ class AggregationGraph(object):
                     ids = np.load(processed_path)
                 else:
                     ids = sklearn.cluster.AgglomerativeClustering(n_clusters=n_clusters, affinity='euclidean',
-                                                                         memory='/tmp', connectivity=(current_adj > 0.).astype(bool),
-                                                                         compute_full_tree='auto', linkage='ward').fit_predict(adj.astype("float32"))
+                                                                         memory='/tmp', connectivity=(current_adj > 0.).astype(int),
+                                                                         compute_full_tree='auto', linkage='ward').fit_predict(adj)
                     np.save(processed_path, np.array(ids))
             n_clusters = len(set(ids))
             clusters = set([])
