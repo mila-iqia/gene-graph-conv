@@ -112,7 +112,6 @@ class Model(nn.Module):
                 res.append(self(inputs)[:, 1].data.cpu().numpy())
             y_hat = np.concatenate(res).ravel()
             auc['valid'] = sklearn.metrics.roc_auc_score(y_valid, y_hat)
-            print("epoch: " + str(epoch) + ", " + str(auc))
             patience = patience - 1
             if patience == 0:
                 break
@@ -120,7 +119,6 @@ class Model(nn.Module):
                 max_valid = auc['valid']
                 patience = self.start_patience
                 self.best_model = self.state_dict().copy()
-        print(time.time()-start_time)
         self.load_state_dict(self.best_model)
         self.best_model = None
 
