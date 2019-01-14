@@ -1,3 +1,4 @@
+.cache/
 cachedir/
 venv/
 .python-version

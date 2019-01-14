@@ -100,17 +100,40 @@ class AggregationGraph(object):
             nb_nodes = current_adj.shape[0]
             ids = range(current_adj.shape[0])
             if self.cluster_type == "hierarchy":
+                start = time.time()
+
                 n_clusters = int(nb_nodes / (2 ** (layer_id + 1)))
                 temp_sparse_adj = sparse.csr_matrix(adj)
                 adj_hash = joblib.hash(temp_sparse_adj.data.tostring()) + joblib.hash(temp_sparse_adj.indices.tostring()) + joblib.hash(sparse.csr_matrix(current_adj).data.tostring()) + joblib.hash(sparse.csr_matrix(current_adj).indices.tostring()) + str(n_clusters)
-                processed_path = "/tmp/" + '{}.npy'.format(adj_hash)
+                processed_path = ".cache/" + '{}.npy'.format(adj_hash)
                 if os.path.isfile(processed_path):
                     ids = np.load(processed_path)
                 else:
                     ids = sklearn.cluster.AgglomerativeClustering(n_clusters=n_clusters, affinity='euclidean',
-                                                                         memory='/tmp', connectivity=(current_adj > 0.).astype(int),
+                                                                         memory='.cache', connectivity=(current_adj > 0.).astype(int),
                                                                          compute_full_tree='auto', linkage='ward').fit_predict(adj)
+                    print(time.time() - start)
                     np.save(processed_path, np.array(ids))
+            elif self.cluster_type == "random":
+                n_clusters = int(nb_nodes / (2 ** (layer_id + 1)))
+                temp_sparse_adj = sparse.csr_matrix(adj)
+                adj_hash = joblib.hash(temp_sparse_adj.data.tostring()) + joblib.hash(temp_sparse_adj.indices.tostring()) + joblib.hash(sparse.csr_matrix(current_adj).data.tostring()) + joblib.hash(sparse.csr_matrix(current_adj).indices.tostring()) + str(n_clusters)
+                processed_path = ".cache/" + '{}.npy'.format(adj_hash)
+                if os.path.isfile(processed_path):
+                    ids = np.load(processed_path)
+                else:
+                    start = time.time()
+                    ids = []
+                    for gene in gene_graph.nx_graph.nodes:
+                        if len(ids) == n_clusters:
+                            break
+                        neighbors = list(gene_graph.nx_graph[gene])
+                        if neighbors:
+                           ids.append(np.random.choice(neighbors))
+                        else:
+                            ids.append(gene)
+                    print(time.time() - start)
+                np.save(processed_path, np.array(ids))
             n_clusters = len(set(ids))
             clusters = set([])
             to_keep = np.zeros((current_adj.shape[0],))
@@ -185,8 +208,8 @@ class ApprNormalizeLaplacian(object):
     """
 
     # TODO: add unittests
-    def __init__(self, processed_dir='/tmp/'):
-        self.processed_dir = os.path.join(processed_dir, "ApprNormalizeLaplacian-" + str(getpass.getuser()))
+    def __init__(self, processed_dir='.cache/'):
+        self.processed_dir = os.path.join(processed_dir, "ApprNormalizeLaplacian")
 
     def __call__(self, adj):
         adj_sparse = sparse.csr_matrix(adj)
