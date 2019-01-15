@@ -1,3 +1,4 @@
+.connect.sh
 .cache/
 cachedir/
 venv/
