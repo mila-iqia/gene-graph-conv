@@ -12,6 +12,7 @@ import sklearn.cluster
 import joblib
 from joblib import Memory
 import numpy as np
+from sklearn.cluster import KMeans
 
 
 class PoolGraph(object):
@@ -118,7 +119,7 @@ class AggregationGraph(object):
                 n_clusters = int(nb_nodes / (2 ** (layer_id + 1)))
                 temp_sparse_adj = sparse.csr_matrix(adj)
                 adj_hash = joblib.hash(temp_sparse_adj.data.tostring()) + joblib.hash(temp_sparse_adj.indices.tostring()) + joblib.hash(sparse.csr_matrix(current_adj).data.tostring()) + joblib.hash(sparse.csr_matrix(current_adj).indices.tostring()) + str(n_clusters)
-                processed_path = ".cache/" + '{}.npy'.format(adj_hash)
+                processed_path = ".cache/random" + '{}.npy'.format(adj_hash)
                 if os.path.isfile(processed_path):
                     ids = np.load(processed_path)
                 else:
@@ -134,6 +135,17 @@ class AggregationGraph(object):
                             ids.append(gene)
                     print(time.time() - start)
                 np.save(processed_path, np.array(ids))
+            elif self.cluster_type == "kmeans":
+                n_clusters = int(nb_nodes / (2 ** (layer_id + 1)))
+                temp_sparse_adj = sparse.csr_matrix(adj)
+                adj_hash = joblib.hash(temp_sparse_adj.data.tostring()) + joblib.hash(temp_sparse_adj.indices.tostring()) + joblib.hash(sparse.csr_matrix(current_adj).data.tostring()) + joblib.hash(sparse.csr_matrix(current_adj).indices.tostring()) + str(n_clusters)
+                processed_path = ".cache/kmeans" + '{}.npy'.format(adj_hash)
+                if os.path.isfile(processed_path):
+                    ids = np.load(processed_path)
+                else:
+                    ids = KMeans(n_clusters=n_clusters, init='k-means++', n_init=10, max_iter=300, tol=0.0001, precompute_distances='auto', verbose=0, random_state=None, copy_x=True, n_jobs=-1, algorithm='auto').fit(adj).labels_
+                np.save(processed_path, np.array(ids))
+
             n_clusters = len(set(ids))
             clusters = set([])
             to_keep = np.zeros((current_adj.shape[0],))
