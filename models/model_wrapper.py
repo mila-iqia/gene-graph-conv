@@ -151,6 +151,12 @@ class MLP(Model):
         self.my_dropout = torch.nn.Dropout(0.5) if self.dropout else None
         logging.info("Done!")
 
+        torch.manual_seed(self.seed)
+        if self.on_cuda:
+            torch.cuda.manual_seed(self.seed)
+            torch.cuda.manual_seed_all(self.seed)
+            self.cuda()
+
     def forward(self, x):
         nb_examples, nb_nodes, nb_channels = x.size()
         x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
@@ -180,6 +186,12 @@ class SLR(Model):
         logistic_layer = nn.Linear(logistic_in_dim, self.out_dim)
         logistic_layer.register_forward_hook(save_computations)
         self.my_logistic_layers = nn.ModuleList([logistic_layer])
+
+        torch.manual_seed(self.seed)
+        if self.on_cuda:
+            torch.cuda.manual_seed(self.seed)
+            torch.cuda.manual_seed_all(self.seed)
+            self.cuda()
 
     def forward(self, x):
         nb_examples, nb_nodes, nb_channels = x.size()
@@ -339,7 +351,10 @@ class GraphModel(Model):
             return hook
         self.save_grad = save_grad
 
+        torch.manual_seed(self.seed)
         if self.on_cuda:
+            torch.cuda.manual_seed(self.seed)
+            torch.cuda.manual_seed_all(self.seed)
             self.cuda()
 
     def add_embedding_layer(self):
