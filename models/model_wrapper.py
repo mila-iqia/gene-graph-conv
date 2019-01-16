@@ -13,7 +13,8 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 from torch.autograd import Variable
-from models.graph_layers import get_transform, GCNLayer, SGCLayer, LCGLayer
+from models.graph_layers import get_transform, GCNLayer
+from scipy import sparse
 
 # For Monitoring
 def save_computations(self, input, output):
@@ -53,7 +54,7 @@ class Model(nn.Module):
             self.load_state_dict(state_dict)
 
     def fit(self, X, y, adj=None):
-        self.adj = adj
+        self.adj = sparse.csr_matrix(adj)
         self.X = X
         self.setup_layers()
         # Cleanup these vars, todo refactor them from setup_layers()
@@ -175,7 +176,6 @@ class SLR(Model):
         self.nb_nodes = len(self.X.keys())
         self.in_dim = 1
         self.out_dim = 2
-
         np.fill_diagonal(self.adj, 0.)
         D = self.adj.sum(0) + 1e-5
         laplacian = np.eye(D.shape[0]) - np.diag((D**-0.5)).dot(self.adj).dot(np.diag((D**-0.5)))

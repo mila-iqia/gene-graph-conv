@@ -5,7 +5,7 @@ torchvision
 numpy
 sklearn
 networkx
-academictorrents>=2.1.7
+academictorrents>=2.1.10
 matplotlib
 jupyter
 joblib
