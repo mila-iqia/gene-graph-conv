@@ -321,10 +321,8 @@ class GraphModel(Model):
         super(GraphModel, self).__init__(**kwargs)
 
     def setup_layers(self):
-        adj_transforms, aggregate_adj = get_transform(self.adj, self.on_cuda, num_layer=self.num_layer, pooling=self.pooling)
+        aggregate_adj = get_transform(self.adj, self.on_cuda, num_layer=self.num_layer, pooling=self.pooling)
         self.aggregate_adj = aggregate_adj
-        self.adj_transforms = adj_transforms
-
         self.master_nodes = 0
         self.in_dim = 1
         self.out_dim = 2
@@ -372,10 +370,10 @@ class GraphModel(Model):
             # transformation to apply at each layer.
             if self.aggregate_adj is not None:
                 for extra_layer in range(self.prepool_extralayers):
-                    layer = self.graph_layer_type(self.adj, c_in, c_out, self.on_cuda, i, adj_transforms=None, aggregate_adj=None)
+                    layer = self.graph_layer_type(self.adj, c_in, c_out, self.on_cuda, i, aggregate_adj=None)
                     convs.append(layer)
 
-            layer = self.graph_layer_type(self.adj, c_in, c_out, self.on_cuda, i, adj_transforms=self.adj_transforms, aggregate_adj=self.aggregate_adj)
+            layer = self.graph_layer_type(self.adj, c_in, c_out, self.on_cuda, i, aggregate_adj=self.aggregate_adj)
             layer.register_forward_hook(save_computations)
             convs.append(layer)
         self.conv_layers = nn.ModuleList(convs)
