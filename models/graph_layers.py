@@ -56,8 +56,8 @@ class GCNLayer(nn.Module):
         self.linear = nn.Conv1d(in_channels=self.in_dim, out_channels=int(self.channels/2), kernel_size=1, bias=True)  # something to be done with the stride?
         self.eye_linear = nn.Conv1d(in_channels=self.in_dim, out_channels=int(self.channels/2), kernel_size=1, bias=True)
         if self.cuda:
-            self.sparse_adj.cuda()
-            self.dense_adj.cuda()
+            self.sparse_adj = self.sparse_adj.cuda()
+            self.sparse_adj = self.dense_adj.cuda()
 
     def _adj_mul(self, x, D):
         nb_examples, nb_channels, nb_nodes = x.size()
