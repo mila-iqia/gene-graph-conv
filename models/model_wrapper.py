@@ -13,8 +13,8 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 from torch.autograd import Variable
-from models.graph_layers import get_transform, GCNLayer
 from scipy import sparse
+from models.graph_layers import setup_aggregates, GCNLayer
 
 # For Monitoring
 def save_computations(self, input, output):
@@ -321,8 +321,6 @@ class GraphModel(Model):
         super(GraphModel, self).__init__(**kwargs)
 
     def setup_layers(self):
-        aggregate_adj = get_transform(self.adj, self.on_cuda, num_layer=self.num_layer, pooling=self.pooling)
-        self.aggregate_adj = aggregate_adj
         self.master_nodes = 0
         self.in_dim = 1
         self.out_dim = 2
@@ -332,7 +330,7 @@ class GraphModel(Model):
             self.add_embedding_layer()
             self.in_dim = self.emb.emb_size
         self.dims = [self.in_dim] + self.channels
-
+        self.adjs = setup_aggregates(self.adj, self.num_layer, cluster_type=self.pooling)
         self.add_graph_convolutional_layers()
         self.add_logistic_layer()
         self.add_gating_layers()
@@ -368,12 +366,11 @@ class GraphModel(Model):
         convs = []
         for i, [c_in, c_out] in enumerate(zip(self.dims[:-1], self.dims[1:])):
             # transformation to apply at each layer.
-            if self.aggregate_adj is not None:
-                for extra_layer in range(self.prepool_extralayers):
-                    layer = self.graph_layer_type(self.adj, c_in, c_out, self.on_cuda, i, aggregate_adj=None)
-                    convs.append(layer)
+            for extra_layer in range(self.prepool_extralayers):
+                layer = self.graph_layer_type(self.adjs[i], c_in, c_out, self.on_cuda, i)
+                convs.append(layer)
 
-            layer = self.graph_layer_type(self.adj, c_in, c_out, self.on_cuda, i, aggregate_adj=self.aggregate_adj)
+            layer = self.graph_layer_type(self.adjs[i], c_in, c_out, self.on_cuda, i)
             layer.register_forward_hook(save_computations)
             convs.append(layer)
         self.conv_layers = nn.ModuleList(convs)
@@ -390,18 +387,16 @@ class GraphModel(Model):
             self.gating_layers = [None] * (len(self.dims) - 1)
 
     def add_logistic_layer(self):
-        logistic_layer = []
+        logistic_layers = []
         if self.attention_head > 0:
             logistic_in_dim = [self.attention_head * self.dims[-1]]
         else:
-            logistic_in_dim = [self.nb_nodes * self.dims[-1]]
-
+            logistic_in_dim = [self.adjs[-1].shape[0] * self.dims[-1]]
         for d in logistic_in_dim:
             layer = nn.Linear(d, self.out_dim)
             layer.register_forward_hook(save_computations)
-            logistic_layer.append(layer)
-
-            self.my_logistic_layers = nn.ModuleList(logistic_layer)
+            logistic_layers.append(layer)
+        self.my_logistic_layers = nn.ModuleList(logistic_layers)
 
     def forward(self, x):
         nb_examples, nb_nodes, nb_channels = x.size()
@@ -411,7 +406,6 @@ class GraphModel(Model):
             x.register_hook(self.save_grad('emb'))
 
         for i, [layer, gate, dropout] in enumerate(zip(self.conv_layers, self.gating_layers, self.dropout_layers)):
-
             if self.gating > 0.:
                 x = layer(x)
                 g = gate(x)
