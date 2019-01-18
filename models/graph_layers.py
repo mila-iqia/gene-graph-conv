@@ -38,7 +38,7 @@ class SparseMM(torch.autograd.Function):
 
 
 class GCNLayer(nn.Module):
-    def __init__(self, adj, in_dim=1, channels=1, cuda=False, id_layer=None, centroids=None):
+    def __init__(self, adj, in_dim=1, channels=1, cuda=False, id_layer=None, mask=None):
         super(GCNLayer, self).__init__()
         self.my_layers = []
         self.cuda = cuda
@@ -47,7 +47,7 @@ class GCNLayer(nn.Module):
         self.channels = channels
         self.id_layer = id_layer
         self.adj = adj
-        self.centroids = centroids
+        self.mask = mask
 
         self.edges = torch.LongTensor(np.array(self.adj.nonzero()))
         sparse_adj = torch.sparse.FloatTensor(self.edges, torch.FloatTensor(self.adj.data), torch.Size([self.nb_nodes, self.nb_nodes]))  # .to_dense()
@@ -72,7 +72,7 @@ class GCNLayer(nn.Module):
         adj = Variable(self.sparse_adj, requires_grad=False)
 
         eye_x = self.eye_linear(x)
-        import pdb; pdb.set_trace()
+
         x = self._adj_mul(x, adj)  # + old_x# local average
 
         x = torch.cat([self.linear(x), eye_x], dim=1)  # + old_x# conv
@@ -104,17 +104,16 @@ class GCNLayer(nn.Module):
         for i in range(len(x)):
             temp.append((x[i] * adj).max(dim=1)[0])
         max_value = torch.stack(temp)
-        # max_value = (x.view(-1, x.size(-1), 1) * adj[0]).max(dim=1)[0] # will cause memory errors
+        # max_value = (x.view(-1, x.size(-1), 1) * adj[0]).max(dim=1)[0] # old way that will cause memory errors
 
         print(time.time() - start)
-        x = max_value.view(shape[0], shape[1], -1).permute(0, 2, 1).contiguous()  # put back in ex, node, channel
-
+        x = max_value[:, :int(adj.shape[0] / 2)] # Masking
+        x = x.view(shape[0], shape[1], -1).permute(0, 2, 1).contiguous()  # put back in ex, node, channel
         return x
 
 
 def setup_aggregates(adj, nb_layer, cluster_type=None):
     aggregates = [adj]
-    centroids = []
 
     # For each layer, build the adjs and the nodes to keep.
     for _ in range(nb_layer):
@@ -178,7 +177,10 @@ def setup_aggregates(adj, nb_layer, cluster_type=None):
         for i, row in enumerate(coo.__dict__["row"]):
             coo.__dict__["row"][i] = clusters[row]
 
+        # indices = torch.LongTensor([coo.row, coo.col])
+        # mask = torch.sparse.LongTensor(torch.LongTensor(indices), torch.ones(coo.data.size), coo.shape).coalesce()
+        # masks.append(mask)
+
         adj = coo.tocsr()[:n_clusters, :n_clusters]
         aggregates.append(adj)
-        centroids.append(cleaned)
-    return aggregates, centroids
+    return aggregates
