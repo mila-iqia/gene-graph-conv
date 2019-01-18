@@ -52,8 +52,12 @@ class GCNLayer(nn.Module):
         self.edges = torch.LongTensor(np.array(self.adj.nonzero()))
         sparse_adj = torch.sparse.FloatTensor(self.edges, torch.FloatTensor(self.adj.data), torch.Size([self.nb_nodes, self.nb_nodes]))  # .to_dense()
         self.register_buffer('sparse_adj', sparse_adj)
+        self.dense_adj = self.sparse_adj.to_dense()
         self.linear = nn.Conv1d(in_channels=self.in_dim, out_channels=int(self.channels/2), kernel_size=1, bias=True)  # something to be done with the stride?
         self.eye_linear = nn.Conv1d(in_channels=self.in_dim, out_channels=int(self.channels/2), kernel_size=1, bias=True)
+        if self.cuda:
+            self.sparse_adj.cuda()
+            self.dense_adj.cuda()
 
     def _adj_mul(self, x, D):
         nb_examples, nb_channels, nb_nodes = x.size()
@@ -78,6 +82,19 @@ class GCNLayer(nn.Module):
         x = torch.cat([self.linear(x), eye_x], dim=1)  # + old_x# conv
         shape = x.size()
 
+        # x = max_value.view(shape[0], shape[1], -1).permute(0, 2, 1).contiguous()  # put back in ex, node, channel
+        # return x
+        adj = Variable(self.dense_adj, requires_grad=False)
+        try:
+            # Memory intensive, but fast Max Pooling
+            max_value = (x.view(-1, x.size(-1), 1) * adj).max(dim=1)[0]
+        except Exception:
+            temp = []
+            x = x.view(-1, x.size(-1))
+            for i in range(len(x)):
+                temp.append((x[i] * adj).max(dim=1)[0])
+            max_value = torch.stack(temp)
+
         # Sparse Max Pooling
         # x = x.view(-1, x.shape[-1])
         # temp = []
@@ -89,24 +106,8 @@ class GCNLayer(nn.Module):
         #         temp.append(x[:, neighbors])
         #
         # max_value = torch.stack(temp)
-        # x = max_value.view(shape[0], shape[1], -1).permute(0, 2, 1).contiguous()  # put back in ex, node, channel
-        # return x
 
-
-        # Dense Max Pooling
-        start = time.time()
-        if self.cuda:
-            adj = self.sparse_adj.cuda()
-        adj = adj.to_dense()
-        temp = []
-        x = x.view(-1, x.size(-1))
-
-        for i in range(len(x)):
-            temp.append((x[i] * adj).max(dim=1)[0])
-        max_value = torch.stack(temp)
-        # max_value = (x.view(-1, x.size(-1), 1) * adj[0]).max(dim=1)[0] # old way that will cause memory errors
-
-        print(time.time() - start)
+        # max_value = (x.view(-1, x.size(-1), 1) * adj).max(dim=1)[0] # will cause memory errors
         x = max_value[:, :int(adj.shape[0] / 2)] # Masking
         x = x.view(shape[0], shape[1], -1).permute(0, 2, 1).contiguous()  # put back in ex, node, channel
         return x
@@ -123,7 +124,7 @@ def setup_aggregates(adj, nb_layer, cluster_type=None):
             adj = sparse.load_npz(processed_path)
         else:
             D = np.array(adj.astype(bool).sum(axis=0))[0]
-	    D_inv = sparse.diags(np.array(np.divide(1., np.sqrt(D),  out=np.zeros_like(D), where=D!=0))[0], 0)
+            D_inv = sparse.diags(np.divide(1., np.sqrt(D)), 0)
             adj = D_inv.dot(adj).dot(D_inv)
             sparse.save_npz(processed_path, adj)
 

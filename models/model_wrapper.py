@@ -23,7 +23,7 @@ def save_computations(self, input, output):
 
 class Model(nn.Module):
 
-    def __init__(self, name=None, column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=0.0001, dropout=False, cuda=False, seed=0, adj=None, graph_name=None, pooling="ignore", prepool_extralayers=0, state_dict=""):
+    def __init__(self, name=None, column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=0.0001, dropout=False, cuda=False, seed=0, adj=None, graph_name=None, pooling="ignore", prepool_extralayers=0):
         self.name = name
         self.column_names = column_names
         self.num_layer = num_layer
@@ -50,8 +50,6 @@ class Model(nn.Module):
             torch.cuda.manual_seed(self.seed)
             torch.cuda.manual_seed_all(self.seed)
             self.cuda()
-        if state_dict:
-            self.load_state_dict(state_dict)
 
     def fit(self, X, y, adj=None):
         self.adj = sparse.csr_matrix(adj)
@@ -73,8 +71,10 @@ class Model(nn.Module):
         optimizer = torch.optim.Adam(self.parameters(), lr=0.001, weight_decay=0.0001)
         max_valid = 0
         patience = self.start_patience
-        start_time = time.time()
+        self.best_model = self.state_dict().copy()
         for epoch in range(0, self.num_epochs):
+
+            start = time.time()
             for i in range(0, x_train.shape[0], self.batch_size):
                 inputs, labels = x_train[i:i + self.batch_size], y_train[i:i + self.batch_size]
 
@@ -94,6 +94,8 @@ class Model(nn.Module):
                 loss.backward()
                 optimizer.step()
                 self.eval()
+            print("train time" + str(time.time() - start))
+            start = time.time()
 
             auc = {'train': 0., 'valid': 0.}
             res = []
