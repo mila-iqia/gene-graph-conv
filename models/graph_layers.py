@@ -123,7 +123,7 @@ def setup_aggregates(adj, nb_layer, cluster_type=None):
             adj = sparse.load_npz(processed_path)
         else:
             D = np.array(adj.astype(bool).sum(axis=0))[0]
-            D_inv = sparse.diags(np.divide(1., np.sqrt(D)), 0)
+	    D_inv = sparse.diags(np.array(np.divide(1., np.sqrt(D),  out=np.zeros_like(D), where=D!=0))[0], 0)
             adj = D_inv.dot(adj).dot(D_inv)
             sparse.save_npz(processed_path, adj)
 
