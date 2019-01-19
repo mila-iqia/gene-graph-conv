@@ -11,6 +11,7 @@ import sklearn.cluster
 import joblib
 import numpy as np
 from sklearn.cluster import KMeans
+from torch_scatter import scatter_max, scatter_add
 
 
 
@@ -47,18 +48,17 @@ class GCNLayer(nn.Module):
         self.channels = channels
         self.id_layer = id_layer
         self.adj = adj
-        self.centroids = centroids
+        self.centroids = torch.tensor(centroids)
 
-        self.edges = torch.LongTensor(np.array(self.adj.nonzero()))
-        sparse_adj = torch.sparse.FloatTensor(self.edges, torch.FloatTensor(self.adj.data), torch.Size([self.nb_nodes, self.nb_nodes]))  # .to_dense()
+        edges = torch.LongTensor(np.array(self.adj.nonzero()))
+        sparse_adj = torch.sparse.FloatTensor(edges, torch.FloatTensor(self.adj.data), torch.Size([self.nb_nodes, self.nb_nodes]))
         self.register_buffer('sparse_adj', sparse_adj)
-        self.dense_adj = self.sparse_adj.to_dense()
-        self.csr_adj = sparse.csr_matrix(self.dense_adj)
-        self.linear = nn.Conv1d(in_channels=self.in_dim, out_channels=int(self.channels/2), kernel_size=1, bias=True)  # something to be done with the stride?
+        self.linear = nn.Conv1d(in_channels=self.in_dim, out_channels=int(self.channels/2), kernel_size=1, bias=True)
         self.eye_linear = nn.Conv1d(in_channels=self.in_dim, out_channels=int(self.channels/2), kernel_size=1, bias=True)
+        
         if self.cuda:
             self.sparse_adj = self.sparse_adj.cuda()
-            self.dense_adj = self.dense_adj.cuda()
+            self.centroids = self.centroids.cuda()
 
     def _adj_mul(self, x, D):
         nb_examples, nb_channels, nb_nodes = x.size()
@@ -82,32 +82,16 @@ class GCNLayer(nn.Module):
 
         x = torch.cat([self.linear(x), eye_x], dim=1)  # + old_x# conv
         shape = x.size()
-
-        # x = max_value.view(shape[0], shape[1], -1).permute(0, 2, 1).contiguous()  # put back in ex, node, channel
-        # return x
-        x = x.view(-1, x.shape[-1])
-        adj = Variable(self.dense_adj, requires_grad=False)
-        x = sparse_max_pool(self.csr_adj, self.centroids, x)
+        
+        x = max_pool(x, self.centroids)
+        x = x.permute(0, 2, 1).contiguous()
         return x
-
-def dense_max_pool(adj, centroids, x):
-    temp = []
-    for i in range(len(x)):
-        temp.append((x[i] * adj).max(dim=1)[0])
-    max_value = torch.stack(temp)
-    x = max_value[:, :int(adj.shape[0] / 2)] # Masking
-    return x
     
-def sparse_max_pool(adj, centroids, x):
-    temp = []
-    for i in range(int(adj.shape[0] / 2)):
-        neighbors = self.centroids[i]
-        if len(self.csr_adj[neighbors].nonzero()[1]) != 0:
-            temp.append(x[:, self.csr_adj[neighbors].nonzero()[1]].max(dim=1)[0])
-        else:
-            temp.append(x[:, neighbors])
-    x = torch.stack(temp)
-    x = x.view(shape[0], shape[1], -1).permute(0, 2, 1).contiguous()  # put back in ex, node, channel
+def max_pool(x, centroids):
+    shape = x.shape
+    x = x.view(x.shape[0] * x.shape[1], -1)
+    x = scatter_max(x, centroids)[0]
+    x = x.view(shape[0], shape[1], -1)  # put back in ex, node, channel
     return x
 
 def norm_laplacian(adj):
@@ -180,18 +164,9 @@ def setup_aggregates(adj, nb_layer, cluster_type="hierarchy"):
             clusters = kmeans_clustering(adj, n_clusters)
         else:
             clusters = range(adj.shape[0])
-        
-        cluster_dict = defaultdict(list)
-        for i, cluster in enumerate(clusters):
-            cluster_dict[i] = np.argwhere(clusters == cluster).flatten()
-
-        coo = adj.tocoo()
-        for i, col in enumerate(coo.__dict__["col"]):
-            coo.__dict__["col"][i] = clusters[col]
-        for i, row in enumerate(coo.__dict__["row"]):
-            coo.__dict__["row"][i] = clusters[row]
-        
-        adj = coo.tocsr()[:n_clusters, :n_clusters]
+        adj = scatter_add(torch.tensor(adj.toarray()), torch.tensor(clusters)).numpy()[:n_clusters]
+        adj = sparse.csr_matrix(adj)
         aggregates.append(adj)
-        centroids.append(cluster_dict)
+        centroids.append(clusters)
     return aggregates, centroids
+
