@@ -94,7 +94,6 @@ class Model(nn.Module):
                 loss.backward()
                 optimizer.step()
                 self.eval()
-            print("train time" + str(time.time() - start))
             start = time.time()
 
             auc = {'train': 0., 'valid': 0.}
@@ -332,7 +331,7 @@ class GraphModel(Model):
             self.add_embedding_layer()
             self.in_dim = self.emb.emb_size
         self.dims = [self.in_dim] + self.channels
-        self.adjs = setup_aggregates(self.adj, self.num_layer, cluster_type=self.pooling)
+        self.adjs, self.centroids = setup_aggregates(self.adj, self.num_layer, cluster_type=self.pooling)
         self.add_graph_convolutional_layers()
         self.add_logistic_layer()
         self.add_gating_layers()
@@ -369,10 +368,10 @@ class GraphModel(Model):
         for i, [c_in, c_out] in enumerate(zip(self.dims[:-1], self.dims[1:])):
             # transformation to apply at each layer.
             for extra_layer in range(self.prepool_extralayers):
-                layer = self.graph_layer_type(self.adjs[i], c_in, c_out, self.on_cuda, i)
+                layer = self.graph_layer_type(self.adjs[i], c_in, c_out, self.on_cuda, i, self.centroids[i])
                 convs.append(layer)
 
-            layer = self.graph_layer_type(self.adjs[i], c_in, c_out, self.on_cuda, i)
+            layer = self.graph_layer_type(self.adjs[i], c_in, c_out, self.on_cuda, i, self.centroids[i])
             layer.register_forward_hook(save_computations)
             convs.append(layer)
         self.conv_layers = nn.ModuleList(convs)

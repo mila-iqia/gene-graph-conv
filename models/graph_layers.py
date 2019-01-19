@@ -38,7 +38,7 @@ class SparseMM(torch.autograd.Function):
 
 
 class GCNLayer(nn.Module):
-    def __init__(self, adj, in_dim=1, channels=1, cuda=False, id_layer=None, mask=None):
+    def __init__(self, adj, in_dim=1, channels=1, cuda=False, id_layer=None, centroids=None):
         super(GCNLayer, self).__init__()
         self.my_layers = []
         self.cuda = cuda
@@ -47,17 +47,18 @@ class GCNLayer(nn.Module):
         self.channels = channels
         self.id_layer = id_layer
         self.adj = adj
-        self.mask = mask
+        self.centroids = centroids
 
         self.edges = torch.LongTensor(np.array(self.adj.nonzero()))
         sparse_adj = torch.sparse.FloatTensor(self.edges, torch.FloatTensor(self.adj.data), torch.Size([self.nb_nodes, self.nb_nodes]))  # .to_dense()
         self.register_buffer('sparse_adj', sparse_adj)
         self.dense_adj = self.sparse_adj.to_dense()
+        self.csr_adj = sparse.csr_matrix(self.dense_adj)
         self.linear = nn.Conv1d(in_channels=self.in_dim, out_channels=int(self.channels/2), kernel_size=1, bias=True)  # something to be done with the stride?
         self.eye_linear = nn.Conv1d(in_channels=self.in_dim, out_channels=int(self.channels/2), kernel_size=1, bias=True)
         if self.cuda:
             self.sparse_adj = self.sparse_adj.cuda()
-            self.sparse_adj = self.dense_adj.cuda()
+            self.dense_adj = self.dense_adj.cuda()
 
     def _adj_mul(self, x, D):
         nb_examples, nb_channels, nb_nodes = x.size()
@@ -84,104 +85,113 @@ class GCNLayer(nn.Module):
 
         # x = max_value.view(shape[0], shape[1], -1).permute(0, 2, 1).contiguous()  # put back in ex, node, channel
         # return x
+        x = x.view(-1, x.shape[-1])
         adj = Variable(self.dense_adj, requires_grad=False)
-        try:
-            # Memory intensive, but fast Max Pooling
-            max_value = (x.view(-1, x.size(-1), 1) * adj).max(dim=1)[0]
-        except Exception:
-            temp = []
-            x = x.view(-1, x.size(-1))
-            for i in range(len(x)):
-                temp.append((x[i] * adj).max(dim=1)[0])
-            max_value = torch.stack(temp)
-
-        # Sparse Max Pooling
-        # x = x.view(-1, x.shape[-1])
-        # temp = []
-        # for i in range(int(adj.shape[0] / 2)):
-        #     neighbors = self.centroids[i]
-        #     if len(self.adj[neighbors].nonzero()[1]) != 0:
-        #         temp.append(x[:, self.adj[neighbors].nonzero()[1]].max(dim=1)[0])
-        #     else:
-        #         temp.append(x[:, neighbors])
-        #
-        # max_value = torch.stack(temp)
-
-        # max_value = (x.view(-1, x.size(-1), 1) * adj).max(dim=1)[0] # will cause memory errors
-        x = max_value[:, :int(adj.shape[0] / 2)] # Masking
-        x = x.view(shape[0], shape[1], -1).permute(0, 2, 1).contiguous()  # put back in ex, node, channel
+        x = sparse_max_pool(self.csr_adj, self.centroids, x)
         return x
 
+def dense_max_pool(adj, centroids, x):
+    temp = []
+    for i in range(len(x)):
+        temp.append((x[i] * adj).max(dim=1)[0])
+    max_value = torch.stack(temp)
+    x = max_value[:, :int(adj.shape[0] / 2)] # Masking
+    return x
+    
+def sparse_max_pool(adj, centroids, x):
+    temp = []
+    for i in range(int(adj.shape[0] / 2)):
+        neighbors = self.centroids[i]
+        if len(self.csr_adj[neighbors].nonzero()[1]) != 0:
+            temp.append(x[:, self.csr_adj[neighbors].nonzero()[1]].max(dim=1)[0])
+        else:
+            temp.append(x[:, neighbors])
+    x = torch.stack(temp)
+    x = x.view(shape[0], shape[1], -1).permute(0, 2, 1).contiguous()  # put back in ex, node, channel
+    return x
 
-def setup_aggregates(adj, nb_layer, cluster_type=None):
+def norm_laplacian(adj):
+    adj_hash = joblib.hash(adj) + str(adj.shape)
+    processed_path = ".cache/ApprNormalizeLaplacian_{}.npz".format(adj_hash)
+    if os.path.isfile(processed_path):
+        adj = sparse.load_npz(processed_path)
+    else:
+        D = np.array(adj.astype(bool).sum(axis=0))[0]
+        D_inv = sparse.diags(np.divide(1., np.sqrt(D)), 0)
+        adj = D_inv.dot(adj).dot(D_inv)
+        sparse.save_npz(processed_path, adj)
+    return adj
+
+def hierarchical_clustering(adj, n_clusters):
+    adj_hash = joblib.hash(adj.indices.tostring()) + joblib.hash(sparse.csr_matrix(adj).data.tostring()) + str(n_clusters)
+    processed_path = ".cache/" + '{}.npy'.format(adj_hash)
+    if os.path.isfile(processed_path):
+        clusters = np.load(processed_path)
+    else:
+        clusters = sklearn.cluster.AgglomerativeClustering(n_clusters=n_clusters, affinity='euclidean',
+                                                           memory='.cache', connectivity=adj,
+                                                           compute_full_tree='auto', linkage='ward').fit_predict(adj.toarray())
+    np.save(processed_path, np.array(clusters))
+    return clusters
+
+def random_clustering(adj, n_clusters):
+    adj_hash = joblib.hash(adj.data.tostring()) + joblib.hash(adj.indices.tostring()) + str(n_clusters)
+    processed_path = ".cache/random" + '{}.npy'.format(adj_hash)
+    if os.path.isfile(processed_path):
+        clusters = np.load(processed_path)
+    else:
+        clusters = []
+        for gene in gene_graph.nx_graph.nodes:
+            if len(clusters) == n_clusters:
+                break
+            neighbors = list(gene_graph.nx_graph[gene])
+            if neighbors:
+                clusters.append(np.random.choice(neighbors))
+            else:
+                clusters.append(gene)
+        np.save(processed_path, np.array(clusters))
+    return clusters
+
+def kmeans_clustering(adj, n_clusters):
+    adj_hash = joblib.hash(adj.data.tostring()) + joblib.hash(adj.indices.tostring()) + str(n_clusters)
+    processed_path = ".cache/kmeans" + '{}.npy'.format(adj_hash)
+    if os.path.isfile(processed_path):
+        clusters = np.load(processed_path)
+    else:
+        clusters = KMeans(n_clusters=n_clusters, init='k-means++', n_init=10, max_iter=300, tol=0.0001, precompute_distances='auto', verbose=0, random_state=None, copy_x=True, n_jobs=-1, algorithm='auto').fit(adj).labels_
+        np.save(processed_path, np.array(clusters))
+    return clusters
+
+def setup_aggregates(adj, nb_layer, cluster_type="hierarchy"):
     aggregates = [adj]
+    centroids = []
 
     # For each layer, build the adjs and the nodes to keep.
     for _ in range(nb_layer):
-        adj_hash = joblib.hash(adj) + str(adj.shape)
-        processed_path = ".cache/ApprNormalizeLaplacian_{}.npz".format(adj_hash)
-        if os.path.isfile(processed_path):
-            adj = sparse.load_npz(processed_path)
-        else:
-            D = np.array(adj.astype(bool).sum(axis=0))[0]
-            D_inv = sparse.diags(np.divide(1., np.sqrt(D)), 0)
-            adj = D_inv.dot(adj).dot(D_inv)
-            sparse.save_npz(processed_path, adj)
-
+        adj = norm_laplacian(adj)
         # Do the clustering
-        clusters = range(adj.shape[0])
+
         n_clusters = int(adj.shape[0] / 2)
         if cluster_type == "hierarchy":
-            adj_hash = joblib.hash(adj.indices.tostring()) + joblib.hash(sparse.csr_matrix(adj).data.tostring()) + str(n_clusters)
-            processed_path = ".cache/" + '{}.npy'.format(adj_hash)
-            if os.path.isfile(processed_path):
-                clusters = np.load(processed_path)
-            else:
-                clusters = sklearn.cluster.AgglomerativeClustering(n_clusters=n_clusters, affinity='euclidean',
-                                                                     memory='.cache', connectivity=adj,
-                                                                     compute_full_tree='auto', linkage='ward').fit_predict(adj.toarray())
-                np.save(processed_path, np.array(clusters))
+            clusters = hierarchical_clustering(adj, n_clusters)
         elif cluster_type == "random":
-            adj_hash = joblib.hash(adj.data.tostring()) + joblib.hash(adj.indices.tostring()) + str(n_clusters)
-            processed_path = ".cache/random" + '{}.npy'.format(adj_hash)
-            if os.path.isfile(processed_path):
-                clusters = np.load(processed_path)
-            else:
-                clusters = []
-                for gene in gene_graph.nx_graph.nodes:
-                    if len(clusters) == n_clusters:
-                        break
-                    neighbors = list(gene_graph.nx_graph[gene])
-                    if neighbors:
-                        clusters.append(np.random.choice(neighbors))
-                    else:
-                        clusters.append(gene)
-                np.save(processed_path, np.array(clusters))
+            clusters = random_clustering(adj, n_clusters)
         elif cluster_type == "kmeans":
-            adj_hash = joblib.hash(adj.data.tostring()) + joblib.hash(adj.indices.tostring()) + str(n_clusters)
-            processed_path = ".cache/kmeans" + '{}.npy'.format(adj_hash)
-            if os.path.isfile(processed_path):
-                clusters = np.load(processed_path)
-            else:
-                clusters = KMeans(n_clusters=n_clusters, init='k-means++', n_init=10, max_iter=300, tol=0.0001, precompute_distances='auto', verbose=0, random_state=None, copy_x=True, n_jobs=-1, algorithm='auto').fit(adj).labels_
-            np.save(processed_path, np.array(clusters))
-
-        n_clusters = len(set(clusters))
-        cleaned = defaultdict(list)
-
+            clusters = kmeans_clustering(adj, n_clusters)
+        else:
+            clusters = range(adj.shape[0])
+        
+        cluster_dict = defaultdict(list)
         for i, cluster in enumerate(clusters):
-            cleaned[i] = np.argwhere(clusters == cluster).flatten()
+            cluster_dict[i] = np.argwhere(clusters == cluster).flatten()
 
         coo = adj.tocoo()
         for i, col in enumerate(coo.__dict__["col"]):
             coo.__dict__["col"][i] = clusters[col]
         for i, row in enumerate(coo.__dict__["row"]):
             coo.__dict__["row"][i] = clusters[row]
-
-        # indices = torch.LongTensor([coo.row, coo.col])
-        # mask = torch.sparse.LongTensor(torch.LongTensor(indices), torch.ones(coo.data.size), coo.shape).coalesce()
-        # masks.append(mask)
-
+        
         adj = coo.tocsr()[:n_clusters, :n_clusters]
         aggregates.append(adj)
-    return aggregates
+        centroids.append(cluster_dict)
+    return aggregates, centroids
