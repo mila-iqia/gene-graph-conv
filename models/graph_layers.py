@@ -1,6 +1,7 @@
 import os
 import time
 import torch
+import glob
 import networkx as nx
 from torch import nn
 from torch.autograd import Variable
@@ -95,34 +96,40 @@ def max_pool(x, centroids):
     return x
 
 def norm_laplacian(adj):
-    adj_hash = joblib.hash(adj) + str(adj.shape)
-    processed_path = ".cache/ApprNormalizeLaplacian_{}.npz".format(adj_hash)
-    if os.path.isfile(processed_path):
-        adj = sparse.load_npz(processed_path)
-    else:
-        D = np.array(adj.astype(bool).sum(axis=0))[0]
-        D_inv = sparse.diags(np.divide(1., np.sqrt(D)), 0)
-        adj = D_inv.dot(adj).dot(D_inv)
-        sparse.save_npz(processed_path, adj)
+    D = np.array(adj.astype(bool).sum(axis=0))[0].astype("float32")
+    D_inv = np.divide(1., np.sqrt(D), out=np.zeros_like(D), where=D!=0.)
+    D_inv_diag = sparse.diags(D_inv)
+    adj = D_inv_diag.dot(adj).dot(D_inv_diag)
     return adj
+
+def resize(path, n_clusters, adj, clusters):
+    if len(clusters) != n_clusters:
+        # Find the right cluster file
+        for filename in glob.glob(".cache/*" + str(n_clusters) + "*" + ".npy") :
+            other_clusters = np.load(filename)
+            if len(other_clusters) == n_clusters:
+                print(filename)
+            import pdb ;pdb.set_trace()
+        pass
 
 def hierarchical_clustering(adj, n_clusters):
     adj_hash = joblib.hash(adj.indices.tostring()) + joblib.hash(sparse.csr_matrix(adj).data.tostring()) + str(n_clusters)
-    processed_path = ".cache/" + '{}.npy'.format(adj_hash)
-    if os.path.isfile(processed_path):
-        clusters = np.load(processed_path)
+    path = ".cache/" + '{}.npy'.format(adj_hash)
+    if os.path.isfile(path):
+        clusters = np.load(path)
+        resize(path, n_clusters, adj, clusters)
     else:
         clusters = sklearn.cluster.AgglomerativeClustering(n_clusters=n_clusters, affinity='euclidean',
                                                            memory='.cache', connectivity=adj,
                                                            compute_full_tree='auto', linkage='ward').fit_predict(adj.toarray())
-    np.save(processed_path, np.array(clusters))
+    np.save(path, np.array(clusters))
     return clusters
 
 def random_clustering(adj, n_clusters):
     adj_hash = joblib.hash(adj.data.tostring()) + joblib.hash(adj.indices.tostring()) + str(n_clusters)
-    processed_path = ".cache/random" + '{}.npy'.format(adj_hash)
-    if os.path.isfile(processed_path):
-        clusters = np.load(processed_path)
+    path = ".cache/random" + '{}.npy'.format(adj_hash)
+    if os.path.isfile(path):
+        clusters = np.load(path)
     else:
         clusters = []
         for gene in gene_graph.nx_graph.nodes:
@@ -133,17 +140,19 @@ def random_clustering(adj, n_clusters):
                 clusters.append(np.random.choice(neighbors))
             else:
                 clusters.append(gene)
-        np.save(processed_path, np.array(clusters))
+        np.save(path, np.array(clusters))
     return clusters
 
 def kmeans_clustering(adj, n_clusters):
     adj_hash = joblib.hash(adj.data.tostring()) + joblib.hash(adj.indices.tostring()) + str(n_clusters)
-    processed_path = ".cache/kmeans" + '{}.npy'.format(adj_hash)
-    if os.path.isfile(processed_path):
-        clusters = np.load(processed_path)
+    path = ".cache/kmeans" + '{}.npy'.format(adj_hash)
+    resize(path, n_clusters, adj)
+
+    if os.path.isfile(path):
+        clusters = np.load(path)
     else:
         clusters = KMeans(n_clusters=n_clusters, init='k-means++', n_init=10, max_iter=300, tol=0.0001, precompute_distances='auto', verbose=0, random_state=None, copy_x=True, n_jobs=-1, algorithm='auto').fit(adj).labels_
-        np.save(processed_path, np.array(clusters))
+        np.save(path, np.array(clusters))
     return clusters
 
 def setup_aggregates(adj, nb_layer, cluster_type="hierarchy"):
@@ -164,7 +173,8 @@ def setup_aggregates(adj, nb_layer, cluster_type="hierarchy"):
             clusters = kmeans_clustering(adj, n_clusters)
         else:
             clusters = range(adj.shape[0])
-        adj = scatter_add(torch.tensor(adj.toarray()), torch.tensor(clusters)).numpy()[:n_clusters]
+
+        adj = scatter_add(torch.FloatTensor(adj.toarray()), torch.LongTensor(clusters)).numpy()[:n_clusters]
         adj = sparse.csr_matrix(adj)
         aggregates.append(adj)
         centroids.append(clusters)

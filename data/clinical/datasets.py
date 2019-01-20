@@ -5,7 +5,7 @@ from torch.utils.data import Dataset
 import academictorrents as at
 
 
-DIR = '/home/martinweiss/gene-graph-conv/data/clinical/'
+DIR = '/media/martin/the_milano/code/academic/dev-gene-graph-conv/data/clinical/'
 
 class TCGADataset(Dataset):
     def __init__(self, normalize=False, limit=100000):
@@ -29,19 +29,22 @@ class TCGADataset(Dataset):
 class Task(Dataset):
     def __init__(self, fulldataset, task_id, limit=100):  # tcga id blaclist: blacklist
         label_name, tissue_type = task_id.split('-')
+        self.fulldataset = fulldataset
+        self.limit = limit
         df = fulldataset.labels.loc(axis=1)[label_name, 'clinicalMatrix'].dropna()  # tissue type
         label_indices = df[df['clinicalMatrix'] == tissue_type].index
         intersection = [x for x in label_indices.tolist() if x in fulldataset.data.index]
-        #print("intersection:{}" .format(intersection))
+        self.intersection = intersection
         self.metadata = None
-
         self.labels = fulldataset.labels.loc[intersection][label_name][:limit].astype('category').cat.codes
         self.num_labels = len(self.labels.unique())
         self.num_all_labels = len(fulldataset.labels.loc[intersection][label_name].astype('category').cat.codes.unique())
-        self.data = fulldataset.data.loc[intersection][:limit]
         self.attrs = [label_name, tissue_type]
         self.id = label_name + '-' + tissue_type
 
+    def get_data(self):
+        return self.fulldataset.data.loc[self.intersection][:self.limit]
+        
     def get_num_examples(self):
         return len(self.data)
 

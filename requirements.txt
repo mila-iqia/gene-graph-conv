@@ -1,3 +1,5 @@
+torch-scatter
+jupyterlab
 h5py
 pandas
 torch
