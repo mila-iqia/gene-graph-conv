@@ -15,79 +15,6 @@ from sklearn.cluster import KMeans
 from torch_scatter import scatter_max, scatter_add
 
 
-
-class SparseMM(torch.autograd.Function):
-    """
-    Sparse x dense matrix multiplication with autograd support.
-    Implementation by Soumith Chintala:
-    https://discuss.pytorch.org/t/
-    does-pytorch-support-autograd-on-sparse-matrix/6156/7
-    From: https://github.com/tkipf/pygcn/blob/master/pygcn/layers.py
-    """
-
-    def __init__(self, sparse):
-        super(SparseMM, self).__init__()
-        self.sparse = sparse
-
-    def forward(self, dense):
-        return torch.mm(self.sparse, dense)
-
-    def backward(self, grad_output):
-        grad_input = None
-        if self.needs_input_grad[0]:
-            grad_input = torch.mm(self.sparse.t(), grad_output)
-        return grad_input
-
-
-class GCNLayer(nn.Module):
-    def __init__(self, adj, in_dim=1, channels=1, cuda=False, id_layer=None, centroids=None):
-        super(GCNLayer, self).__init__()
-        self.my_layers = []
-        self.cuda = cuda
-        self.nb_nodes = adj.shape[0]
-        self.in_dim = in_dim
-        self.channels = channels
-        self.id_layer = id_layer
-        self.adj = adj
-        self.centroids = torch.tensor(centroids)
-
-        edges = torch.LongTensor(np.array(self.adj.nonzero()))
-        sparse_adj = torch.sparse.FloatTensor(edges, torch.FloatTensor(self.adj.data), torch.Size([self.nb_nodes, self.nb_nodes]))
-        self.register_buffer('sparse_adj', sparse_adj)
-        self.linear = nn.Conv1d(in_channels=self.in_dim, out_channels=int(self.channels/2), kernel_size=1, bias=True)
-        self.eye_linear = nn.Conv1d(in_channels=self.in_dim, out_channels=int(self.channels/2), kernel_size=1, bias=True)
-        
-        if self.cuda:
-            self.sparse_adj = self.sparse_adj.cuda()
-            self.centroids = self.centroids.cuda()
-
-    def _adj_mul(self, x, D):
-        nb_examples, nb_channels, nb_nodes = x.size()
-        x = x.view(-1, nb_nodes)
-
-        # Needs this hack to work: https://discuss.pytorch.org/t/does-pytorch-support-autograd-on-sparse-matrix/6156/7
-        #x = D.mm(x.t()).t()
-        x = SparseMM(D)(x.t()).t()
-
-        x = x.contiguous().view(nb_examples, nb_channels, nb_nodes)
-        return x
-
-    def forward(self, x):
-        x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
-
-        adj = Variable(self.sparse_adj, requires_grad=False)
-
-        eye_x = self.eye_linear(x)
-
-        x = self._adj_mul(x, adj)  # + old_x# local average
-
-        x = torch.cat([self.linear(x), eye_x], dim=1)  # + old_x# conv
-        shape = x.size()
-        
-        x = max_pool(x, self.centroids)
-        x = x.permute(0, 2, 1).contiguous()
-        return x
-    
 def max_pool(x, centroids):
     shape = x.shape
     x = x.view(x.shape[0] * x.shape[1], -1)
@@ -101,16 +28,6 @@ def norm_laplacian(adj):
     D_inv_diag = sparse.diags(D_inv)
     adj = D_inv_diag.dot(adj).dot(D_inv_diag)
     return adj
-
-def resize(path, n_clusters, adj, clusters):
-    if len(clusters) != n_clusters:
-        # Find the right cluster file
-        for filename in glob.glob(".cache/*" + str(n_clusters) + "*" + ".npy") :
-            other_clusters = np.load(filename)
-            if len(other_clusters) == n_clusters:
-                print(filename)
-            import pdb ;pdb.set_trace()
-        pass
 
 def hierarchical_clustering(adj, n_clusters):
     adj_hash = joblib.hash(adj.indices.tostring()) + joblib.hash(sparse.csr_matrix(adj).data.tostring()) + str(n_clusters)
@@ -179,4 +96,3 @@ def setup_aggregates(adj, nb_layer, cluster_type="hierarchy"):
         aggregates.append(adj)
         centroids.append(clusters)
     return aggregates, centroids
-
