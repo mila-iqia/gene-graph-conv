@@ -1,3 +1,4 @@
+.cache/
 venv/
 .python-version
 gene_inference_results/

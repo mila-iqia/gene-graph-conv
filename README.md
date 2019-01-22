@@ -26,7 +26,7 @@ Let's start by loading your gene expression dataset. Here's an abstract class st
 
 There are a few important attributes your dataset class will want to set in the load_data method. The most important ones are a pandas dataframe, `df` with genes as columns (with gene names as column names) and patient samples as rows. Your dataset should also have a labels attribute with a label for each row in `df`. Finally, a data attribute should contain the same data as your `df`, but in the form of a numpy array. If you are confused, look at the `TCGADataset` that we load in our notebooks for an example. As for the `__getitem__` function on your dataset, it just returns samples of this form: `{'sample': sample, 'labels': label}`.
 
-Additionally, you'll need a gene interaction graph to construct your Graph Convolutional Network. These live in `data/graph_wrapper.py`. Its format should be:
+Additionally, you'll need a gene interaction graph to construct your Graph Convolutional Network. These live in `data/gene_graphs.py`. Its format should be:
 ```
 class GeneInteractionGraph(object):
     """ This class manages the data pertaining to the relationships between genes.
@@ -49,11 +49,11 @@ Again, you'll want to subclass the `GeneInteractionGraph` and implement the `loa
 
 Now you're ready to use our models!
 
-If you look in `models/model_wrapper.py` you will find a class called WrappedModel. This class provides a nice interface to our graph convolution code (which is in `models/model_layers.py` and `models/graph_layers.py`). 
+If you look in `models/model_wrapper.py` you will find a class called Model. This class provides a nice interface to our graph convolution code (which is in `models/model_layers.py` and `models/graph_layers.py`). 
 
 We instantiate our graph convolutional model like this:
 
-`gcn = WrappedModel(name="GCN_lay20_chan32_emb32_dropout", cuda=True, num_layer=4, channels=32, embedding=32, prepool_extralayers=5, pooling="ignore")`
+`gcn = Model(name="GCN_lay20_chan32_emb32_dropout", cuda=True, num_layer=4, channels=32, embedding=32, prepool_extralayers=5, pooling="ignore")`
 
 Then we can train it like this:
 
