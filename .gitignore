@@ -1,6 +1,4 @@
-connect.sh
 .cache/
-cachedir/
 venv/
 .python-version
 gene_inference_results/
