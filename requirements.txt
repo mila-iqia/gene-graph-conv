@@ -1,9 +1,9 @@
-torch-scatter
 jupyterlab
 h5py
 pandas
 torch
 torchvision
+torch-scatter
 numpy
 sklearn
 networkx

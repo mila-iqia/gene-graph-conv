@@ -1,6 +1,6 @@
 import pandas as pd
 
-DIR = '/media/martin/the_milano/code/academic/dev-gene-graph-conv/data/clinical/'
+DIR = '/home/martin/gene-graph-conv/data/clinical/'
 
 def get_all_tasks(tcga, seed = 0):
     columns = pd.read_csv(DIR + 'tcga_cols.csv', header=None, index_col=0)

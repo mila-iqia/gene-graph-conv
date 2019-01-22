@@ -2,6 +2,7 @@
 
 import logging
 import time
+import itertools
 import sklearn
 import sklearn.model_selection
 import sklearn.metrics
@@ -14,7 +15,7 @@ import torch.nn.functional as F
 from torch import nn
 from torch.autograd import Variable
 from scipy import sparse
-from models.utils import setup_aggregates, max_pool, norm_laplacian, hierarchical_clustering, random_clustering, kmeans_clustering
+from models.utils import setup_aggregates, max_pool, sparse_max_pool, norm_laplacian, hierarchical_clustering, random_clustering, kmeans_clustering
 
 # For Monitoring
 def save_computations(self, input, output):
@@ -23,7 +24,7 @@ def save_computations(self, input, output):
 
 class Model(nn.Module):
 
-    def __init__(self, name=None, column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=0.0001, dropout=False, cuda=False, seed=0, adj=None, graph_name=None, pooling="ignore", prepool_extralayers=0):
+    def __init__(self, name=None, column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=0.0001, dropout=False, cuda=False, seed=0, adj=None, graph_name=None, pooling=None, prepool_extralayers=0):
         self.name = name
         self.column_names = column_names
         self.num_layer = num_layer
@@ -54,12 +55,18 @@ class Model(nn.Module):
     def fit(self, X, y, adj=None):
         self.adj = sparse.csr_matrix(adj)
         self.X = X
+        start = time.time()
         self.setup_layers()
+        print("setup layers took: " + str(time.time() - start))
         # Cleanup these vars, todo refactor them from setup_layers()
         self.adj = None
         self.X = None
-
-        x_train, x_valid, y_train, y_valid = sklearn.model_selection.train_test_split(X, y, stratify=y, train_size=self.train_valid_split, test_size=1-self.train_valid_split, random_state=self.seed)
+        try:
+            x_train, x_valid, y_train, y_valid = sklearn.model_selection.train_test_split(X, y, stratify=y, train_size=self.train_valid_split, test_size=1-self.train_valid_split, random_state=self.seed)
+        except ValueError as e:
+            print(e)
+            self.best_model = self.state_dict().copy()
+            return
 
         # pylint: disable=E1101
         x_train = torch.FloatTensor(np.expand_dims(x_train, axis=2))
@@ -72,6 +79,7 @@ class Model(nn.Module):
         max_valid = 0
         patience = self.start_patience
         self.best_model = self.state_dict().copy()
+        all_time = time.time()
         for epoch in range(0, self.num_epochs):
 
             start = time.time()
@@ -121,6 +129,8 @@ class Model(nn.Module):
                 max_valid = auc['valid']
                 patience = self.start_patience
                 self.best_model = self.state_dict().copy()
+            print("epoch: " + str(epoch) + " " + str(time.time() - start))
+        print("total train time:" + str(time.time() - all_time) + " for epochs: " + str(epoch))
         self.load_state_dict(self.best_model)
         self.best_model = None
 
@@ -177,7 +187,8 @@ class SLR(Model):
         self.nb_nodes = len(self.X.keys())
         self.in_dim = 1
         self.out_dim = 2
-        np.fill_diagonal(self.adj, 0.)
+        import pdb ;pdb.set_trace()
+        self.adj.setdiag(0.)
         D = self.adj.sum(0) + 1e-5
         laplacian = np.eye(D.shape[0]) - np.diag((D**-0.5)).dot(self.adj).dot(np.diag((D**-0.5)))
         self.laplacian = torch.FloatTensor(laplacian)
@@ -354,6 +365,42 @@ class GraphModel(Model):
             torch.cuda.manual_seed(self.seed)
             torch.cuda.manual_seed_all(self.seed)
             self.cuda()
+    
+    def forward(self, x):
+        nb_examples, nb_nodes, nb_channels = x.size()
+
+        if self.embedding:
+            x = self.emb(x)
+            x.register_hook(self.save_grad('emb'))
+        
+        for i, [conv, gate, dropout] in enumerate(zip(self.conv_layers, self.gating_layers, self.dropout_layers)):
+            for prepool_conv in self.prepool_conv_layers[i]:
+                x = prepool_conv(x)
+            
+            if self.gating > 0.:
+                x = conv(x)
+                g = gate(x)
+                x = g * x
+            else:
+                x = conv(x)
+
+            x = F.relu(x)
+            x.register_hook(self.save_grad('layer_{}'.format(i)))
+
+            if dropout is not None:
+                id_to_keep = dropout(torch.FloatTensor(np.ones((x.size(0), x.size(1))))).unsqueeze(2)
+                if self.on_cuda:
+                    id_to_keep = id_to_keep.cuda()
+                x = x * id_to_keep
+
+        # Do attention pooling here
+        if self.attention_head:
+            x = self.attention_layer(x)[0]
+
+        x = self.my_logistic_layers[-1](x.view(nb_examples, -1))
+        x.register_hook(self.save_grad('logistic'))
+        return x
+
 
     def add_embedding_layer(self):
         self.emb = EmbeddingLayer(self.nb_nodes, self.embedding)
@@ -366,16 +413,22 @@ class GraphModel(Model):
 
     def add_graph_convolutional_layers(self):
         convs = []
+        prepool_convs = nn.ModuleList([])
         for i, [c_in, c_out] in enumerate(zip(self.dims[:-1], self.dims[1:])):
             # transformation to apply at each layer.
-            for extra_layer in range(self.prepool_extralayers):
-                layer = self.graph_layer_type(self.adjs[i], c_in, c_out, self.on_cuda, i, self.centroids[i])
-                convs.append(layer)
+            extra_layers = []
+            for _ in range(self.prepool_extralayers):
+                extra_layer = self.graph_layer_type(self.adjs[i], c_in, c_out, self.on_cuda, i, torch.tensor([]))
+                extra_layer.register_forward_hook(save_computations)
+                extra_layers.append(extra_layer)
 
-            layer = self.graph_layer_type(self.adjs[i], c_in, c_out, self.on_cuda, i, self.centroids[i])
+            prepool_convs.append(nn.ModuleList(extra_layers))
+
+            layer = self.graph_layer_type(self.adjs[i], c_in, c_out, self.on_cuda, i, torch.tensor(self.centroids[i]))
             layer.register_forward_hook(save_computations)
             convs.append(layer)
         self.conv_layers = nn.ModuleList(convs)
+        self.prepool_conv_layers = prepool_convs
 
     def add_gating_layers(self):
         if self.gating > 0.:
@@ -399,40 +452,6 @@ class GraphModel(Model):
             layer.register_forward_hook(save_computations)
             logistic_layers.append(layer)
         self.my_logistic_layers = nn.ModuleList(logistic_layers)
-
-    def forward(self, x):
-        nb_examples, nb_nodes, nb_channels = x.size()
-
-        if self.embedding:
-            x = self.emb(x)
-            x.register_hook(self.save_grad('emb'))
-
-        for i, [layer, gate, dropout] in enumerate(zip(self.conv_layers, self.gating_layers, self.dropout_layers)):
-            if self.gating > 0.:
-                x = layer(x)
-                g = gate(x)
-                x = g * x
-            else:
-                x = layer(x)
-
-            x = F.relu(x)  # + old_x
-            x.register_hook(self.save_grad('layer_{}'.format(i)))
-
-
-            if dropout is not None:
-                id_to_keep = dropout(torch.FloatTensor(np.ones((x.size(0), x.size(1))))).unsqueeze(2)
-                if self.on_cuda:
-                    id_to_keep = id_to_keep.cuda()
-
-                x = x * id_to_keep
-
-        # Do attention pooling here
-        if self.attention_head:
-            x = self.attention_layer(x)[0]
-
-        x = self.my_logistic_layers[-1](x.view(nb_examples, -1))
-        x.register_hook(self.save_grad('logistic'))
-        return x
 
     def get_representation(self):
         def add_rep(layer, name, rep):
@@ -514,17 +533,16 @@ class GCNLayer(nn.Module):
         self.channels = channels
         self.id_layer = id_layer
         self.adj = adj
-        self.centroids = torch.tensor(centroids)
+        self.centroids = centroids
 
         edges = torch.LongTensor(np.array(self.adj.nonzero()))
         sparse_adj = torch.sparse.FloatTensor(edges, torch.FloatTensor(self.adj.data), torch.Size([self.nb_nodes, self.nb_nodes]))
         self.register_buffer('sparse_adj', sparse_adj)
         self.linear = nn.Conv1d(in_channels=self.in_dim, out_channels=int(self.channels/2), kernel_size=1, bias=True)
         self.eye_linear = nn.Conv1d(in_channels=self.in_dim, out_channels=int(self.channels/2), kernel_size=1, bias=True)
-
-        if self.cuda:
-            self.sparse_adj = self.sparse_adj.cuda()
-            self.centroids = self.centroids.cuda()
+       
+        self.sparse_adj = self.sparse_adj.cuda() if self.cuda else self.sparse_adj
+        self.centroids = self.centroids.cuda() if self.cuda else self.centroids
 
     def _adj_mul(self, x, D):
         nb_examples, nb_channels, nb_nodes = x.size()
@@ -548,7 +566,9 @@ class GCNLayer(nn.Module):
 
         x = torch.cat([self.linear(x), eye_x], dim=1)  # + old_x# conv
         shape = x.size()
-
-        x = max_pool(x, self.centroids)
+        if any(self.centroids):
+            x = max_pool(x, self.centroids)
+            #import pdb; pdb.set_trace()
+            #x = sparse_max_pool(x, adj)[:len(set(self.centroids))]
         x = x.permute(0, 2, 1).contiguous()
         return x

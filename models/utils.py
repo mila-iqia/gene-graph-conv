@@ -22,11 +22,29 @@ def max_pool(x, centroids):
     x = x.view(shape[0], shape[1], -1)  # put back in ex, node, channel
     return x
 
+def sparse_max_pool(x, adj):
+    x = x.permute(0, 2, 1).contiguous()  # put in ex, channel, node
+    original_x_shape = x.size()
+    x = x.view(-1, x.shape[-1])
+    adj = adj.to_dense()
+    temp = []
+    for i in range(adj.shape[0]):
+        if len(adj[i].nonzero()[1]) != 0:
+            temp.append(x[adj[i].nonzero().flatten()].max(dim=1)[0])
+        else:
+            temp.append(x[i])
+    max_value = torch.stack(temp)
+    max_value.view(original_x_shape).permute(0, 2, 1).contiguous()  
+    return max_value
+    
 def norm_laplacian(adj):
     D = np.array(adj.astype(bool).sum(axis=0))[0].astype("float32")
     D_inv = np.divide(1., np.sqrt(D), out=np.zeros_like(D), where=D!=0.)
     D_inv_diag = sparse.diags(D_inv)
-    adj = D_inv_diag.dot(adj).dot(D_inv_diag)
+    try:
+        adj = D_inv_diag.dot(adj).dot(D_inv_diag)
+    except Exception as e:
+        print(e)
     return adj
 
 def hierarchical_clustering(adj, n_clusters):
@@ -34,7 +52,6 @@ def hierarchical_clustering(adj, n_clusters):
     path = ".cache/" + '{}.npy'.format(adj_hash)
     if os.path.isfile(path):
         clusters = np.load(path)
-        resize(path, n_clusters, adj, clusters)
     else:
         clusters = sklearn.cluster.AgglomerativeClustering(n_clusters=n_clusters, affinity='euclidean',
                                                            memory='.cache', connectivity=adj,
@@ -63,7 +80,6 @@ def random_clustering(adj, n_clusters):
 def kmeans_clustering(adj, n_clusters):
     adj_hash = joblib.hash(adj.data.tostring()) + joblib.hash(adj.indices.tostring()) + str(n_clusters)
     path = ".cache/kmeans" + '{}.npy'.format(adj_hash)
-    resize(path, n_clusters, adj)
 
     if os.path.isfile(path):
         clusters = np.load(path)
@@ -79,8 +95,13 @@ def setup_aggregates(adj, nb_layer, cluster_type="hierarchy"):
     # For each layer, build the adjs and the nodes to keep.
     for _ in range(nb_layer):
         adj = norm_laplacian(adj)
-        # Do the clustering
+        
+        if not cluster_type:
+            aggregates.append(adj)
+            centroids.append(np.array(range(adj.shape[0])))
+            continue
 
+        # Determine what clusters we want in our adjacency matrices
         n_clusters = int(adj.shape[0] / 2)
         if cluster_type == "hierarchy":
             clusters = hierarchical_clustering(adj, n_clusters)
@@ -88,9 +109,8 @@ def setup_aggregates(adj, nb_layer, cluster_type="hierarchy"):
             clusters = random_clustering(adj, n_clusters)
         elif cluster_type == "kmeans":
             clusters = kmeans_clustering(adj, n_clusters)
-        else:
-            clusters = range(adj.shape[0])
-
+        
+        # Cluster the adjacency matrix (reduces dimensionality) 
         adj = scatter_add(torch.FloatTensor(adj.toarray()), torch.LongTensor(clusters)).numpy()[:n_clusters]
         adj = sparse.csr_matrix(adj)
         aggregates.append(adj)

@@ -5,7 +5,7 @@ from torch.utils.data import Dataset
 import academictorrents as at
 
 
-DIR = '/media/martin/the_milano/code/academic/dev-gene-graph-conv/data/clinical/'
+DIR = '/home/martin/gene-graph-conv/data/clinical/'
 
 class TCGADataset(Dataset):
     def __init__(self, normalize=False, limit=100000):
