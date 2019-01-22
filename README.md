@@ -8,6 +8,8 @@ This is a research codebase developed to incorporate gene interaction graphs as 
 
 There are two notebooks in the repository called fig-4.ipynb and fig-5.ipynb. Within them you will find a training loop that generates figures 4 and 5 from [our paper](https://arxiv.org/pdf/1806.06975.pdf) published at the Workshop on Computational Biology at ICML 2018. I would recommend starting there.
 
+**NB** Currently under development in the interest of supporting larger gene graphs and datasets.
+
 You will see that the interface to our models is simple (like SKLearn with fit and predict functions) and extensible. The gene graph and dataset loaders are pretty simple too. 
 
 Let's start by loading your gene expression dataset. Here's an abstract class stored in `data/datasets.py`. You're going to want to subclass it and implement the load_data method and the `__getitem__` method.
@@ -49,11 +51,11 @@ Again, you'll want to subclass the `GeneInteractionGraph` and implement the `loa
 
 Now you're ready to use our models!
 
-If you look in `models/model_wrapper.py` you will find a class called Model. This class provides a nice interface to our graph convolution code (which is in `models/model_layers.py` and `models/graph_layers.py`). 
+If you look in `models/models.py` you will find a class called Model. This class provides a nice interface to our graph convolution models, baseline, and train loop. You'll also see a utils file that we use for graph clustering and constructing our models.
 
 We instantiate our graph convolutional model like this:
 
-`gcn = Model(name="GCN_lay20_chan32_emb32_dropout", cuda=True, num_layer=4, channels=32, embedding=32, prepool_extralayers=5, pooling="ignore")`
+`gcn = GCN(name="GCN_lay4_chan32_emb32_dropout", cuda=True, num_layer=4, channels=32, embedding=32, dropout=True)`
 
 Then we can train it like this:
 
@@ -61,8 +63,8 @@ Then we can train it like this:
 
 where `X` is (all or part of) your gene expression dataset, `y` are your labels for those samples, and `neighborhood` is a NetworkX graph containing the genes in `X`.
 
-And use it like this:
+Then simply evaluate your model
 
 `y_hat = gcn.predict(X_test, y_test)`
 
-And that's about it! We're excited about this project, available to support it, and will continue development. Don't hesitate to reach out by email.
+And that's about it!  We're excited about this project, available to support it, and will continue development. Don't hesitate to reach out by email.
