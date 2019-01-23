@@ -66,10 +66,11 @@ def random_clustering(adj, n_clusters):
         clusters = np.load(path)
     else:
         clusters = []
-        for gene in gene_graph.nx_graph.nodes:
+        import pdb; pdb.set_trace()
+        for gene in range(adj.shape[0]):
             if len(clusters) == n_clusters:
                 break
-            neighbors = list(gene_graph.nx_graph[gene])
+            neighbors = list(adj[gene].nonzero()[1])
             if neighbors:
                 clusters.append(np.random.choice(neighbors))
             else:
