@@ -15,7 +15,7 @@ import torch.nn.functional as F
 from torch import nn
 from torch.autograd import Variable
 from scipy import sparse
-from models.utils import setup_aggregates, max_pool, norm_laplacian, hierarchical_clustering, random_clustering, kmeans_clustering
+from models.utils import setup_aggregates, max_pool_torch_scatter, max_pool_dense_iter, max_pool_dense, sparse_max_pool, norm_laplacian, hierarchical_clustering, random_clustering, kmeans_clustering
 
 # For Monitoring
 def save_computations(self, input, output):
@@ -45,12 +45,6 @@ class Model(nn.Module):
         self.train_valid_split = 0.8
         self.best_model = None
         super(Model, self).__init__()
-
-        torch.manual_seed(self.seed)
-        if self.on_cuda:
-            torch.cuda.manual_seed(self.seed)
-            torch.cuda.manual_seed_all(self.seed)
-            self.cuda()
 
     def fit(self, X, y, adj=None):
         self.adj = sparse.csr_matrix(adj)
@@ -129,7 +123,7 @@ class Model(nn.Module):
                 max_valid = auc['valid']
                 patience = self.start_patience
                 self.best_model = self.state_dict().copy()
-            print("epoch: " + str(epoch) + " " + str(time.time() - start))
+            #print("epoch: " + str(epoch) + " " + str(time.time() - start))
         print("total train time:" + str(time.time() - all_time) + " for epochs: " + str(epoch))
         self.load_state_dict(self.best_model)
         self.best_model = None
@@ -365,18 +359,18 @@ class GraphModel(Model):
             torch.cuda.manual_seed(self.seed)
             torch.cuda.manual_seed_all(self.seed)
             self.cuda()
-    
+
     def forward(self, x):
         nb_examples, nb_nodes, nb_channels = x.size()
 
         if self.embedding:
             x = self.emb(x)
             x.register_hook(self.save_grad('emb'))
-        
+
         for i, [conv, gate, dropout] in enumerate(zip(self.conv_layers, self.gating_layers, self.dropout_layers)):
             for prepool_conv in self.prepool_conv_layers[i]:
                 x = prepool_conv(x)
-            
+
             if self.gating > 0.:
                 x = conv(x)
                 g = gate(x)
@@ -418,13 +412,13 @@ class GraphModel(Model):
             # transformation to apply at each layer.
             extra_layers = []
             for _ in range(self.prepool_extralayers):
-                extra_layer = self.graph_layer_type(self.adjs[i], c_in, c_out, self.on_cuda, i, torch.tensor([]))
+                extra_layer = self.graph_layer_type(self.adjs[i], c_in, c_out, self.on_cuda, i, torch.tensor([]), self.exp)
                 extra_layer.register_forward_hook(save_computations)
                 extra_layers.append(extra_layer)
 
             prepool_convs.append(nn.ModuleList(extra_layers))
 
-            layer = self.graph_layer_type(self.adjs[i], c_in, c_out, self.on_cuda, i, torch.tensor(self.centroids[i]))
+            layer = self.graph_layer_type(self.adjs[i], c_in, c_out, self.on_cuda, i, torch.tensor(self.centroids[i]), self.exp)
             layer.register_forward_hook(save_computations)
             convs.append(layer)
         self.conv_layers = nn.ModuleList(convs)
@@ -524,8 +518,11 @@ class SparseMM(torch.autograd.Function):
 
 
 class GCNLayer(nn.Module):
-    def __init__(self, adj, in_dim=1, channels=1, cuda=False, id_layer=None, centroids=None):
+    def __init__(self, adj, in_dim=1, channels=1, cuda=False, id_layer=None, centroids=None, exp=None):
         super(GCNLayer, self).__init__()
+
+        adj.setdiag(np.ones(adj.shape[0]))
+
         self.my_layers = []
         self.cuda = cuda
         self.nb_nodes = adj.shape[0]
@@ -534,15 +531,18 @@ class GCNLayer(nn.Module):
         self.id_layer = id_layer
         self.adj = adj
         self.centroids = centroids
-
+        self.exp = exp
         edges = torch.LongTensor(np.array(self.adj.nonzero()))
         sparse_adj = torch.sparse.FloatTensor(edges, torch.FloatTensor(self.adj.data), torch.Size([self.nb_nodes, self.nb_nodes]))
+        self.dense_adj = sparse_adj.to_dense()
         self.register_buffer('sparse_adj', sparse_adj)
+
         self.linear = nn.Conv1d(in_channels=self.in_dim, out_channels=int(self.channels/2), kernel_size=1, bias=True)
         self.eye_linear = nn.Conv1d(in_channels=self.in_dim, out_channels=int(self.channels/2), kernel_size=1, bias=True)
-       
+
         self.sparse_adj = self.sparse_adj.cuda() if self.cuda else self.sparse_adj
         self.centroids = self.centroids.cuda() if self.cuda else self.centroids
+        self.dense_adj = self.dense_adj.cuda() if self.cuda else self.dense_adj
 
     def _adj_mul(self, x, D):
         nb_examples, nb_channels, nb_nodes = x.size()
@@ -562,13 +562,16 @@ class GCNLayer(nn.Module):
 
         eye_x = self.eye_linear(x)
 
-        x = self._adj_mul(x, adj)  # + old_x# local average
+        x = self._adj_mul(x, adj)
 
-        x = torch.cat([self.linear(x), eye_x], dim=1)  # + old_x# conv
+        x = torch.cat([self.linear(x), eye_x], dim=1)
         shape = x.size()
-        if any(self.centroids):
-            x = max_pool(x, self.centroids)
-            #import pdb; pdb.set_trace()
-            #x = sparse_max_pool(x, adj)[:len(set(self.centroids))]
-        x = x.permute(0, 2, 1).contiguous()
-        return x
+        if self.exp == "sparse_max_pool":
+            res = sparse_max_pool(x, self.centroids, self.dense_adj)
+        elif self.exp == "max_pool_dense":
+            res = max_pool_dense(x, self.centroids, self.dense_adj)
+        elif self.exp == "max_pool_dense_iter":
+            res = max_pool_dense_iter(x, self.centroids, self.dense_adj)
+        elif self.exp == "max_pool_torch_scatter":
+            res = max_pool_torch_scatter(x, self.centroids)
+        return res
