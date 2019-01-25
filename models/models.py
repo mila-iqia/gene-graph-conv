@@ -15,7 +15,7 @@ import torch.nn.functional as F
 from torch import nn
 from torch.autograd import Variable
 from scipy import sparse
-from models.utils import setup_aggregates, max_pool, sparse_max_pool, norm_laplacian, hierarchical_clustering, random_clustering, kmeans_clustering
+from models.utils import setup_aggregates, max_pool, norm_laplacian, hierarchical_clustering, random_clustering, kmeans_clustering
 
 # For Monitoring
 def save_computations(self, input, output):

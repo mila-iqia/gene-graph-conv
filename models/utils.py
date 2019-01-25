@@ -12,30 +12,31 @@ import sklearn.cluster
 import joblib
 import numpy as np
 from sklearn.cluster import KMeans
-from torch_scatter import scatter_max, scatter_add
 
-
-def max_pool(x, centroids):
-    shape = x.shape
-    x = x.view(x.shape[0] * x.shape[1], -1)
-    x = scatter_max(x, centroids)[0]
-    x = x.view(shape[0], shape[1], -1)  # put back in ex, node, channel
-    return x
-
-def sparse_max_pool(x, adj):
-    x = x.permute(0, 2, 1).contiguous()  # put in ex, channel, node
-    original_x_shape = x.size()
-    x = x.view(-1, x.shape[-1])
-    adj = adj.to_dense()
-    temp = []
-    for i in range(adj.shape[0]):
-        if len(adj[i].nonzero()[1]) != 0:
-            temp.append(x[adj[i].nonzero().flatten()].max(dim=1)[0])
-        else:
-            temp.append(x[i])
-    max_value = torch.stack(temp)
-    max_value.view(original_x_shape).permute(0, 2, 1).contiguous()  
-    return max_value
+try:
+    from torch_scatter import scatter_max, scatter_add
+    def max_pool(x, centroids):
+        shape = x.shape
+        x = x.view(x.shape[0] * x.shape[1], -1)
+        x = scatter_max(x, centroids)[0]
+        x = x.view(shape[0], shape[1], -1)  # put back in ex, node, channel
+        return x
+except ImportError:
+    def max_pool(x, centroids):
+        x = x.permute(0, 2, 1).contiguous()  # put in ex, channel, node
+        original_x_shape = x.size()
+        x = x.view(-1, x.shape[-1])
+        #adj = adj.to_dense()
+        temp = []
+        for i in range(adj.shape[0]):
+            neighbors = np.argwhere(centroids==i)
+            if len(neighbors) != 0:
+                temp.append(x[neighbors].max(dim=1)[0])
+            else:
+                temp.append(x[i])
+        max_value = torch.stack(temp)
+        max_value.view(original_x_shape).permute(0, 2, 1).contiguous()  
+        return max_value
     
 def norm_laplacian(adj):
     D = np.array(adj.astype(bool).sum(axis=0))[0].astype("float32")
