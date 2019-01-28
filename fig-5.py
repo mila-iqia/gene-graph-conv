@@ -32,20 +32,21 @@ try:
     results = pickle.load(open(filename, "rb"), encoding='latin1')
     print("Loaded Checkpointed Results")
 except Exception as e:
-    results = pd.DataFrame(columns=['auc', 'gene', 'model', 'num_genes', 'seed', 'train_size', 'time_elapsed', 'exp'])
+    results = pd.DataFrame(columns=['auc', 'gene', 'model', 'num_genes', 'seed', 'train_size', 'time_elapsed', 'cluster'])
     print("Created a New Results Dictionary")
 
 gene_graph = GeneManiaGraph()
 
-search_num_genes=[50, 100, 200, 300, 500, 1000, 2000, 4000, 8000, 16000]
+search_num_genes=[50]#, 100, 200, 300, 500, 1000, 2000, 4000, 8000, 16000]
 test_size=300
 search_train_size=[50]
-cuda=True
-trials=3
+cuda=False
+trials=1
 search_genes = ["RPL4"]
 models = [
                #GCN(name="GCN_lay20_chan32_emb32_dropout_pool_hierarchy", cuda=cuda, dropout=True, num_layer=4, channels=32, embedding=32, prepool_extralayers=5, pooling="hierarchy"),
                GCN(name="GCN_lay3_chan64_emb32_dropout_pool_hierarchy", cuda=cuda, dropout=True, num_layer=3, channels=64, embedding=32, pooling="hierarchy"),
+               GCN(name="GCN_lay1_chan64_emb32_dropout_pool_hierarchy", cuda=cuda, dropout=True, num_layer=1, channels=64, embedding=32, pooling="hierarchy"),
               #GCN(name="GCN_lay20_chan32_emb32_dropout_pool_random", cuda=cuda, num_layer=4, channels=32, embedding=32, prepool_extralayers=5, pooling="random"),
                #GCN(name="GCN_lay3_chan64_emb32_dropout", cuda=cuda, dropout=True, num_layer=3, channels=64, embedding=32),
                #MLP(name="MLP_lay2_chan512_dropout", cuda=cuda, dropout=True, num_layer=2, channels=512),
@@ -55,9 +56,9 @@ models = [
 
 # Create the set of all experiment ids and see which are left to do
 model_names = [model.name for model in models]
-exp = ["sparse_max_pool", "max_pool_dense", "max_pool_dense_iter", "max_pool_torch_scatter"]
+cluster = ["max_pool_dense", "max_pool_dense_iter", "max_pool_torch_scatter"]
 columns = ["gene", "model", "num_genes", "train_size", "seed", "exp"]
-all_exp_ids = [x for x in itertools.product(search_genes, model_names, search_num_genes, search_train_size, range(trials), exp)]
+all_exp_ids = [x for x in itertools.product(search_genes, model_names, search_num_genes, search_train_size, range(trials), cluster)]
 all_exp_ids = pd.DataFrame(all_exp_ids, columns=columns)
 all_exp_ids.index = ["-".join(map(str, tup[1:])) for tup in all_exp_ids.itertuples(name=None)]
 results_exp_ids = results[columns].copy()
@@ -70,7 +71,6 @@ print("done: " + str(len(results)))
 
 
 for row in todo:
-    print(row)
     start_time = time.time()
     gene = row["gene"]
     model_name = row["model"]
@@ -78,9 +78,9 @@ for row in todo:
     num_genes = row["num_genes"] if row["num_genes"] < 10000 else 16300
     train_size = row["train_size"]
     model = [copy.deepcopy(model) for model in models if model.name == row["model"]][0]
-    model.exp = row["exp"]
+    model.cluster = row["cluster"]
     experiment = {
-        "exp": model.exp,
+        "cluster": model.cluster,
         "gene": gene,
         "model": model.name,
         "num_genes": num_genes,
@@ -90,7 +90,6 @@ for row in todo:
 
     dataset.labels = dataset.df[gene].where(dataset.df[gene] > 0).notnull().astype("int")
     X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(dataset.df, dataset.labels, stratify=dataset.labels, train_size=train_size, test_size=test_size, random_state=seed)
-
     if num_genes == 16300:
         neighbors = gene_graph.nx_graph
     else:
@@ -113,6 +112,7 @@ for row in todo:
             y_hat.extend(model.predict(chunk)[:,1].data.cpu().numpy().tolist())
         auc = sklearn.metrics.roc_auc_score(y_test, np.asarray(y_hat).flatten())
     except Exception as e:
+        import pdb; pdb.set_trace()
         experiment["exception"] = e
         auc = 0.
     del model

@@ -1,9 +1,10 @@
+pytest
 h5py
+numpy
 pandas
 torch
 torchvision
 torch-scatter
-numpy
 sklearn
 networkx
 academictorrents>=2.1.11

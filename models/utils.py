@@ -12,7 +12,7 @@ import sklearn.cluster
 import joblib
 import numpy as np
 from sklearn.cluster import KMeans
-from torch_scatter import scatter_max, scatter_add
+from torch_scatter import scatter_max, scatter_add, scatter_mul
 
 # try:
 #     from torch_scatter import scatter_max, scatter_add
@@ -39,61 +39,72 @@ from torch_scatter import scatter_max, scatter_add
 #         max_value.view(original_x_shape).permute(0, 2, 1).contiguous()
 #         return max_value
 
+# want inputs of shape ex, node, channels
 def max_pool_torch_scatter(x, centroids):
-    shape = x.shape
-    x = x.view(x.shape[0] * x.shape[1], -1)
+    ex, channels, nodes = x.shape
+    x = x.view(ex * channels, -1)
     x = scatter_max(x, centroids)[0]
-    x = x.view(shape[0], shape[1], -1)  # put back in ex, node, channel
-    x = x.permute(0, 2, 1).contiguous()  # put back in ex, node, channel
+    x = x.view(ex, channels, -1)
+    x = x.permute(0, 2, 1).contiguous()
     return x
 
-def max_pool_dense_iter(x, centroids, adj):
-    temp = []
-    start = time.time()
-    shape = x.shape
-    for i in range(x.shape[0]):
-        for j in range(x.shape[1]):
-            temp.append((x[i][j].view(1, -1, 1) * adj).max(dim=1)[0])
-    res = torch.stack(temp)
-    res = res.view(shape)
-    res = res.narrow(2, 0, len(set(centroids.cpu().numpy())))
-    res = res.permute(0, 2, 1).contiguous()  # put back in ex, node, channel
-    return res
-
 def max_pool_dense(x, centroids, adj):
-    shape = x.shape
-    res = (x.view(-1, x.size(-1), 1) * adj).max(dim=1)[0]
-    res = res.view(shape)
+    ex, channels, nodes  = x.shape
+    x = x.view(-1, nodes, 1)
+    res = (x * adj).max(dim=1)[0]
+    res = res.view(ex, channels, nodes)
+    res = res.permute(0, 2 ,1).contiguous()
+    res = res.narrow(1, 0, len(set(centroids.cpu().numpy()))).contiguous()
+    return res
+
+def max_pool_dense_iter(x, centroids, adj):
+    ex, channels, nodes = x.shape
+    x = x.view(-1, nodes, 1)
+
+    temp = []
+    for i in range(len(x)):
+        temp.append((x[i] * adj).max(dim=0)[0])
+    res = torch.stack(temp)
+
+    res = res.view(ex, channels, nodes)
     res = res.narrow(2, 0, len(set(centroids.cpu().numpy())))
     res = res.permute(0, 2, 1).contiguous()  # put back in ex, node, channel
     return res
-
 
 # def sparse_max_pool(x, centroids, adj):
-#     shape = x.shape
-#     x = x.view(-1, x.shape[-1])
+#     ex, channels, nodes = x.shape
+#     x = x.view(-1, nodes)
+#
 #     temp = []
 #     for i in range(adj.shape[0]):
-#         if any(adj[i].nonzero()):
-#             temp.append(x[:, adj[i].nonzero()[1]].max(dim=1)[0])
-#         else:
-#             temp.append(x[:, i])
+#         neighbors_to_pool = x[:, adj[i].nonzero().flatten()]
+#         maxed = neighbors_to_pool.max(dim=1)[0]
+#         temp.append(maxed)
 #     res = torch.stack(temp)
-#     res = res.view(shape)
-#     res = res.narrow(2, 0, len(set(centroids.cpu().numpy())))
-#     res = res.permute(0, 2, 1).contiguous()  # put back in ex, node, channel
+#     res = res.narrow(0, 0, len(set(centroids.cpu().numpy())))
+#
+#     res = res.view(ex, -1, channels)
+#     #res = res.permute(0, 2, 1).contiguous()  # put back in ex, node, channel
 #     return res
 
-def sparse_max_pool(x, centroids, adj):
-    x = x.permute(0, 2, 1).contiguous()  # put in ex, channel, node
-    shape = x.size()
-    x = x.view(x.shape[1], -1)
-    #adj = adj.to_dense()
-    temp = []
-    for i in range(int(centroids.shape[0] / 2 )):
-        temp.append(x[adj[i].nonzero().flatten()].max(dim=0)[0])
-    max_value = torch.stack(temp)
-    return max_value.view(shape[0], -1, shape[-1])
+# def sparse_max_pool(x, centroids, adj):
+#     ex, channels, nodes = x.shape
+#     x = x.view(-1, nodes)
+#
+#     temp = []
+#     for i in range(adj.shape[0]):
+#         neighbors_to_pool = x[:, adj[i].nonzero().flatten()]
+#         maxed = neighbors_to_pool.max(dim=1)[0]
+#         temp.append(maxed)
+#     res = torch.stack(temp)
+#     res = res.narrow(0, 0, len(set(centroids.cpu().numpy())))
+#     res = res.view(ex, channels, nodes)
+#     res = res.permute(0, 2, 1).contiguous()  # put back in ex, node, channel
+
+    # res = res.narrow(0, 0, len(set(centroids.cpu().numpy())))
+    # res = res.view(ex, -1, channels).contiguous()
+    #res = res.permute(0, 2, 1).contiguous()
+    return res
 
 def norm_laplacian(adj):
     D = np.array(adj.astype(bool).sum(axis=0))[0].astype("float32")
