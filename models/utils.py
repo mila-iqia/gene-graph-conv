@@ -16,6 +16,12 @@ from sklearn.cluster import KMeans
 
 
 from torch_scatter import scatter_max, scatter_add
+def max_pool(x, centroids):
+    shape = x.shape
+    x = x.view(x.shape[0] * x.shape[1], -1)
+    x = scatter_max(x, centroids)[0]
+    x = x.view(shape[0], shape[1], -1)  # put back in ex, node, channel
+    return x
 
 # try:
 #     from torch_scatter import scatter_max, scatter_add
@@ -26,35 +32,19 @@ from torch_scatter import scatter_max, scatter_add
 #         x = x.view(shape[0], shape[1], -1)  # put back in ex, node, channel
 #         return x
 # except ImportError:
-def max_pool(x, centroids, adj):
-    ex, channels, nodes = x.shape
-    x = x.view(-1, nodes, 1)
+# def max_pool(x, centroids, adj):
+#     ex, channels, nodes = x.shape
+#     x = x.view(-1, nodes, 1)
 
-    temp = []
-    for i in range(len(x)):
-        temp.append((x[i] * adj).max(dim=0)[0])
-    res = torch.stack(temp)
+#     temp = []
+#     for i in range(len(x)):
+#         temp.append((x[i] * adj).max(dim=0)[0])
+#     res = torch.stack(temp)
 
-    res = res.view(ex, channels, nodes)
-    res = res.narrow(2, 0, len(set(centroids.cpu().numpy())))
-    res = res.permute(0, 2, 1).contiguous()  # put back in ex, node, channel
-    return res
-
-    # def max_pool(x, centroids):
-    #     x = x.permute(0, 2, 1).contiguous()  # put in ex, channel, node
-    #     original_x_shape = x.size()
-    #     x = x.view(-1, x.shape[-1])
-    #     #adj = adj.to_dense()
-    #     temp = []
-    #     for i in range(adj.shape[0]):
-    #         neighbors = np.argwhere(centroids==i)
-    #         if len(neighbors) != 0:
-    #             temp.append(x[neighbors].max(dim=1)[0])
-    #         else:
-    #             temp.append(x[i])
-    #     max_value = torch.stack(temp)
-    #     max_value.view(original_x_shape).permute(0, 2, 1).contiguous()
-    #     return max_value
+#     res = res.view(ex, channels, nodes)
+#     res = res.narrow(2, 0, len(set(centroids.cpu().numpy())))
+#     #res = res.permute(0, 2, 1).contiguous()  # put back in ex, node, channel
+#     return res
 
 # We use this to calculate the noramlized laplacian for our graph convolution signal propagation
 def norm_laplacian(adj):

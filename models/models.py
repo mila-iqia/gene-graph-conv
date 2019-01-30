@@ -565,7 +565,7 @@ class GCNLayer(nn.Module):
         x = torch.cat([self.linear(x), eye_x], dim=1)  # + old_x# conv
         shape = x.size()
         if any(self.centroids):
-            x = max_pool(x, self.centroids, self.dense_adj)
+            x = max_pool(x, self.centroids)
             #import pdb; pdb.set_trace()
             #x = sparse_max_pool(x, adj)[:len(set(self.centroids))]
         x = x.permute(0, 2, 1).contiguous()
