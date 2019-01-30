@@ -365,18 +365,18 @@ class GraphModel(Model):
             torch.cuda.manual_seed(self.seed)
             torch.cuda.manual_seed_all(self.seed)
             self.cuda()
-    
+
     def forward(self, x):
         nb_examples, nb_nodes, nb_channels = x.size()
 
         if self.embedding:
             x = self.emb(x)
             x.register_hook(self.save_grad('emb'))
-        
+
         for i, [conv, gate, dropout] in enumerate(zip(self.conv_layers, self.gating_layers, self.dropout_layers)):
             for prepool_conv in self.prepool_conv_layers[i]:
                 x = prepool_conv(x)
-            
+
             if self.gating > 0.:
                 x = conv(x)
                 g = gate(x)
@@ -533,16 +533,14 @@ class GCNLayer(nn.Module):
         self.channels = channels
         self.id_layer = id_layer
         self.adj = adj
-        self.centroids = centroids
-
-        edges = torch.LongTensor(np.array(self.adj.nonzero()))
-        sparse_adj = torch.sparse.FloatTensor(edges, torch.FloatTensor(self.adj.data), torch.Size([self.nb_nodes, self.nb_nodes]))
+        self.centroids = centroids.cuda() if self.cuda else centroids
+        sparse_adj = torch.sparse.FloatTensor(torch.LongTensor(np.array(self.adj.nonzero())), torch.FloatTensor(self.adj.data), torch.Size([self.nb_nodes, self.nb_nodes]))
         self.register_buffer('sparse_adj', sparse_adj)
+        self.sparse_adj = self.sparse_adj.cuda() if self.cuda else self.sparse_adj
+        self.dense_adj = self.sparse_adj.to_dense()
+
         self.linear = nn.Conv1d(in_channels=self.in_dim, out_channels=int(self.channels/2), kernel_size=1, bias=True)
         self.eye_linear = nn.Conv1d(in_channels=self.in_dim, out_channels=int(self.channels/2), kernel_size=1, bias=True)
-       
-        self.sparse_adj = self.sparse_adj.cuda() if self.cuda else self.sparse_adj
-        self.centroids = self.centroids.cuda() if self.cuda else self.centroids
 
     def _adj_mul(self, x, D):
         nb_examples, nb_channels, nb_nodes = x.size()
@@ -567,7 +565,7 @@ class GCNLayer(nn.Module):
         x = torch.cat([self.linear(x), eye_x], dim=1)  # + old_x# conv
         shape = x.size()
         if any(self.centroids):
-            x = max_pool(x, self.centroids)
+            x = max_pool(x, self.centroids, self.dense_adj)
             #import pdb; pdb.set_trace()
             #x = sparse_max_pool(x, adj)[:len(set(self.centroids))]
         x = x.permute(0, 2, 1).contiguous()
