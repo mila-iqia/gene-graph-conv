@@ -411,13 +411,13 @@ class GraphModel(Model):
             # transformation to apply at each layer.
             extra_layers = []
             for _ in range(self.prepool_extralayers):
-                extra_layer = self.graph_layer_type(self.adjs[i], c_in, c_out, self.on_cuda, i, torch.tensor([]), self.cluster)
+                extra_layer = self.graph_layer_type(self.adjs[i], c_in, c_out, self.on_cuda, i, torch.tensor([]))
                 extra_layer.register_forward_hook(save_computations)
                 extra_layers.append(extra_layer)
 
             prepool_convs.append(nn.ModuleList(extra_layers))
 
-            layer = self.graph_layer_type(self.adjs[i], c_in, c_out, self.on_cuda, i, torch.tensor(self.centroids[i]), self.cluster)
+            layer = self.graph_layer_type(self.adjs[i], c_in, c_out, self.on_cuda, i, torch.tensor(self.centroids[i]))
             layer.register_forward_hook(save_computations)
             convs.append(layer)
         self.conv_layers = nn.ModuleList(convs)
@@ -517,7 +517,7 @@ class SparseMM(torch.autograd.Function):
 
 
 class GCNLayer(nn.Module):
-    def __init__(self, adj, in_dim=1, channels=1, cuda=False, id_layer=None, centroids=None, cluster=None):
+    def __init__(self, adj, in_dim=1, channels=1, cuda=False, id_layer=None, centroids=None):
         super(GCNLayer, self).__init__()
 
         adj.setdiag(np.ones(adj.shape[0]))
@@ -530,7 +530,6 @@ class GCNLayer(nn.Module):
         self.id_layer = id_layer
         self.adj = adj
         self.centroids = centroids
-        self.cluster = cluster
         edges = torch.LongTensor(np.array(self.adj.nonzero()))
         sparse_adj = torch.sparse.FloatTensor(edges, torch.FloatTensor(self.adj.data), torch.Size([self.nb_nodes, self.nb_nodes]))
         self.dense_adj = sparse_adj.to_dense()
@@ -566,11 +565,10 @@ class GCNLayer(nn.Module):
         x = torch.cat([self.linear(x), eye_x], dim=1).contiguous()
         # if self.cluster == "sparse_max_pool":
         #     res = sparse_max_pool(x, self.centroids, self.dense_adj)
-        if self.cluster == "max_pool_dense":
-            res = max_pool_dense(x, self.centroids, self.dense_adj)
-        elif self.cluster == "max_pool_dense_iter":
-            res = max_pool_dense_iter(x, self.centroids, self.dense_adj)
-        elif self.cluster == "max_pool_torch_scatter":
-            res = max_pool_torch_scatter(x, self.centroids)
-
+#         if self.cluster == "max_pool_dense":
+#             res = max_pool_dense(x, self.centroids, self.dense_adj)
+#         elif self.cluster == "max_pool_dense_iter":
+#             res = max_pool_dense_iter(x, self.centroids, self.dense_adj)
+#         elif self.cluster == "max_pool_torch_scatter":
+        res = max_pool_torch_scatter(x, self.centroids)
         return res

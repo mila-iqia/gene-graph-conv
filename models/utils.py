@@ -40,6 +40,7 @@ from torch_scatter import scatter_max, scatter_add, scatter_mul
 #         return max_value
 
 # want inputs of shape ex, node, channels
+
 def max_pool_torch_scatter(x, centroids):
     ex, channels, nodes = x.shape
     x = x.view(ex * channels, -1)
