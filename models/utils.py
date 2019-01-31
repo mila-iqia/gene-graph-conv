@@ -106,6 +106,50 @@ def max_pool_dense_iter(x, centroids, adj):
     #res = res.permute(0, 2, 1).contiguous()
     return res
 
+
+
+from torch_scatter import scatter_max, scatter_add
+
+# try:
+#     from torch_scatter import scatter_max, scatter_add
+#     def max_pool(x, centroids):
+#         shape = x.shape
+#         x = x.view(x.shape[0] * x.shape[1], -1)
+#         x = scatter_max(x, centroids)[0]
+#         x = x.view(shape[0], shape[1], -1)  # put back in ex, node, channel
+#         return x
+# except ImportError:
+def max_pool(x, centroids, adj):
+    ex, channels, nodes = x.shape
+    x = x.view(-1, nodes, 1)
+
+    temp = []
+    for i in range(len(x)):
+        temp.append((x[i] * adj).max(dim=0)[0])
+    res = torch.stack(temp)
+
+    res = res.view(ex, channels, nodes)
+    res = res.narrow(2, 0, len(set(centroids.cpu().numpy())))
+    res = res.permute(0, 2, 1).contiguous()  # put back in ex, node, channel
+    return res
+
+    # def max_pool(x, centroids):
+    #     x = x.permute(0, 2, 1).contiguous()  # put in ex, channel, node
+    #     original_x_shape = x.size()
+    #     x = x.view(-1, x.shape[-1])
+    #     #adj = adj.to_dense()
+    #     temp = []
+    #     for i in range(adj.shape[0]):
+    #         neighbors = np.argwhere(centroids==i)
+    #         if len(neighbors) != 0:
+    #             temp.append(x[neighbors].max(dim=1)[0])
+    #         else:
+    #             temp.append(x[i])
+    #     max_value = torch.stack(temp)
+    #     max_value.view(original_x_shape).permute(0, 2, 1).contiguous()
+    #     return max_value
+
+# We use this to calculate the noramlized laplacian for our graph convolution signal propagation
 def norm_laplacian(adj):
     D = np.array(adj.astype(bool).sum(axis=0))[0].astype("float32")
     D_inv = np.divide(1., np.sqrt(D), out=np.zeros_like(D), where=D!=0.)
@@ -116,6 +160,7 @@ def norm_laplacian(adj):
         print(e)
     return adj
 
+# We have several methods for clustering the graph. We use them to define the shape of the model and pooling
 def hierarchical_clustering(adj, n_clusters):
     adj_hash = joblib.hash(adj.indices.tostring()) + joblib.hash(sparse.csr_matrix(adj).data.tostring()) + str(n_clusters)
     path = ".cache/" + '{}.npy'.format(adj_hash)
@@ -158,11 +203,12 @@ def kmeans_clustering(adj, n_clusters):
         np.save(path, np.array(clusters))
     return clusters
 
+
+# This function takes in the full adjacency matrix and a number of layers, then returns a bunch of clustered adjacencies
 def setup_aggregates(adj, nb_layer, cluster_type="hierarchy"):
     aggregates = [adj]
     centroids = []
 
-    # For each layer, build the adjs and the nodes to keep.
     for _ in range(nb_layer):
         adj = norm_laplacian(adj)
 
@@ -171,7 +217,7 @@ def setup_aggregates(adj, nb_layer, cluster_type="hierarchy"):
             centroids.append(np.array(range(adj.shape[0])))
             continue
 
-        # Determine what clusters we want in our adjacency matrices
+        # Determine what kind of clustering should we perform on our adjacency matrix?
         n_clusters = int(adj.shape[0] / 2)
         if cluster_type == "hierarchy":
             clusters = hierarchical_clustering(adj, n_clusters)
@@ -180,7 +226,9 @@ def setup_aggregates(adj, nb_layer, cluster_type="hierarchy"):
         elif cluster_type == "kmeans":
             clusters = kmeans_clustering(adj, n_clusters)
 
-        # Cluster the adjacency matrix (reduces dimensionality)
+        # When we cluster the adjacency matrix to reduce the graph dimensionality, we do a scatter add to preserve the edge weights.
+        # We may want to replace this pytorch-scatter call with a call to the relatively undocumented pytorch _scatter_add function,
+        # or change this to a mask (or slice?)
         adj = scatter_add(torch.FloatTensor(adj.toarray()), torch.LongTensor(clusters)).numpy()[:n_clusters]
         adj = sparse.csr_matrix(adj)
         aggregates.append(adj)

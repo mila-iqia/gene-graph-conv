@@ -542,7 +542,6 @@ class GCNLayer(nn.Module):
         self.sparse_adj = self.sparse_adj.cuda() if self.cuda else self.sparse_adj
         self.centroids = self.centroids.cuda() if self.cuda else self.centroids
         self.dense_adj = self.dense_adj.cuda() if self.cuda else self.dense_adj
-        self.done = []
 
     def _adj_mul(self, x, D):
         nb_examples, nb_channels, nb_nodes = x.size()
