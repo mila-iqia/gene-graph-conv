@@ -15,7 +15,7 @@ import torch.nn.functional as F
 from torch import nn
 from torch.autograd import Variable
 from scipy import sparse
-from models.utils import setup_aggregates, max_pool, norm_laplacian, hierarchical_clustering, random_clustering, kmeans_clustering
+from models.utils import setup_aggregates, max_pool_torch_scatter, max_pool_dense_iter, max_pool_dense, norm_laplacian, hierarchical_clustering, random_clustering, kmeans_clustering
 
 # For Monitoring
 def save_computations(self, input, output):
@@ -46,18 +46,11 @@ class Model(nn.Module):
         self.best_model = None
         super(Model, self).__init__()
 
-        torch.manual_seed(self.seed)
-        if self.on_cuda:
-            torch.cuda.manual_seed(self.seed)
-            torch.cuda.manual_seed_all(self.seed)
-            self.cuda()
-
     def fit(self, X, y, adj=None):
         self.adj = sparse.csr_matrix(adj)
         self.X = X
         start = time.time()
         self.setup_layers()
-        print("setup layers took: " + str(time.time() - start))
         # Cleanup these vars, todo refactor them from setup_layers()
         self.adj = None
         self.X = None
@@ -129,8 +122,8 @@ class Model(nn.Module):
                 max_valid = auc['valid']
                 patience = self.start_patience
                 self.best_model = self.state_dict().copy()
-            print("epoch: " + str(epoch) + " " + str(time.time() - start))
-        print("total train time:" + str(time.time() - all_time) + " for epochs: " + str(epoch))
+            #print("epoch: " + str(epoch) + " " + str(time.time() - start))
+        # print("total train time:" + str(time.time() - all_time) + " for epochs: " + str(epoch))
         self.load_state_dict(self.best_model)
         self.best_model = None
 
@@ -526,6 +519,9 @@ class SparseMM(torch.autograd.Function):
 class GCNLayer(nn.Module):
     def __init__(self, adj, in_dim=1, channels=1, cuda=False, id_layer=None, centroids=None):
         super(GCNLayer, self).__init__()
+
+        adj.setdiag(np.ones(adj.shape[0]))
+
         self.my_layers = []
         self.cuda = cuda
         self.nb_nodes = adj.shape[0]
@@ -533,14 +529,18 @@ class GCNLayer(nn.Module):
         self.channels = channels
         self.id_layer = id_layer
         self.adj = adj
-        self.centroids = centroids.cuda() if self.cuda else centroids
-        sparse_adj = torch.sparse.FloatTensor(torch.LongTensor(np.array(self.adj.nonzero())), torch.FloatTensor(self.adj.data), torch.Size([self.nb_nodes, self.nb_nodes]))
+        self.centroids = centroids
+        edges = torch.LongTensor(np.array(self.adj.nonzero()))
+        sparse_adj = torch.sparse.FloatTensor(edges, torch.FloatTensor(self.adj.data), torch.Size([self.nb_nodes, self.nb_nodes]))
+        self.dense_adj = sparse_adj.to_dense()
         self.register_buffer('sparse_adj', sparse_adj)
-        self.sparse_adj = self.sparse_adj.cuda() if self.cuda else self.sparse_adj
-        self.dense_adj = self.sparse_adj.to_dense()
 
         self.linear = nn.Conv1d(in_channels=self.in_dim, out_channels=int(self.channels/2), kernel_size=1, bias=True)
         self.eye_linear = nn.Conv1d(in_channels=self.in_dim, out_channels=int(self.channels/2), kernel_size=1, bias=True)
+
+        self.sparse_adj = self.sparse_adj.cuda() if self.cuda else self.sparse_adj
+        self.centroids = self.centroids.cuda() if self.cuda else self.centroids
+        self.dense_adj = self.dense_adj.cuda() if self.cuda else self.dense_adj
 
     def _adj_mul(self, x, D):
         nb_examples, nb_channels, nb_nodes = x.size()
@@ -560,13 +560,15 @@ class GCNLayer(nn.Module):
 
         eye_x = self.eye_linear(x)
 
-        x = self._adj_mul(x, adj)  # + old_x# local average
+        x = self._adj_mul(x, adj)
 
-        x = torch.cat([self.linear(x), eye_x], dim=1)  # + old_x# conv
-        shape = x.size()
-        if any(self.centroids):
-            x = max_pool(x, self.centroids)
-            #import pdb; pdb.set_trace()
-            #x = sparse_max_pool(x, adj)[:len(set(self.centroids))]
-        x = x.permute(0, 2, 1).contiguous()
-        return x
+        x = torch.cat([self.linear(x), eye_x], dim=1).contiguous()
+        # if self.cluster == "sparse_max_pool":
+        #     res = sparse_max_pool(x, self.centroids, self.dense_adj)
+#         if self.cluster == "max_pool_dense":
+#             res = max_pool_dense(x, self.centroids, self.dense_adj)
+#         elif self.cluster == "max_pool_dense_iter":
+#             res = max_pool_dense_iter(x, self.centroids, self.dense_adj)
+#         elif self.cluster == "max_pool_torch_scatter":
+        res = max_pool_torch_scatter(x, self.centroids)
+        return res
