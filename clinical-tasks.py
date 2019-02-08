@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
-
-
 import time
 import os
 import sys
@@ -22,14 +19,15 @@ from collections import defaultdict
 from scipy import sparse
 
 from torch.autograd import Variable
-from models.models import MLP
 from data import datasets
 from data.gene_graphs import GeneManiaGraph, RegNetGraph
 from data.utils import record_result
 import meta_dataloader.TCGA as TCGA
 from meta_dataloader.TCGA import TCGAMeta
-from models.models import MLP, GCN, SLR
-import academictorrents as at
+from models.mlp import MLP
+from models.gcn import GCN
+from models.slr import SLR
+from models.utils import *
 
 tasks = TCGAMeta(download=True)
 graphs = {"genemania": GeneManiaGraph()}
@@ -52,11 +50,11 @@ models = [
               #GCN(name="GCN_lay20_chan32_emb32_dropout_pool_kmeans", cuda=cuda, dropout=True, num_layer=4, channels=32, embedding=32, prepool_extralayers=5, pooling="kmeans"),
               #GCN(name="GCN_lay20_chan32_emb32_dropout_pool_hierarchy", cuda=cuda, dropout=True, num_layer=4, channels=32, embedding=32, prepool_extralayers=5, pooling="hierarchy"),
               #GCN(name="GCN_lay20_chan32_emb32_dropout_pool_random", cuda=cuda, dropout=True,num_layer=4, channels=32, embedding=32, prepool_extralayers=5, pooling="random"),
-              GCN(name="GCN_lay3_chan64_emb32_dropout_pool_hierarchy", cuda=cuda, dropout=True, num_layer=3, channels=64, embedding=32, pooling="hierarchy"),
-              GCN(name="GCN_lay3_chan64_emb32_dropout", cuda=cuda, dropout=True, num_layer=3, channels=64, embedding=32),
-              MLP(name="MLP_lay2_chan512_dropout", cuda=cuda, dropout=True, num_layer=2, channels=512),
+              #GCN(name="GCN_lay3_chan64_emb32_dropout_pool_hierarchy", cuda=cuda, dropout=True, num_layer=3, channels=64, embedding=32, pooling="hierarchy"),
+              #GCN(name="GCN_lay3_chan64_emb32_dropout", cuda=cuda, dropout=True, num_layer=3, channels=64, embedding=32),
+              #MLP(name="MLP_lay2_chan512_dropout", cuda=cuda, dropout=True, num_layer=2, channels=512),
               MLP(name="MLP_lay2_chan512", cuda=cuda, dropout=False, num_layer=2, channels=512),
-              #SLR(name="SLR_lambda1_l11", cuda=cuda)
+              SLR(name="SLR_lambda1_l11", cuda=cuda)
              ]
 
 # Create the set of all experiment ids and see which are left to do
@@ -71,10 +69,6 @@ todo = all_exp_ids.drop(intersection_ids).to_dict(orient="records")
 
 print("todo: " + str(len(todo)))
 print("done: " + str(len(results)))
-
-def get_every_n(a, n=2):
-    for i in range(a.shape[0] // 2):
-        yield a[2*i:2*(i+1)]
 
 
 for row in todo:
@@ -106,7 +100,7 @@ for row in todo:
     adj = sparse.csr_matrix(nx.to_numpy_matrix(gene_graph.nx_graph))
     try:
         model.fit(X_train, y_train, adj=adj)
-        x_test = Variable(torch.FloatTensor(np.expand_dims(X_test.values, axis=2)), requires_grad=False).float()
+        x_test = Variable(torch.FloatTensor(np.expand_dims(X_test, axis=2)), requires_grad=False).float()
         if cuda:
             x_test = x_test.cuda()
 

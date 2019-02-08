@@ -32,10 +32,7 @@ def norm_laplacian(adj):
     D = np.array(adj.astype(bool).sum(axis=0))[0].astype("float32")
     D_inv = np.divide(1., np.sqrt(D), out=np.zeros_like(D), where=D!=0.)
     D_inv_diag = sparse.diags(D_inv)
-    try:
-        adj = D_inv_diag.dot(adj).dot(D_inv_diag)
-    except Exception as e:
-        print(e)
+    adj = D_inv_diag.dot(adj).dot(D_inv_diag)
     return adj
 
 # We have several methods for clustering the graph. We use them to define the shape of the model and pooling
@@ -112,3 +109,11 @@ def setup_aggregates(adj, nb_layer, cluster_type="hierarchy"):
         aggregates.append(adj)
         centroids.append(clusters)
     return aggregates, centroids
+
+def save_computations(self, input, output):
+    setattr(self, "input", input)
+    setattr(self, "output", output)
+
+def get_every_n(a, n=2):
+    for i in range(a.shape[0] // 2):
+        yield a[2*i:2*(i+1)]
