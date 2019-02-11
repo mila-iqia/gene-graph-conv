@@ -29,6 +29,7 @@ def max_pool(x, centroids, adj):
 
 # We use this to calculate the noramlized laplacian for our graph convolution signal propagation
 def norm_laplacian(adj):
+    adj.setdiag(np.ones(adj.shape[0]))
     D = np.array(adj.astype(bool).sum(axis=0))[0].astype("float32")
     D_inv = np.divide(1., np.sqrt(D), out=np.zeros_like(D), where=D!=0.)
     D_inv_diag = sparse.diags(D_inv)
@@ -80,32 +81,30 @@ def kmeans_clustering(adj, n_clusters):
 
 
 # This function takes in the full adjacency matrix and a number of layers, then returns a bunch of clustered adjacencies
-def setup_aggregates(adj, nb_layer, cluster_type="hierarchy"):
+def setup_aggregates(adj, nb_layer, aggregation="hierarchy"):
     aggregates = [adj]
     centroids = []
 
     for _ in range(nb_layer):
         adj = norm_laplacian(adj)
 
-        if not cluster_type:
+        if not aggregation:
             aggregates.append(adj)
             centroids.append(np.array(range(adj.shape[0])))
             continue
 
-        # Determine what kind of clustering should we perform on our adjacency matrix?
         n_clusters = int(adj.shape[0] / 2)
-        if cluster_type == "hierarchy":
+        if aggregation == "hierarchy":
             clusters = hierarchical_clustering(adj, n_clusters)
-        elif cluster_type == "random":
+        elif aggregation == "random":
             clusters = random_clustering(adj, n_clusters)
-        elif cluster_type == "kmeans":
+        elif aggregation == "kmeans":
             clusters = kmeans_clustering(adj, n_clusters)
 
         # When we cluster the adjacency matrix to reduce the graph dimensionality, we do a scatter add to preserve the edge weights.
         # We may want to replace this pytorch-scatter call with a call to the relatively undocumented pytorch _scatter_add function,
         # or change this to a mask (or slice?)
-        adj = scatter_add(torch.FloatTensor(adj.toarray()), torch.LongTensor(clusters)).numpy()[:n_clusters]
-        adj = sparse.csr_matrix(adj)
+        adj = sparse.csr_matrix((scatter_add(torch.FloatTensor(adj.toarray()), torch.LongTensor(clusters)) > 0.).numpy())
         aggregates.append(adj)
         centroids.append(clusters)
     return aggregates, centroids

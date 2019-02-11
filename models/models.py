@@ -19,7 +19,7 @@ from models.utils import *
 
 class Model(nn.Module):
 
-    def __init__(self, name=None, column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=0.0001, dropout=False, cuda=False, seed=0, adj=None, graph_name=None, pooling=None, prepool_extralayers=0):
+    def __init__(self, name=None, column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=0., dropout=False, cuda=False, seed=0, adj=None, graph_name=None, aggregation=None, prepool_extralayers=0):
         self.name = name
         self.column_names = column_names
         self.num_layer = num_layer
@@ -33,7 +33,7 @@ class Model(nn.Module):
         self.adj = adj
         self.graph_name = graph_name
         self.prepool_extralayers = prepool_extralayers
-        self.pooling = pooling
+        self.aggregation = aggregation
         self.batch_size = 10
         self.start_patience = 10
         self.attention_head = 0
@@ -76,11 +76,10 @@ class Model(nn.Module):
                 targets = Variable(labels, requires_grad=False).long()
                 loss = criterion(y_pred, targets)
 
-                # Zero gradients, perform a backward pass, and update the weights.
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
-                self.eval()
+            self.eval()
             start = time.time()
 
             auc = {'train': 0., 'valid': 0.}

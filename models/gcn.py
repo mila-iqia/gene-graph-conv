@@ -33,7 +33,7 @@ class GCN(Model):
             self.add_embedding_layer()
             self.in_dim = self.emb.emb_size
         self.dims = [self.in_dim] + self.channels
-        self.adjs, self.centroids = setup_aggregates(self.adj, self.num_layer, cluster_type=self.pooling)
+        self.adjs, self.centroids = setup_aggregates(self.adj, self.num_layer, aggregation=self.aggregation)
         self.add_graph_convolutional_layers()
         self.add_logistic_layer()
         self.add_gating_layers()

@@ -19,8 +19,6 @@ class GCNLayer(nn.Module):
     def __init__(self, adj, in_dim=1, channels=1, cuda=False, id_layer=None, centroids=None):
         super(GCNLayer, self).__init__()
 
-        adj.setdiag(np.ones(adj.shape[0]))
-
         self.my_layers = []
         self.cuda = cuda
         self.nb_nodes = adj.shape[0]
