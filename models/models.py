@@ -19,7 +19,7 @@ from models.utils import *
 
 class Model(nn.Module):
 
-    def __init__(self, name=None, column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=0., dropout=False, cuda=False, seed=0, adj=None, graph_name=None, aggregation=None, prepool_extralayers=0, lr=0.001, patience=10, agg_reduce=2):
+    def __init__(self, name=None, column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=0., dropout=False, cuda=False, seed=0, adj=None, graph_name=None, aggregation=None, prepool_extralayers=0, lr=0.001, patience=10, agg_reduce=2, scheduler=False):
         self.name = name
         self.column_names = column_names
         self.num_layer = num_layer
@@ -58,6 +58,9 @@ class Model(nn.Module):
 
         criterion = torch.nn.CrossEntropyLoss(reduction='mean')
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=0.0001)
+        if self.scheduler:
+            scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma = 0.95)
+
         max_valid = 0
         patience = self.start_patience
         self.best_model = self.state_dict().copy()
@@ -110,6 +113,8 @@ class Model(nn.Module):
                 patience = self.start_patience
                 self.best_model = self.state_dict().copy()
             print("epoch: " + str(epoch) + ", time: " + str(time.time() - start) + ", valid_auc: " + str(auc['valid']) + ", train_auc: " + str(auc['train']))
+            if self.scheduler:
+                scheduler.step()
         print("total train time:" + str(time.time() - all_time) + " for epochs: " + str(epoch))
         self.load_state_dict(self.best_model)
         self.best_model = None
