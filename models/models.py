@@ -19,7 +19,7 @@ from models.utils import *
 
 class Model(nn.Module):
 
-    def __init__(self, name=None, column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=0., dropout=False, cuda=False, seed=0, adj=None, graph_name=None, aggregation=None, prepool_extralayers=0):
+    def __init__(self, name=None, column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=0., dropout=False, cuda=False, seed=0, adj=None, graph_name=None, aggregation=None, prepool_extralayers=0, lr=0.001, patience=10):
         self.name = name
         self.column_names = column_names
         self.num_layer = num_layer
@@ -34,8 +34,9 @@ class Model(nn.Module):
         self.graph_name = graph_name
         self.prepool_extralayers = prepool_extralayers
         self.aggregation = aggregation
+        self.lr = lr
         self.batch_size = 10
-        self.start_patience = 10
+        self.start_patience = patience
         self.attention_head = 0
         self.train_valid_split = 0.8
         self.best_model = None
@@ -55,7 +56,7 @@ class Model(nn.Module):
         y_train = torch.FloatTensor(y_train)
 
         criterion = torch.nn.CrossEntropyLoss(reduction='mean')
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.001, weight_decay=0.0001)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=0.0001)
         max_valid = 0
         patience = self.start_patience
         self.best_model = self.state_dict().copy()
@@ -107,7 +108,7 @@ class Model(nn.Module):
                 max_valid = auc['valid']
                 patience = self.start_patience
                 self.best_model = self.state_dict().copy()
-            print("epoch: " + str(epoch) + " " + str(time.time() - start))
+            print("epoch: " + str(epoch) + ", time: " + str(time.time() - start) + ", valid_auc: " + str(auc['valid']) + ", train_auc: " + str(auc['train']))
         print("total train time:" + str(time.time() - all_time) + " for epochs: " + str(epoch))
         self.load_state_dict(self.best_model)
         self.best_model = None

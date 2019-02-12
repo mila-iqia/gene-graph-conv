@@ -107,7 +107,7 @@ class GCN(Model):
             # transformation to apply at each layer.
             extra_layers = []
             for _ in range(self.prepool_extralayers):
-                extra_layer = GCNLayer(self.adjs[i], c_in, c_out, self.on_cuda, i, torch.LongTensor(np.array(range(self.adjs[i].shape[0]))))
+                extra_layer = GCNLayer(self.adjs[i], c_in, c_in, self.on_cuda, i, torch.LongTensor(np.array(range(self.adjs[i].shape[0]))))
                 extra_layer.register_forward_hook(save_computations)
                 extra_layers.append(extra_layer)
 
