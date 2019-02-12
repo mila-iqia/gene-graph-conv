@@ -35,6 +35,7 @@ class Model(nn.Module):
         self.prepool_extralayers = prepool_extralayers
         self.aggregation = aggregation
         self.lr = lr
+        self.scheduler = scheduler
         self.agg_reduce=2
         self.batch_size = 10
         self.start_patience = patience
@@ -59,7 +60,7 @@ class Model(nn.Module):
         criterion = torch.nn.CrossEntropyLoss(reduction='mean')
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=0.0001)
         if self.scheduler:
-            scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma = 0.95)
+            scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma = 0.9)
 
         max_valid = 0
         patience = self.start_patience
