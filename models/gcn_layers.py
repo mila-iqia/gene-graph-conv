@@ -37,7 +37,7 @@ class GCNLayer(nn.Module):
         self.sparse_adj = self.sparse_adj.cuda() if self.cuda else self.sparse_adj
         self.centroids = self.centroids.cuda() if self.cuda else self.centroids
         self.dense_adj = (self.sparse_adj.to_dense() > 0.).float()
-        self.dense_adj = self.dense_adj.cuda() if self.cuda else dense_adj
+        self.dense_adj = self.dense_adj.cuda() if self.cuda else self.dense_adj
 
     def _adj_mul(self, x, D):
         nb_examples, nb_channels, nb_nodes = x.size()
@@ -51,7 +51,7 @@ class GCNLayer(nn.Module):
         return x
 
     def forward(self, x):
-        x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
+        x = x.permute(0, 2, 1).contiguous()
 
         adj = Variable(self.sparse_adj, requires_grad=False)
 
@@ -60,8 +60,9 @@ class GCNLayer(nn.Module):
         x = self._adj_mul(x, adj)
 
         x = torch.cat([self.linear(x), eye_x], dim=1).contiguous()
-        res = max_pool(x, self.centroids, self.dense_adj)
-        return res
+        x = torch.index_select(x, 2, torch.LongTensor(self.centroids))
+        x = x.permute(0, 2, 1).contiguous()
+        return x
 
 
 class SparseMM(torch.autograd.Function):

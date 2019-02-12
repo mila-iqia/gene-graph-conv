@@ -107,8 +107,8 @@ class Model(nn.Module):
                 max_valid = auc['valid']
                 patience = self.start_patience
                 self.best_model = self.state_dict().copy()
-            #print("epoch: " + str(epoch) + " " + str(time.time() - start))
-        # print("total train time:" + str(time.time() - all_time) + " for epochs: " + str(epoch))
+            print("epoch: " + str(epoch) + " " + str(time.time() - start))
+        print("total train time:" + str(time.time() - all_time) + " for epochs: " + str(epoch))
         self.load_state_dict(self.best_model)
         self.best_model = None
 

@@ -12,7 +12,7 @@ import sklearn.cluster
 import joblib
 import numpy as np
 from sklearn.cluster import KMeans
-from torch_scatter import scatter_max, scatter_add, scatter_mul
+from torch_scatter import scatter_max
 
 def max_pool(x, centroids, adj):
     ex, channels, nodes = x.shape
@@ -29,7 +29,6 @@ def max_pool(x, centroids, adj):
 
 # We use this to calculate the noramlized laplacian for our graph convolution signal propagation
 def norm_laplacian(adj):
-    adj.setdiag(np.ones(adj.shape[0]))
     D = np.array(adj.astype(bool).sum(axis=0))[0].astype("float32")
     D_inv = np.divide(1., np.sqrt(D), out=np.zeros_like(D), where=D!=0.)
     D_inv_diag = sparse.diags(D_inv)
@@ -82,17 +81,11 @@ def kmeans_clustering(adj, n_clusters):
 
 # This function takes in the full adjacency matrix and a number of layers, then returns a bunch of clustered adjacencies
 def setup_aggregates(adj, nb_layer, aggregation="hierarchy"):
-    aggregates = [adj]
+    adj = (adj > 0.).astype(int)
+    adj.setdiag(np.ones(adj.shape[0]))
+    adjs = [norm_laplacian(adj)]
     centroids = []
-
     for _ in range(nb_layer):
-        adj = norm_laplacian(adj)
-
-        if not aggregation:
-            aggregates.append(adj)
-            centroids.append(np.array(range(adj.shape[0])))
-            continue
-
         n_clusters = int(adj.shape[0] / 2)
         if aggregation == "hierarchy":
             clusters = hierarchical_clustering(adj, n_clusters)
@@ -100,14 +93,17 @@ def setup_aggregates(adj, nb_layer, aggregation="hierarchy"):
             clusters = random_clustering(adj, n_clusters)
         elif aggregation == "kmeans":
             clusters = kmeans_clustering(adj, n_clusters)
+        else:
+            clusters = np.array(range(adj.shape[0]))
+        _, to_keep = np.unique(clusters, return_index=True)
 
-        # When we cluster the adjacency matrix to reduce the graph dimensionality, we do a scatter add to preserve the edge weights.
-        # We may want to replace this pytorch-scatter call with a call to the relatively undocumented pytorch _scatter_add function,
-        # or change this to a mask (or slice?)
-        adj = sparse.csr_matrix((scatter_add(torch.FloatTensor(adj.toarray()), torch.LongTensor(clusters)) > 0.).numpy())
-        aggregates.append(adj)
-        centroids.append(clusters)
-    return aggregates, centroids
+        adj = torch.zeros(adj.shape).index_add_(1,  torch.LongTensor(clusters), torch.FloatTensor(adj.todense()))
+        adj = torch.index_select(adj, 1, torch.LongTensor(to_keep))[:len(to_keep)]
+        adj = sparse.csr_matrix(adj > 0)
+
+        adjs.append(norm_laplacian(adj))
+        centroids.append(to_keep)
+    return adjs, centroids
 
 def save_computations(self, input, output):
     setattr(self, "input", input)

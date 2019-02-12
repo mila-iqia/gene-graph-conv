@@ -40,13 +40,13 @@ gene_graph = GeneManiaGraph()
 search_num_genes=[50, 100, 200, 300, 500, 1000, 2000, 4000, 8000, 16000]
 test_size=300
 search_train_size=[50]
-cuda=True
+cuda=False
 trials=3
 search_genes = ["RPL4"]
 models = [
-               #GCN(name="GCN_lay20_chan32_emb32_dropout_pool_hierarchy", cuda=cuda, dropout=True, num_layer=4, channels=32, embedding=32, prepool_extralayers=5, pooling="hierarchy"),
-              GCN(name="GCN_lay3_chan64_emb32_dropout_pool_hierarchy", cuda=cuda, dropout=True, num_layer=3, channels=64, embedding=32, pooling="hierarchy"),
-              #GCN(name="GCN_lay20_chan32_emb32_dropout_pool_random", cuda=cuda, num_layer=4, channels=32, embedding=32, prepool_extralayers=5, pooling="random"),
+               #GCN(name="GCN_lay20_chan32_emb32_dropout_pool_hierarchy", cuda=cuda, dropout=True, num_layer=4, channels=32, embedding=32, prepool_extralayers=5, aggregation="hierarchy"),
+              GCN(name="GCN_lay3_chan64_emb32_dropout_pool_hierarchy", cuda=cuda, dropout=True, num_layer=3, channels=64, embedding=32, aggregation="hierarchy"),
+              #GCN(name="GCN_lay20_chan32_emb32_dropout_pool_random", cuda=cuda, num_layer=4, channels=32, embedding=32, prepool_extralayers=5, aggregation="random"),
               GCN(name="GCN_lay3_chan64_emb32_dropout", cuda=cuda, dropout=True, num_layer=3, channels=64, embedding=32),
               MLP(name="MLP_lay2_chan512_dropout", cuda=cuda, dropout=True, num_layer=2, channels=512),
               MLP(name="MLP_lay2_chan512", cuda=cuda, dropout=False, num_layer=2, channels=512),
@@ -89,7 +89,7 @@ for row in todo:
     dataset.labels = dataset.df[gene].where(dataset.df[gene] > 0).notnull().astype("int")
     dataset.labels = dataset.labels.values if type(dataset.labels) == pd.Series else dataset.labels
     X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(dataset.df, dataset.labels, stratify=dataset.labels, train_size=train_size, test_size=test_size, random_state=seed)
-    if num_genes == 16300:
+    if num_genes == 16000 or num_genes == 16300:
         neighbors = gene_graph.nx_graph
     else:
         neighbors = gene_graph.bfs_sample_neighbors(gene, num_genes)
