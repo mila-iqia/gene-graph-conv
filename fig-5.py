@@ -99,21 +99,16 @@ for row in todo:
     X_train[gene] = 1
     X_test[gene] = 1
     adj = sparse.csr_matrix(nx.to_numpy_matrix(neighbors))
-    try:
-        model.fit(X_train, y_train, adj=adj)
+    model.fit(X_train, y_train, adj=adj)
 
-        x_test = Variable(torch.FloatTensor(np.expand_dims(X_test.values, axis=2)), requires_grad=False).float()
-        if cuda:
-            x_test = x_test.cuda()
+    x_test = Variable(torch.FloatTensor(np.expand_dims(X_test.values, axis=2)), requires_grad=False).float()
+    if cuda:
+        x_test = x_test.cuda()
 
-        y_hat = []
-        for chunk in get_every_n(x_test, 10):
-            y_hat.extend(model.predict(chunk)[:,1].data.cpu().numpy().tolist())
-        auc = sklearn.metrics.roc_auc_score(y_test, np.asarray(y_hat).flatten())
-    except Exception as e:
-        print(e)
-        experiment["exception"] = e
-        auc = 0.
+    y_hat = []
+    for chunk in get_every_n(x_test, 10):
+        y_hat.extend(model.predict(chunk)[:,1].data.cpu().numpy().tolist())
+    auc = sklearn.metrics.roc_auc_score(y_test, np.asarray(y_hat).flatten())
     del model
     experiment["auc"] = auc
     experiment["time_elapsed"] = str(time.time() - start_time)
