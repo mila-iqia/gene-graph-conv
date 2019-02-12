@@ -46,8 +46,8 @@ class Model(nn.Module):
         self.X = X
         start = time.time()
         self.setup_layers()
-        self.adj = None
-        self.X = None
+#        self.adj = None
+#        self.X = None
         x_train, x_valid, y_train, y_valid = sklearn.model_selection.train_test_split(X, y, stratify=y, train_size=self.train_valid_split, test_size=1-self.train_valid_split, random_state=self.seed)
 
         x_train = torch.FloatTensor(np.expand_dims(x_train, axis=2))
@@ -113,6 +113,15 @@ class Model(nn.Module):
         self.load_state_dict(self.best_model)
         self.best_model = None
 
-    def predict(self, inputs):
-        """ Run the trained model on the inputs"""
-        return self.forward(inputs)
+    def predict(self, inputs, probs=False):
+        """ 
+        Run the trained model on the inputs
+        
+        Args:
+        inputs (torch.FloatTensor): Input to the model
+        probs (bool): Get probability estimates
+        """
+        out = self.forward(inputs)
+        if probs:
+            out = F.softmax(dim=1)
+        return out

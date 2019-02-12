@@ -2,7 +2,7 @@ import logging
 from models.models import Model
 from models.utils import *
 import torch.nn.functional as F
-
+import torch
 
 class SLR(Model):
     def __init__(self, **kwargs):
@@ -34,7 +34,7 @@ class SLR(Model):
         return x
 
     def regularization(self, reg_lambda):
-        laplacian = Variable(self.laplacian, requires_grad=False)
+        laplacian = torch.Variable(self.laplacian, requires_grad=False)
         if self.on_cuda:
             laplacian = laplacian.cuda()
         weight = self.my_logistic_layers[-1].weight

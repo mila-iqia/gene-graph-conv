@@ -24,7 +24,7 @@ def max_pool(x, centroids, adj):
     res = torch.stack(temp)
     res = scatter_max(src=res, index=centroids, dim=1, fill_value=-1000)[0]
     res = res.view(ex, channels, -1)
-    res = res.permute(0, 2, 1).contiguous()
+#    res = res.permute(0, 2, 1).contiguous()
     return res
 
 # We use this to calculate the noramlized laplacian for our graph convolution signal propagation
@@ -115,5 +115,5 @@ def save_computations(self, input, output):
     setattr(self, "output", output)
 
 def get_every_n(a, n=2):
-    for i in range(a.shape[0] // 2):
-        yield a[2*i:2*(i+1)]
+    for i in range(0, a.shape[0], n): 
+        yield a[i:i+n]
