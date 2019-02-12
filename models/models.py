@@ -19,7 +19,7 @@ from models.utils import *
 
 class Model(nn.Module):
 
-    def __init__(self, name=None, column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=0., dropout=False, cuda=False, seed=0, adj=None, graph_name=None, aggregation=None, prepool_extralayers=0, lr=0.001, patience=10):
+    def __init__(self, name=None, column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=0., dropout=False, cuda=False, seed=0, adj=None, graph_name=None, aggregation=None, prepool_extralayers=0, lr=0.001, patience=10, agg_reduce=2):
         self.name = name
         self.column_names = column_names
         self.num_layer = num_layer
@@ -35,6 +35,7 @@ class Model(nn.Module):
         self.prepool_extralayers = prepool_extralayers
         self.aggregation = aggregation
         self.lr = lr
+        self.agg_reduce=2
         self.batch_size = 10
         self.start_patience = patience
         self.attention_head = 0

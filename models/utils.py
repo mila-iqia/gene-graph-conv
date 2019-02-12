@@ -80,13 +80,13 @@ def kmeans_clustering(adj, n_clusters):
 
 
 # This function takes in the full adjacency matrix and a number of layers, then returns a bunch of clustered adjacencies
-def setup_aggregates(adj, nb_layer, aggregation="hierarchy"):
+def setup_aggregates(adj, nb_layer, aggregation="hierarchy", agg_reduce=2):
     adj = (adj > 0.).astype(int)
     adj.setdiag(np.ones(adj.shape[0]))
     adjs = [norm_laplacian(adj)]
     centroids = []
     for _ in range(nb_layer):
-        n_clusters = int(adj.shape[0] / 2)
+        n_clusters = int(adj.shape[0] / agg_reduce)
         if aggregation == "hierarchy":
             clusters = hierarchical_clustering(adj, n_clusters)
         elif aggregation == "random":

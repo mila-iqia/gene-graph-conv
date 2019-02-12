@@ -44,7 +44,10 @@ cuda=True
 trials=3
 search_genes = ["RPL4"]
 models = [
-              GCN(name="GCN_lay20_chan32_emb32_dropout_pool_hierarchy", cuda=cuda, dropout=True, num_layer=4, channels=32, embedding=32, prepool_extralayers=5, aggregation="hierarchy"),
+             # GCN(name="GCN_lay20_chan32_emb32_dropout_pool_hierarchy", cuda=cuda, dropout=True, num_layer=4, channels=32, embedding=32, prepool_extralayers=5, aggregation="hierarchy"),
+              GCN(name="GCN_lay3_chan16_emb32_dropout_agg_hierarchy_prepool_1", cuda=cuda, dropout=True, num_layer=3, channels=16, embedding=32, prepool_extralayers=1, aggregation="hierarchy"),
+              GCN(name="GCN_lay4_chan64_emb32_dropout_agg_hierarchy", cuda=cuda, dropout=True, num_layer=4, channels=64, embedding=32, aggregation="hierarchy"), 
+              GCN(name="GCN_lay3_chan64_emb32_dropout_agg_hierarchy_reduce_5", cuda=cuda, dropout=True, num_layer=3, channels=64, embedding=32, aggregation="hierarchy", agg_reduce=5),
               GCN(name="GCN_lay3_chan64_emb32_dropout_pool_hierarchy", cuda=cuda, dropout=True, num_layer=3, channels=64, embedding=32, aggregation="hierarchy"),
               #GCN(name="GCN_lay20_chan32_emb32_dropout_pool_random", cuda=cuda, num_layer=4, channels=32, embedding=32, prepool_extralayers=5, aggregation="random"),
               GCN(name="GCN_lay3_chan64_emb32_dropout", cuda=cuda, dropout=True, num_layer=3, channels=64, embedding=32),
