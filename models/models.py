@@ -123,5 +123,5 @@ class Model(nn.Module):
         """
         out = self.forward(inputs)
         if probs:
-            out = F.softmax(dim=1)
+            out = F.softmax(out, dim=1)
         return out
