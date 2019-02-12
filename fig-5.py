@@ -37,10 +37,10 @@ except Exception as e:
 
 gene_graph = GeneManiaGraph()
 
-search_num_genes=[50, 100, 200, 300, 500, 1000, 2000, 4000, 8000, 16000]
+search_num_genes=[50, 100, 200, 300, 500, 1000, 2000, 4000, 8000, 16300]
 test_size=300
 search_train_size=[50]
-cuda=False
+cuda=True
 trials=3
 search_genes = ["RPL4"]
 models = [
@@ -55,7 +55,6 @@ models = [
 
 # Create the set of all experiment ids and see which are left to do
 model_names = [model.name for model in models]
-exp = ["sparse_max_pool", "max_pool_dense", "max_pool_dense_iter", "max_pool_torch_scatter"]
 columns = ["gene", "model", "num_genes", "train_size", "seed"]
 all_exp_ids = [x for x in itertools.product(search_genes, model_names, search_num_genes, search_train_size, range(trials))]
 all_exp_ids = pd.DataFrame(all_exp_ids, columns=columns)
@@ -89,7 +88,7 @@ for row in todo:
     dataset.labels = dataset.df[gene].where(dataset.df[gene] > 0).notnull().astype("int")
     dataset.labels = dataset.labels.values if type(dataset.labels) == pd.Series else dataset.labels
     X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(dataset.df, dataset.labels, stratify=dataset.labels, train_size=train_size, test_size=test_size, random_state=seed)
-    if num_genes == 16000 or num_genes == 16300:
+    if num_genes == 16300:
         neighbors = gene_graph.nx_graph
     else:
         neighbors = gene_graph.bfs_sample_neighbors(gene, num_genes)

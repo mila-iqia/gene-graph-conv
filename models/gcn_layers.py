@@ -60,7 +60,7 @@ class GCNLayer(nn.Module):
         x = self._adj_mul(x, adj)
 
         x = torch.cat([self.linear(x), eye_x], dim=1).contiguous()
-        x = torch.index_select(x, 2, torch.LongTensor(self.centroids))
+        x = torch.index_select(x, 2, self.centroids)
         x = x.permute(0, 2, 1).contiguous()
         return x
 
