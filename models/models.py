@@ -51,8 +51,8 @@ class Model(nn.Module):
         self.y = y
         start = time.time()
         self.setup_layers()
-#        self.adj = None
-#        self.X = None
+        self.adj = None
+        self.X = None
         x_train, x_valid, y_train, y_valid = sklearn.model_selection.train_test_split(X, y, stratify=y, train_size=self.train_valid_split, test_size=1-self.train_valid_split, random_state=self.seed)
 
         x_train = torch.FloatTensor(np.expand_dims(x_train, axis=2))
