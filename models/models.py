@@ -115,7 +115,7 @@ class Model(nn.Module):
                 max_valid = auc['valid']
                 patience = self.start_patience
                 self.best_model = self.state_dict().copy()
-            print("epoch: " + str(epoch) + ", time: " + "{0:.2f}".format(time.time() - start) + ", valid_auc: " + "{0:.2f}".format(auc['valid']) + ", train_auc: " + "{0:.2f}".format(auc['train']))
+            print("epoch: " + str(epoch) + ", time: " + "{0:.2f}".format(time.time() - start) + ", valid_metric: " + "{0:.2f}".format(auc['valid']) + ", train_metric: " + "{0:.2f}".format(auc['train']))
             if self.scheduler:
                 scheduler.step()
         print("total train time:" + "{0:.2f}".format(time.time() - all_time) + " for epochs: " + str(epoch))
