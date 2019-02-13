@@ -18,6 +18,7 @@ from scipy import sparse
 from models.utils import *
 from models.models import Model
 from models.gcn_layers import *
+import scipy.sparse 
 
 class GCN(Model):
     def __init__(self, **kwargs):
@@ -27,13 +28,17 @@ class GCN(Model):
         self.master_nodes = 0
         self.in_dim = 1
         self.out_dim = 2
+        
+        if (self.adj is None):
+            raise Exception("adj must be specified for GCN")
+        self.adj = scipy.sparse.csr_matrix(self.adj)
         self.nb_nodes = self.adj.shape[0]
 
         if self.embedding:
             self.add_embedding_layer()
             self.in_dim = self.emb.emb_size
         self.dims = [self.in_dim] + self.channels
-        self.adjs, self.centroids = setup_aggregates(self.adj, self.num_layer, cluster_type=self.pooling)
+        self.adjs, self.centroids = setup_aggregates(self.adj, self.num_layer, aggregation=self.aggregation, agg_reduce=self.agg_reduce)
         self.add_graph_convolutional_layers()
         self.add_logistic_layer()
         self.add_gating_layers()
@@ -106,7 +111,7 @@ class GCN(Model):
             # transformation to apply at each layer.
             extra_layers = []
             for _ in range(self.prepool_extralayers):
-                extra_layer = GCNLayer(self.adjs[i], c_in, c_out, self.on_cuda, i, torch.tensor([]))
+                extra_layer = GCNLayer(self.adjs[i], c_in, c_in, self.on_cuda, i, torch.LongTensor(np.array(range(self.adjs[i].shape[0]))))
                 extra_layer.register_forward_hook(save_computations)
                 extra_layers.append(extra_layer)
 

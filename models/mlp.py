@@ -10,7 +10,7 @@ class MLP(Model):
         super(MLP, self).__init__(**kwargs)
 
     def setup_layers(self):
-        out_dim = 2
+        self.out_dim = len(np.unique(self.y))
         in_dim = self.X.shape[1]
         dims = [in_dim] + self.channels
         logging.info("Constructing the network...")
@@ -22,9 +22,9 @@ class MLP(Model):
         self.my_layers = nn.ModuleList(layers)
 
         if self.channels:
-            self.last_layer = nn.Linear(self.channels[-1], out_dim)
+            self.last_layer = nn.Linear(self.channels[-1], self.out_dim)
         else:
-            self.last_layer = nn.Linear(in_dim, out_dim)
+            self.last_layer = nn.Linear(in_dim, self.out_dim)
 
         self.my_dropout = torch.nn.Dropout(0.5) if self.dropout else None
         logging.info("Done!")

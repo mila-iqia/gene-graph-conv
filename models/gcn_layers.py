@@ -19,8 +19,6 @@ class GCNLayer(nn.Module):
     def __init__(self, adj, in_dim=1, channels=1, cuda=False, id_layer=None, centroids=None):
         super(GCNLayer, self).__init__()
 
-        adj.setdiag(np.ones(adj.shape[0]))
-
         self.my_layers = []
         self.cuda = cuda
         self.nb_nodes = adj.shape[0]
@@ -53,7 +51,7 @@ class GCNLayer(nn.Module):
         return x
 
     def forward(self, x):
-        x = x.permute(0, 2, 1).contiguous()  # from ex, node, ch, -> ex, ch, node
+        x = x.permute(0, 2, 1).contiguous()
 
         adj = Variable(self.sparse_adj, requires_grad=False)
 
@@ -63,10 +61,7 @@ class GCNLayer(nn.Module):
 
         x = torch.cat([self.linear(x), eye_x], dim=1).contiguous()
         x = F.relu(x)
-        
-        if any(self.centroids):
-            x = max_pool(x, self.centroids, self.dense_adj)
-            
+        x = torch.index_select(x, 2, self.centroids)
         x = x.permute(0, 2, 1).contiguous()
         return x
 

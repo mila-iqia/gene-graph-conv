@@ -12,9 +12,11 @@ import sklearn.cluster
 import joblib
 import numpy as np
 from sklearn.cluster import KMeans
-from torch_scatter import scatter_max, scatter_add, scatter_mul
+
+cache_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/.cache/" # this needs to change if we move utils.py
 
 def max_pool(x, centroids, adj):
+    from torch_scatter import scatter_max
     ex, channels, nodes = x.shape
     x = x.view(-1, nodes, 1)
 
@@ -38,24 +40,25 @@ def norm_laplacian(adj):
 # We have several methods for clustering the graph. We use them to define the shape of the model and pooling
 def hierarchical_clustering(adj, n_clusters):
     adj_hash = joblib.hash(adj.indices.tostring()) + joblib.hash(sparse.csr_matrix(adj).data.tostring()) + str(n_clusters)
-    path = ".cache/" + '{}.npy'.format(adj_hash)
+    path = cache_dir + "hierarchical" + '{}.npy'.format(adj_hash)
     if os.path.isfile(path):
+        print("Found cache for " + path);
         clusters = np.load(path)
     else:
+        print("No cache for " + path);
         clusters = sklearn.cluster.AgglomerativeClustering(n_clusters=n_clusters, affinity='euclidean',
-                                                           memory='.cache', connectivity=adj,
+                                                           memory=cache_dir, connectivity=adj,
                                                            compute_full_tree='auto', linkage='ward').fit_predict(adj.toarray())
     np.save(path, np.array(clusters))
     return clusters
 
 def random_clustering(adj, n_clusters):
     adj_hash = joblib.hash(adj.data.tostring()) + joblib.hash(adj.indices.tostring()) + str(n_clusters)
-    path = ".cache/random" + '{}.npy'.format(adj_hash)
+    path = cache_dir + "random" + '{}.npy'.format(adj_hash)
     if os.path.isfile(path):
         clusters = np.load(path)
     else:
         clusters = []
-        import pdb; pdb.set_trace()
         for gene in range(adj.shape[0]):
             if len(clusters) == n_clusters:
                 break
@@ -69,7 +72,7 @@ def random_clustering(adj, n_clusters):
 
 def kmeans_clustering(adj, n_clusters):
     adj_hash = joblib.hash(adj.data.tostring()) + joblib.hash(adj.indices.tostring()) + str(n_clusters)
-    path = ".cache/kmeans" + '{}.npy'.format(adj_hash)
+    path = cache_dir + "kmeans" + '{}.npy'.format(adj_hash)
 
     if os.path.isfile(path):
         clusters = np.load(path)
@@ -80,35 +83,32 @@ def kmeans_clustering(adj, n_clusters):
 
 
 # This function takes in the full adjacency matrix and a number of layers, then returns a bunch of clustered adjacencies
-def setup_aggregates(adj, nb_layer, cluster_type="hierarchy"):
-    aggregates = [adj]
+def setup_aggregates(adj, nb_layer, aggregation="hierarchy", agg_reduce=2):
+    adj = (adj > 0.).astype(int)
+    adj.setdiag(np.ones(adj.shape[0]))
+    adjs = [norm_laplacian(adj)]
     centroids = []
-
     for _ in range(nb_layer):
-        adj = norm_laplacian(adj)
-
-        if not cluster_type:
-            aggregates.append(adj)
-            centroids.append(np.array(range(adj.shape[0])))
-            continue
-
-        # Determine what kind of clustering should we perform on our adjacency matrix?
-        n_clusters = int(adj.shape[0] / 2)
-        if cluster_type == "hierarchy":
+        print(agg_reduce)
+        n_clusters = int(adj.shape[0] / agg_reduce) if int(adj.shape[0] / agg_reduce) > 0 else adj.shape[0]
+        print(n_clusters)
+        if aggregation == "hierarchy":
             clusters = hierarchical_clustering(adj, n_clusters)
-        elif cluster_type == "random":
+        elif aggregation == "random":
             clusters = random_clustering(adj, n_clusters)
-        elif cluster_type == "kmeans":
+        elif aggregation == "kmeans":
             clusters = kmeans_clustering(adj, n_clusters)
+        else:
+            clusters = np.array(range(adj.shape[0]))
+        _, to_keep = np.unique(clusters, return_index=True)
 
-        # When we cluster the adjacency matrix to reduce the graph dimensionality, we do a scatter add to preserve the edge weights.
-        # We may want to replace this pytorch-scatter call with a call to the relatively undocumented pytorch _scatter_add function,
-        # or change this to a mask (or slice?)
-        adj = scatter_add(torch.FloatTensor(adj.toarray()), torch.LongTensor(clusters)).numpy()[:n_clusters]
-        adj = sparse.csr_matrix(adj)
-        aggregates.append(adj)
-        centroids.append(clusters)
-    return aggregates, centroids
+        adj = torch.zeros(adj.shape).index_add_(1,  torch.LongTensor(clusters), torch.FloatTensor(adj.todense()))
+        adj = torch.index_select(adj, 1, torch.LongTensor(to_keep))[:len(to_keep)]
+        adj = sparse.csr_matrix(adj > 0)
+
+        adjs.append(norm_laplacian(adj))
+        centroids.append(to_keep)
+    return adjs, centroids
 
 def save_computations(self, input, output):
     setattr(self, "input", input)
