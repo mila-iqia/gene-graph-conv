@@ -40,8 +40,10 @@ def hierarchical_clustering(adj, n_clusters):
     adj_hash = joblib.hash(adj.indices.tostring()) + joblib.hash(sparse.csr_matrix(adj).data.tostring()) + str(n_clusters)
     path = ".cache/" + '{}.npy'.format(adj_hash)
     if os.path.isfile(path):
+        print("Found cache for " + path);
         clusters = np.load(path)
     else:
+        print("No cache for " + path);
         clusters = sklearn.cluster.AgglomerativeClustering(n_clusters=n_clusters, affinity='euclidean',
                                                            memory='.cache', connectivity=adj,
                                                            compute_full_tree='auto', linkage='ward').fit_predict(adj.toarray())
