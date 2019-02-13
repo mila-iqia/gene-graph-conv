@@ -18,6 +18,7 @@ from scipy import sparse
 from models.utils import *
 from models.models import Model
 from models.gcn_layers import *
+import scipy.sparse 
 
 class GCN(Model):
     def __init__(self, **kwargs):
@@ -30,7 +31,7 @@ class GCN(Model):
         
         if (self.adj is None):
             raise Exception("adj must be specified for GCN")
-        
+        self.adj = scipy.sparse.csr_matrix(self.adj)
         self.nb_nodes = self.adj.shape[0]
 
         if self.embedding:
