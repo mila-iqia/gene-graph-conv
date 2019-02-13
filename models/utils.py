@@ -13,6 +13,8 @@ import joblib
 import numpy as np
 from sklearn.cluster import KMeans
 
+cache_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/.cache/" # this needs to change if we move utils.py
+
 def max_pool(x, centroids, adj):
     from torch_scatter import scatter_max
     ex, channels, nodes = x.shape
@@ -38,26 +40,25 @@ def norm_laplacian(adj):
 # We have several methods for clustering the graph. We use them to define the shape of the model and pooling
 def hierarchical_clustering(adj, n_clusters):
     adj_hash = joblib.hash(adj.indices.tostring()) + joblib.hash(sparse.csr_matrix(adj).data.tostring()) + str(n_clusters)
-    path = ".cache/" + '{}.npy'.format(adj_hash)
+    path = cache_dir + "hierarchical" + '{}.npy'.format(adj_hash)
     if os.path.isfile(path):
         print("Found cache for " + path);
         clusters = np.load(path)
     else:
         print("No cache for " + path);
         clusters = sklearn.cluster.AgglomerativeClustering(n_clusters=n_clusters, affinity='euclidean',
-                                                           memory='.cache', connectivity=adj,
+                                                           memory=cache_dir, connectivity=adj,
                                                            compute_full_tree='auto', linkage='ward').fit_predict(adj.toarray())
     np.save(path, np.array(clusters))
     return clusters
 
 def random_clustering(adj, n_clusters):
     adj_hash = joblib.hash(adj.data.tostring()) + joblib.hash(adj.indices.tostring()) + str(n_clusters)
-    path = ".cache/random" + '{}.npy'.format(adj_hash)
+    path = cache_dir + "random" + '{}.npy'.format(adj_hash)
     if os.path.isfile(path):
         clusters = np.load(path)
     else:
         clusters = []
-        import pdb; pdb.set_trace()
         for gene in range(adj.shape[0]):
             if len(clusters) == n_clusters:
                 break
@@ -71,7 +72,7 @@ def random_clustering(adj, n_clusters):
 
 def kmeans_clustering(adj, n_clusters):
     adj_hash = joblib.hash(adj.data.tostring()) + joblib.hash(adj.indices.tostring()) + str(n_clusters)
-    path = ".cache/kmeans" + '{}.npy'.format(adj_hash)
+    path = cache_dir + "kmeans" + '{}.npy'.format(adj_hash)
 
     if os.path.isfile(path):
         clusters = np.load(path)
