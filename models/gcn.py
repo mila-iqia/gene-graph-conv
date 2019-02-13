@@ -27,6 +27,10 @@ class GCN(Model):
         self.master_nodes = 0
         self.in_dim = 1
         self.out_dim = 2
+        
+        if (self.adj is None):
+            raise Exception("adj must be specified for GCN")
+        
         self.nb_nodes = self.adj.shape[0]
 
         if self.embedding:
