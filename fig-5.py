@@ -40,18 +40,21 @@ gene_graph = GeneManiaGraph()
 search_num_genes=[50, 100, 200, 300, 500, 1000, 2000, 4000, 8000, 16300]
 test_size=300
 search_train_size=[50]
-cuda=True
+cuda = torch.cuda.is_available()
 trials=3
 search_genes = ["RPL4"]
 models = [
-             # GCN(name="GCN_lay20_chan32_emb32_dropout_pool_hierarchy", cuda=cuda, dropout=True, num_layer=4, channels=32, embedding=32, prepool_extralayers=5, aggregation="hierarchy"),
+              #GCN(name="GCN_lay20_chan32_emb32_dropout_pool_hierarchy", cuda=cuda, dropout=True, num_layer=4, channels=32, embedding=32, prepool_extralayers=5, aggregation="hierarchy"),
               #GCN(name="GCN_lay3_chan16_emb32_dropout_agg_hierarchy_prepool_1", cuda=cuda, dropout=True, num_layer=3, channels=16, embedding=32, prepool_extralayers=1, aggregation="hierarchy"),
               #GCN(name="GCN_lay3_chan64_emb32_dropout_agg_hierarchy_reduce_5_schedule", cuda=cuda, dropout=True, num_layer=3, channels=64, embedding=32, aggregation="hierarchy", agg_reduce=5, lr=0.001, patience=15, scheduler=True), 
-              GCN(name="GCN_lay3_chan64_emb32_dropout_agg_hierarchy_reduce_5", cuda=cuda, dropout=True, num_layer=3, channels=64, embedding=32, aggregation="hierarchy", agg_reduce=5),
-              GCN(name="GCN_lay3_chan64_emb32_dropout_agg_hierarchy_reduce_3", cuda=cuda, dropout=True, num_layer=3, channels=64, embedding=32, aggregation="hierarchy", agg_reduce=3),
-              GCN(name="GCN_lay3_chan64_emb32_dropout_agg_hierarchy_reduce_10", cuda=cuda, dropout=True, num_layer=3, channels=64, embedding=32, aggregation="hierarchy", agg_reduce=10),
-              GCN(name="GCN_lay3_chan64_emb32_dropout_agg_hierarchy", cuda=cuda, dropout=True, num_layer=3, channels=64, embedding=32, aggregation="hierarchy"),
               #GCN(name="GCN_lay20_chan32_emb32_dropout_pool_random", cuda=cuda, num_layer=4, channels=32, embedding=32, prepool_extralayers=5, aggregation="random"),
+              GCN(name="GCN_lay3_chan64_emb32_dropout_agg_hierarchy_reduce", cuda=cuda, dropout=True, num_layer=3, channels=64, embedding=32, aggregation="hierarchy"),
+              GCN(name="GCN_lay3_chan64_emb32_dropout_agg_hierarchy_reduce_1.2", cuda=cuda, dropout=True, num_layer=3, channels=64, embedding=32, aggregation="hierarchy", agg_reduce=1.2),
+              GCN(name="GCN_lay3_chan64_emb32_dropout_agg_hierarchy_reduce_1.5", cuda=cuda, dropout=True, num_layer=3, channels=64, embedding=32, aggregation="hierarchy", agg_reduce=1.5),
+              GCN(name="GCN_lay3_chan64_emb32_dropout_agg_hierarchy_reduce_2", cuda=cuda, dropout=True, num_layer=3, channels=64, embedding=32, aggregation="hierarchy", agg_reduce=2),
+              GCN(name="GCN_lay3_chan64_emb32_dropout_agg_hierarchy_reduce_3", cuda=cuda, dropout=True, num_layer=3, channels=64, embedding=32, aggregation="hierarchy", agg_reduce=3),
+              GCN(name="GCN_lay3_chan64_emb32_dropout_agg_hierarchy_reduce_5", cuda=cuda, dropout=True, num_layer=3, channels=64, embedding=32, aggregation="hierarchy", agg_reduce=5),
+              GCN(name="GCN_lay3_chan64_emb32_dropout_agg_hierarchy_reduce_10", cuda=cuda, dropout=True, num_layer=3, channels=64, embedding=32, aggregation="hierarchy", agg_reduce=10),
               GCN(name="GCN_lay3_chan64_emb32_dropout", cuda=cuda, dropout=True, num_layer=3, channels=64, embedding=32),
               MLP(name="MLP_lay2_chan512_dropout", cuda=cuda, dropout=True, num_layer=2, channels=512),
               MLP(name="MLP_lay2_chan512", cuda=cuda, dropout=False, num_layer=2, channels=512),
