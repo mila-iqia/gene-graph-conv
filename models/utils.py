@@ -12,9 +12,9 @@ import sklearn.cluster
 import joblib
 import numpy as np
 from sklearn.cluster import KMeans
-from torch_scatter import scatter_max
 
 def max_pool(x, centroids, adj):
+    from torch_scatter import scatter_max
     ex, channels, nodes = x.shape
     x = x.view(-1, nodes, 1)
 
