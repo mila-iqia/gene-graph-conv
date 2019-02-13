@@ -1,4 +1,6 @@
 from models.models import Model
+from models.utils import save_computations
+from torch import nn
 
 class LR(Model):
     def __init__(self, **kwargs):

@@ -9,3 +9,4 @@ slurm-*
 cache/*
 slurm/*
 *.ipynb_checkpoints*
+.spyproject/

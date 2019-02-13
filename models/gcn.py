@@ -78,7 +78,6 @@ class GCN(Model):
             else:
                 x = conv(x)
 
-            x = F.relu(x)
             x.register_hook(self.save_grad('layer_{}'.format(i)))
 
             if dropout is not None:
@@ -153,7 +152,7 @@ class GCN(Model):
 
         representation = {}
 
-        if self.add_emb:
+        if self.embedding:
             add_rep(self.emb, 'emb', representation)
 
         for i, [layer, gate] in enumerate(zip(self.conv_layers, self.gating_layers)):

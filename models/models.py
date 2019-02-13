@@ -122,6 +122,15 @@ class Model(nn.Module):
         self.load_state_dict(self.best_model)
         self.best_model = None
 
-    def predict(self, inputs):
-        """ Run the trained model on the inputs"""
-        return self.forward(inputs)
+    def predict(self, inputs, probs=False):
+        """ 
+        Run the trained model on the inputs
+        
+        Args:
+        inputs (torch.FloatTensor): Input to the model
+        probs (bool): Get probability estimates
+        """
+        out = self.forward(inputs)
+        if probs:
+            out = F.softmax(out, dim=1)
+        return out
