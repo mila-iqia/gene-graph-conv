@@ -105,3 +105,6 @@ venv.bak/
 
 # Data folder
 data/
+
+# Pycharm settings
+.idea/

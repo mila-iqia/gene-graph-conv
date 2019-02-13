@@ -4,6 +4,7 @@ import os
 import numpy as np
 import pandas as pd
 import h5py
+from collections import Counter
 
 
 class TCGAMeta(Dataset):
@@ -11,10 +12,11 @@ class TCGAMeta(Dataset):
 
     """
 
-    def __init__(self, data_dir=None, dataset_transform=None, transform=None, target_transform=None, download=False, preload=True):
+    def __init__(self, data_dir=None, dataset_transform=None, transform=None, target_transform=None, download=False, preload=True, min_samples_per_class=3, task_variables_file=None):
         self.dataset_transform = dataset_transform
         self.target_transform = target_transform
         self.transform = transform
+
         # specify a default data directory
         if data_dir is None:
             data_dir = os.path.join(os.path.dirname(__file__), 'data')
@@ -27,7 +29,7 @@ class TCGAMeta(Dataset):
 
             _download(data_dir, cancers)
 
-        self.task_ids = get_TCGA_task_ids(data_dir)
+        self.task_ids = get_TCGA_task_ids(data_dir, min_samples_per_class, task_variables_file)
 
         if preload:
             try:
@@ -36,12 +38,8 @@ class TCGAMeta(Dataset):
 
                     gene_ids_file = os.path.join(data_dir, 'gene_ids')
                     all_sample_ids_file = os.path.join(data_dir, 'all_sample_ids')
-                    with open(gene_ids_file, 'r') as file:
-                        gene_ids = file.readlines()
-                        self.gene_ids = [x.strip() for x in gene_ids]
-                    with open(all_sample_ids_file, 'r') as file:
-                        all_sample_ids = file.readlines()
-                        self.all_sample_ids = [x.strip() for x in all_sample_ids]
+                    self.gene_ids = _read_string_list(gene_ids_file)
+                    self.all_sample_ids = _read_string_list(all_sample_ids_file)
 
                     self.preloaded = (self.all_sample_ids, self.gene_ids, self.gene_expression_data)
             except:
@@ -98,7 +96,7 @@ class TCGAMeta(Dataset):
         """
         dataset = TCGATask(self.task_ids[index], transform=self.transform, target_transform=self.target_transform, download=False, preloaded=self.preloaded)
 
-        if self.target_transform is not None:
+        if self.dataset_transform is not None:
             dataset = self.dataset_transform(dataset)
         return dataset
 
@@ -122,22 +120,16 @@ class TCGATask(Dataset):
             _download(data_dir, [cancer])
 
         if preloaded is None:
-            try:
-                with h5py.File(os.path.join(data_dir, 'TCGA_tissue_ppi.hdf5'), 'r') as f:
-                    gene_ids_file = os.path.join(data_dir, 'gene_ids')
-                    all_sample_ids_file = os.path.join(data_dir, 'all_sample_ids')
-                    with open(gene_ids_file, 'r') as file:
-                        gene_ids = file.readlines()
-                        self.gene_ids = [x.strip() for x in gene_ids]
-                    with open(all_sample_ids_file, 'r') as file:
-                        all_sample_ids = file.readlines()
-                        self.all_sample_ids = [x.strip() for x in all_sample_ids]
+            gene_ids_file = os.path.join(data_dir, 'gene_ids')
+            all_sample_ids_file = os.path.join(data_dir, 'all_sample_ids')
 
-            except:
-                print('TCGA_tissue_ppi.hdf5 could not be read from the data_dir.')
-                sys.exit()
+            if not(os.path.isfile(gene_ids_file) and os.path.isfile(all_sample_ids_file)):
+                raise ValueError('Preprocessed gene_ids and sample_ids list where not found in {}.'.format(data_dir))
+
+            self.gene_ids = _read_string_list(gene_ids_file)
+            self._all_sample_ids = _read_string_list(all_sample_ids_file)
         else:
-            self.all_sample_ids, self.gene_ids, self.data = preloaded
+            self._all_sample_ids, self.gene_ids, self._data = preloaded
 
         # load the cancer specific matrix
         matrix = pd.read_csv(os.path.join(data_dir, 'clinicalMatrices', cancer + '_clinicalMatrix'), delimiter='\t')
@@ -147,7 +139,7 @@ class TCGATask(Dataset):
         attribute = matrix[task_variable]
 
         # filter all elements where the clinical variable is not available or the associated gene expression data
-        available_elements = attribute.notnull() & matrix['sampleID'].isin(self.all_sample_ids)
+        available_elements = attribute.notnull() & matrix['sampleID'].isin(self._all_sample_ids)
         sample_ids = ids[available_elements].tolist()
         filtered_attribute = attribute[available_elements].astype('category').cat
         self._labels = filtered_attribute.codes.tolist()
@@ -155,14 +147,15 @@ class TCGATask(Dataset):
         self.num_classes = len(self.categories)
 
         # generator to retrieve the specific indices we need
-        indices_to_load = (sample_ids.index(sample_id) for sample_id in sample_ids)
+        indices_to_load = [self._all_sample_ids.index(sample_id) for sample_id in sample_ids]
+        indices_to_load, self._labels = zip(*sorted(zip(indices_to_load, self._labels)))
 
         # lazy loading or loading from preloaded data if available
         if preloaded is None:
             with h5py.File(os.path.join(data_dir, 'TCGA_tissue_ppi.hdf5'), 'r') as f:
                 self._samples = f['expression_data'][indices_to_load, :]
         else:
-            self._samples = self.data[np.array(list(indices_to_load), dtype=int), :]
+            self._samples = self._data[np.array(list(indices_to_load), dtype=int), :]
 
         self.input_size = self._samples.shape[1]
 
@@ -182,9 +175,8 @@ class TCGATask(Dataset):
         return self._samples.shape[0]
 
 
-def get_TCGA_task_ids(data_dir=None, min_samples=250, max_samples=sys.maxsize, task_variables_file=None):
+def get_TCGA_task_ids(data_dir=None, min_samples_per_class=3, task_variables_file=None):
     # specify a default data directory
-
     if data_dir is None:
         data_dir = os.path.join(os.path.dirname(__file__), 'data')
 
@@ -205,8 +197,8 @@ def get_TCGA_task_ids(data_dir=None, min_samples=250, max_samples=sys.maxsize, t
 
     task_ids = []
     for filename in os.listdir(os.path.join(data_dir, 'clinicalMatrices')):
-
         matrix = pd.read_csv(os.path.join(data_dir, 'clinicalMatrices', filename), delimiter='\t')
+
         for task_variable in task_variables:
             try:
                 # if this task_variable exists for this cancer find the sample_ids for this task
@@ -220,9 +212,13 @@ def get_TCGA_task_ids(data_dir=None, min_samples=250, max_samples=sys.maxsize, t
 
             task_id = (task_variable, filename.split('_')[0])
 
-            num_samples = len(task_sample_ids)
+            num_samples_per_label = Counter(matrix[task_variable][matrix['sampleID'].isin(task_sample_ids)])
+
             # only add this task for the specified range of number of samples
-            if min_samples < num_samples < max_samples:
+            num_samples_per_class_is_in_range = all([num_samples > min_samples_per_class for num_samples in num_samples_per_label.values()])
+            # Make sure this task is not a one-class classification in the first place
+            is_not_one_class = len(num_samples_per_label) > 1
+            if num_samples_per_class_is_in_range and is_not_one_class:
                 task_ids.append(task_id)
     return task_ids
 
@@ -295,3 +291,13 @@ def _download(data_dir, cancers):
                     text_file.write('{}\n'.format(sample_id))
 
         print('Done!')
+
+
+def _read_string_list(path):
+    with open(path) as f:
+        string_list = f.readlines()
+    # remove whitespace
+    string_list = [x.strip() for x in string_list]
+    return string_list
+
+
