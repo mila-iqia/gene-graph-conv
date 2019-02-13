@@ -43,6 +43,9 @@ class GeneInteractionGraph(object):
                 if neighbors.has_node(u) and neighbors.has_node(v):
                     neighbors.add_weighted_edges_from([(u, v, d)])
         return neighbors
+    
+    def adj(self):
+        return nx.to_numpy_matrix(self.nx_graph)
 
 class RegNetGraph(GeneInteractionGraph):
     def __init__(self, at_hash="e109e087a8fc8aec45bae3a74a193922ce27fc58", datastore=""):

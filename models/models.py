@@ -19,7 +19,7 @@ from models.utils import *
 
 class Model(nn.Module):
 
-    def __init__(self, name=None, column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=0., dropout=False, cuda=False, seed=0, adj=None, graph_name=None, aggregation=None, prepool_extralayers=0, lr=0.001, patience=10, agg_reduce=2, scheduler=False):
+    def __init__(self, name=None, column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=0., dropout=False, cuda=False, seed=0, adj=None, graph_name=None, aggregation=None, prepool_extralayers=0, lr=0.0001, patience=10, agg_reduce=2, scheduler=False, metric=sklearn.metrics.roc_auc_score):
         self.name = name
         self.column_names = column_names
         self.num_layer = num_layer
@@ -37,16 +37,18 @@ class Model(nn.Module):
         self.lr = lr
         self.scheduler = scheduler
         self.agg_reduce=2
-        self.batch_size = 10
+        self.batch_size = 100
         self.start_patience = patience
         self.attention_head = 0
         self.train_valid_split = 0.8
         self.best_model = None
+        self.metric = metric
         super(Model, self).__init__()
 
     def fit(self, X, y, adj=None):
         self.adj = adj
         self.X = X
+        self.y = y
         start = time.time()
         self.setup_layers()
         self.adj = None
@@ -94,18 +96,18 @@ class Model(nn.Module):
                 inputs = Variable(x_train[i:i + self.batch_size]).float()
                 if self.on_cuda:
                     inputs = inputs.cuda()
-                res.append(self(inputs)[:, 1].data.cpu().numpy())
-            y_hat = np.concatenate(res).ravel()
-            auc['train'] = sklearn.metrics.roc_auc_score(y_train.numpy(), y_hat)
+                res.append(self(inputs).data.cpu().numpy())
+            y_hat = np.concatenate(res)
+            auc['train'] = self.metric(y_train.numpy(), np.argmax(y_hat, axis=1))
 
             res = []
             for i in range(0, x_valid.shape[0], self.batch_size):
                 inputs = Variable(x_valid[i:i + self.batch_size]).float()
                 if self.on_cuda:
                     inputs = inputs.cuda()
-                res.append(self(inputs)[:, 1].data.cpu().numpy())
-            y_hat = np.concatenate(res).ravel()
-            auc['valid'] = sklearn.metrics.roc_auc_score(y_valid, y_hat)
+                res.append(self(inputs).data.cpu().numpy())
+            y_hat = np.concatenate(res)
+            auc['valid'] = self.metric(y_valid, np.argmax(y_hat, axis=1))
             patience = patience - 1
             if patience == 0:
                 break
@@ -113,10 +115,10 @@ class Model(nn.Module):
                 max_valid = auc['valid']
                 patience = self.start_patience
                 self.best_model = self.state_dict().copy()
-            print("epoch: " + str(epoch) + ", time: " + str(time.time() - start) + ", valid_auc: " + str(auc['valid']) + ", train_auc: " + str(auc['train']))
+            print("epoch: " + str(epoch) + ", time: " + "{0:.2f}".format(time.time() - start) + ", valid_metric: " + "{0:.2f}".format(auc['valid']) + ", train_metric: " + "{0:.2f}".format(auc['train']))
             if self.scheduler:
                 scheduler.step()
-        print("total train time:" + str(time.time() - all_time) + " for epochs: " + str(epoch))
+        print("total train time:" + "{0:.2f}".format(time.time() - all_time) + " for epochs: " + str(epoch))
         self.load_state_dict(self.best_model)
         self.best_model = None
 
