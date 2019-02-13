@@ -36,7 +36,7 @@ class Model(nn.Module):
         self.aggregation = aggregation
         self.lr = lr
         self.scheduler = scheduler
-        self.agg_reduce=2
+        self.agg_reduce=agg_reduce
         self.batch_size = 100
         self.start_patience = patience
         self.attention_head = 0
