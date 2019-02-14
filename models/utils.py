@@ -89,9 +89,8 @@ def setup_aggregates(adj, nb_layer, aggregation="hierarchy", agg_reduce=2):
     adjs = [norm_laplacian(adj)]
     centroids = []
     for _ in range(nb_layer):
-        print(agg_reduce)
         n_clusters = int(adj.shape[0] / agg_reduce) if int(adj.shape[0] / agg_reduce) > 0 else adj.shape[0]
-        print(n_clusters)
+        print("Reducing graph by a factor of " + str(agg_reduce) + " to " + str(n_clusters) + " nodes")
         if aggregation == "hierarchy":
             clusters = hierarchical_clustering(adj, n_clusters)
         elif aggregation == "random":
