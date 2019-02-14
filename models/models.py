@@ -19,7 +19,7 @@ from models.utils import *
 
 class Model(nn.Module):
 
-    def __init__(self, name=None, column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=0., dropout=False, cuda=False, seed=0, adj=None, graph_name=None, aggregation=None, prepool_extralayers=0, lr=0.0001, patience=10, agg_reduce=2, scheduler=False, metric=sklearn.metrics.accuracy_score):
+    def __init__(self, name=None, column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=0., dropout=False, cuda=False, seed=0, adj=None, graph_name=None, aggregation=None, prepool_extralayers=0, lr=0.0001, patience=10, agg_reduce=2, scheduler=False, metric=sklearn.metrics.accuracy_score,batch_size=10):
         self.name = name
         self.column_names = column_names
         self.num_layer = num_layer
@@ -37,7 +37,7 @@ class Model(nn.Module):
         self.lr = lr
         self.scheduler = scheduler
         self.agg_reduce=agg_reduce
-        self.batch_size = 100
+        self.batch_size = batch_size
         self.start_patience = patience
         self.attention_head = 0
         self.train_valid_split = 0.8
@@ -84,6 +84,7 @@ class Model(nn.Module):
 
                 targets = Variable(labels, requires_grad=False).long()
                 loss = criterion(y_pred, targets)
+                print("  batch ({}/{})".format(i, x_train.shape[0]) + ", train loss:" + "{0:.4f}".format(loss))
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -123,15 +124,16 @@ class Model(nn.Module):
         self.load_state_dict(self.best_model)
         self.best_model = None
 
-    def predict(self, inputs, probs=False):
+    def predict(self, inputs, probs=True):
         """ 
         Run the trained model on the inputs
         
         Args:
-        inputs (torch.FloatTensor): Input to the model
+        inputs: Input to the model
         probs (bool): Get probability estimates
         """
+        inputs = torch.FloatTensor(np.expand_dims(inputs, axis=2))
         out = self.forward(inputs)
         if probs:
             out = F.softmax(out, dim=1)
-        return out
+        return out.detach()
