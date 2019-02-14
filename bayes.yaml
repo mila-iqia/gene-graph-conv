@@ -1,0 +1,4 @@
+name: sgi
+algorithms: BayesianOptimizer
+# https://cloud.mongodb.com/v2/5c65bd849ccf640cd1206ec7#metrics/replicaSet/5c65bf17fd4cbaaffda3a316/explorer/test/experiments/find
+# orion -vv hunt --config bayes.yaml --branch sgi1 --max-trial=10 --code-change-type noeffect ./fig-5.py --lr~'loguniform(0.0001, 0.01)'
