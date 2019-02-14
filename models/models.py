@@ -19,7 +19,7 @@ from models.utils import *
 
 class Model(nn.Module):
 
-    def __init__(self, name=None, column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=0., dropout=False, cuda=False, seed=0, adj=None, graph_name=None, aggregation=None, prepool_extralayers=0, lr=0.0001, patience=10, agg_reduce=2, scheduler=False, metric=sklearn.metrics.roc_auc_score):
+    def __init__(self, name=None, column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=0., dropout=False, cuda=False, seed=0, adj=None, graph_name=None, aggregation=None, prepool_extralayers=0, lr=0.0001, patience=10, agg_reduce=2, scheduler=False, metric=sklearn.metrics.accuracy_score):
         self.name = name
         self.column_names = column_names
         self.num_layer = num_layer
@@ -43,6 +43,7 @@ class Model(nn.Module):
         self.train_valid_split = 0.8
         self.best_model = None
         self.metric = metric
+        print("Early stopping metric is " + self.metric.__name__)
         super(Model, self).__init__()
 
     def fit(self, X, y, adj=None):

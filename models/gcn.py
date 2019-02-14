@@ -27,7 +27,7 @@ class GCN(Model):
     def setup_layers(self):
         self.master_nodes = 0
         self.in_dim = 1
-        self.out_dim = 2
+        self.out_dim = len(np.unique(self.y))
         
         if (self.adj is None):
             raise Exception("adj must be specified for GCN")
