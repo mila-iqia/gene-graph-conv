@@ -133,7 +133,9 @@ class Model(nn.Module):
         probs (bool): Get probability estimates
         """
         inputs = torch.FloatTensor(np.expand_dims(inputs, axis=2))
+        if self.on_cuda:
+            inputs = inputs.cuda()
         out = self.forward(inputs)
         if probs:
             out = F.softmax(out, dim=1)
-        return out.detach()
+        return out.cpu().detach()
