@@ -68,6 +68,7 @@ class Model(nn.Module):
         patience = self.start_patience
         self.best_model = self.state_dict().copy()
         all_time = time.time()
+        epoch = 0 # when num_epoch is set to 0 for testing
         for epoch in range(0, self.num_epochs):
             start = time.time()
             for i in range(0, x_train.shape[0], self.batch_size):
