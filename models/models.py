@@ -19,7 +19,7 @@ from models.utils import *
 
 class Model(nn.Module):
 
-    def __init__(self, name=None, column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=0., dropout=False, cuda=False, seed=0, adj=None, graph_name=None, aggregation=None, prepool_extralayers=0, lr=0.0001, patience=10, agg_reduce=2, scheduler=False, metric=sklearn.metrics.accuracy_score, optimizer=torch.optim.Adam, weight_decay=0.0001, batch_size=10):
+    def __init__(self, name=None, column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=0., dropout=False, cuda=False, seed=0, adj=None, graph_name=None, aggregation=None, prepool_extralayers=0, lr=0.0001, patience=10, agg_reduce=2, scheduler=False, metric=sklearn.metrics.accuracy_score, optimizer=torch.optim.Adam, weight_decay=0.0001, batch_size=10, verbose=True):
         self.name = name
         self.column_names = column_names
         self.num_layer = num_layer
@@ -45,7 +45,9 @@ class Model(nn.Module):
         self.metric = metric
         self.optimizer = optimizer
         self.weight_decay = weight_decay
-        print("Early stopping metric is " + self.metric.__name__)
+        self.verbose = verbose
+        if self.verbose:
+            print("Early stopping metric is " + self.metric.__name__)
         super(Model, self).__init__()
 
     def fit(self, X, y, adj=None):
@@ -84,7 +86,8 @@ class Model(nn.Module):
 
                 targets = Variable(labels, requires_grad=False).long()
                 loss = criterion(y_pred, targets)
-                print("  batch ({}/{})".format(i, x_train.shape[0]) + ", train loss:" + "{0:.4f}".format(loss))
+                if self.verbose:
+                    print("  batch ({}/{})".format(i, x_train.shape[0]) + ", train loss:" + "{0:.4f}".format(loss))
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -117,10 +120,12 @@ class Model(nn.Module):
                 max_valid = auc['valid']
                 patience = self.start_patience
                 self.best_model = self.state_dict().copy()
-            print("epoch: " + str(epoch) + ", time: " + "{0:.2f}".format(time.time() - start) + ", valid_metric: " + "{0:.2f}".format(auc['valid']) + ", train_metric: " + "{0:.2f}".format(auc['train']))
+            if self.verbose:
+                print("epoch: " + str(epoch) + ", time: " + "{0:.2f}".format(time.time() - start) + ", valid_metric: " + "{0:.2f}".format(auc['valid']) + ", train_metric: " + "{0:.2f}".format(auc['train']))
             if self.scheduler:
                 scheduler.step()
-        print("total train time:" + "{0:.2f}".format(time.time() - all_time) + " for epochs: " + str(epoch))
+        if self.verbose:
+            print("total train time:" + "{0:.2f}".format(time.time() - all_time) + " for epochs: " + str(epoch))
         self.load_state_dict(self.best_model)
         self.best_model = None
 
