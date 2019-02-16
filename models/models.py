@@ -19,7 +19,7 @@ from models.utils import *
 
 class Model(nn.Module):
 
-    def __init__(self, name=None, column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=0., dropout=False, cuda=False, seed=0, adj=None, graph_name=None, aggregation=None, prepool_extralayers=0, lr=0.0001, patience=10, agg_reduce=2, scheduler=False, metric=sklearn.metrics.accuracy_score,batch_size=10):
+    def __init__(self, name=None, column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=0., dropout=False, cuda=False, seed=0, adj=None, graph_name=None, aggregation=None, prepool_extralayers=0, lr=0.0001, patience=10, agg_reduce=2, scheduler=False, metric=sklearn.metrics.accuracy_score, optimizer=torch.optim.Adam, weight_decay=0.0001, batch_size=10):
         self.name = name
         self.column_names = column_names
         self.num_layer = num_layer
@@ -36,13 +36,15 @@ class Model(nn.Module):
         self.aggregation = aggregation
         self.lr = lr
         self.scheduler = scheduler
-        self.agg_reduce=agg_reduce
+        self.agg_reduce = agg_reduce
         self.batch_size = batch_size
         self.start_patience = patience
         self.attention_head = 0
         self.train_valid_split = 0.8
         self.best_model = None
         self.metric = metric
+        self.optimizer = optimizer
+        self.weight_decay = weight_decay
         print("Early stopping metric is " + self.metric.__name__)
         super(Model, self).__init__()
 
@@ -50,10 +52,7 @@ class Model(nn.Module):
         self.adj = adj
         self.X = X
         self.y = y
-        start = time.time()
         self.setup_layers()
-        self.adj = None
-        self.X = None
         x_train, x_valid, y_train, y_valid = sklearn.model_selection.train_test_split(X, y, stratify=y, train_size=self.train_valid_split, test_size=1-self.train_valid_split, random_state=self.seed)
 
         x_train = torch.FloatTensor(np.expand_dims(x_train, axis=2))
@@ -61,7 +60,7 @@ class Model(nn.Module):
         y_train = torch.FloatTensor(y_train)
 
         criterion = torch.nn.CrossEntropyLoss(reduction='mean')
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=0.0001)
+        optimizer = self.optimizer(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
         if self.scheduler:
             scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma = 0.9)
 
@@ -125,9 +124,9 @@ class Model(nn.Module):
         self.best_model = None
 
     def predict(self, inputs, probs=True):
-        """ 
+        """
         Run the trained model on the inputs
-        
+
         Args:
         inputs: Input to the model
         probs (bool): Get probability estimates
