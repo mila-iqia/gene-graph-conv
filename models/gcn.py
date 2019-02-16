@@ -46,14 +46,14 @@ class GCN(Model):
 
         if self.attention_head:
             self.attention_layer = AttentionLayer(self.channels[-1], self.attention_head)
-            self.attention_layer.register_forward_hook(save_computations)
+            #self.attention_layer.register_forward_hook(save_computations)
 
-        self.grads = {}
-        def save_grad(name):
-            def hook(grad):
-                self.grads[name] = grad.data.cpu().numpy()
-            return hook
-        self.save_grad = save_grad
+#        self.grads = {}
+#         def save_grad(name):
+#             def hook(grad):
+#                 self.grads[name] = grad.data.cpu().numpy()
+#             return hook
+        #self.save_grad = save_grad
         torch.manual_seed(self.seed)
         if self.on_cuda:
             torch.cuda.manual_seed(self.seed)
@@ -63,9 +63,10 @@ class GCN(Model):
     def forward(self, x):
         nb_examples, nb_nodes, nb_channels = x.size()
 
+
         if self.embedding:
             x = self.emb(x)
-            x.register_hook(self.save_grad('emb'))
+            #x.register_hook(self.save_grad('emb'))
 
         for i, [conv, gate, dropout] in enumerate(zip(self.conv_layers, self.gating_layers, self.dropout_layers)):
             for prepool_conv in self.prepool_conv_layers[i]:
@@ -78,7 +79,7 @@ class GCN(Model):
             else:
                 x = conv(x)
 
-            x.register_hook(self.save_grad('layer_{}'.format(i)))
+            #x.register_hook(self.save_grad('layer_{}'.format(i)))
 
             if dropout is not None:
                 id_to_keep = dropout(torch.FloatTensor(np.ones((x.size(0), x.size(1))))).unsqueeze(2)
@@ -91,13 +92,13 @@ class GCN(Model):
             x = self.attention_layer(x)[0]
 
         x = self.my_logistic_layers[-1](x.view(nb_examples, -1))
-        x.register_hook(self.save_grad('logistic'))
+        #x.register_hook(self.save_grad('logistic'))
         return x
 
 
     def add_embedding_layer(self):
         self.emb = EmbeddingLayer(self.nb_nodes, self.embedding)
-        self.emb.register_forward_hook(save_computations)
+        #self.emb.register_forward_hook(save_computations)
 
     def add_dropout_layers(self):
         self.dropout_layers = [None] * (len(self.dims) - 1)
@@ -112,13 +113,13 @@ class GCN(Model):
             extra_layers = []
             for _ in range(self.prepool_extralayers):
                 extra_layer = GCNLayer(self.adjs[i], c_in, c_in, self.on_cuda, i, torch.LongTensor(np.array(range(self.adjs[i].shape[0]))))
-                extra_layer.register_forward_hook(save_computations)
+                #extra_layer.register_forward_hook(save_computations)
                 extra_layers.append(extra_layer)
 
             prepool_convs.append(nn.ModuleList(extra_layers))
 
             layer = GCNLayer(self.adjs[i], c_in, c_out, self.on_cuda, i, torch.tensor(self.centroids[i]))
-            layer.register_forward_hook(save_computations)
+            #layer.register_forward_hook(save_computations)
             convs.append(layer)
         self.conv_layers = nn.ModuleList(convs)
         self.prepool_conv_layers = prepool_convs
@@ -128,7 +129,7 @@ class GCN(Model):
             gating_layers = []
             for c_in in self.channels:
                 gate = ElementwiseGateLayer(c_in)
-                gate.register_forward_hook(save_computations)
+                #gate.register_forward_hook(save_computations)
                 gating_layers.append(gate)
             self.gating_layers = nn.ModuleList(gating_layers)
         else:
@@ -142,7 +143,7 @@ class GCN(Model):
             logistic_in_dim = [self.adjs[-1].shape[0] * self.dims[-1]]
         for d in logistic_in_dim:
             layer = nn.Linear(d, self.out_dim)
-            layer.register_forward_hook(save_computations)
+            #layer.register_forward_hook(save_computations)
             logistic_layers.append(layer)
         self.my_logistic_layers = nn.ModuleList(logistic_layers)
 
