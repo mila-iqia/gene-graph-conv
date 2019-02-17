@@ -38,14 +38,16 @@ def norm_laplacian(adj):
     return adj
 
 # We have several methods for clustering the graph. We use them to define the shape of the model and pooling
-def hierarchical_clustering(adj, n_clusters):
+def hierarchical_clustering(adj, n_clusters, verbose=True):
     adj_hash = joblib.hash(adj.indices.tostring()) + joblib.hash(sparse.csr_matrix(adj).data.tostring()) + str(n_clusters)
     path = cache_dir + "hierarchical" + '{}.npy'.format(adj_hash)
     if os.path.isfile(path):
-        print("Found cache for " + path);
+        if verbose:
+            print("Found cache for " + path);
         clusters = np.load(path)
     else:
-        print("No cache for " + path);
+        if verbose:
+            print("No cache for " + path);
         clusters = sklearn.cluster.AgglomerativeClustering(n_clusters=n_clusters, affinity='euclidean',
                                                            memory=cache_dir, connectivity=adj,
                                                            compute_full_tree='auto', linkage='ward').fit_predict(adj.toarray())
@@ -83,16 +85,17 @@ def kmeans_clustering(adj, n_clusters):
 
 
 # This function takes in the full adjacency matrix and a number of layers, then returns a bunch of clustered adjacencies
-def setup_aggregates(adj, nb_layer, aggregation="hierarchy", agg_reduce=2):
+def setup_aggregates(adj, nb_layer, aggregation="hierarchy", agg_reduce=2, verbose=True):
     adj = (adj > 0.).astype(int)
     adj.setdiag(np.ones(adj.shape[0]))
     adjs = [norm_laplacian(adj)]
     centroids = []
     for _ in range(nb_layer):
         n_clusters = int(adj.shape[0] / agg_reduce) if int(adj.shape[0] / agg_reduce) > 0 else adj.shape[0]
-        print("Reducing graph by a factor of " + str(agg_reduce) + " to " + str(n_clusters) + " nodes")
+        if verbose:
+            print("Reducing graph by a factor of " + str(agg_reduce) + " to " + str(n_clusters) + " nodes")
         if aggregation == "hierarchy":
-            clusters = hierarchical_clustering(adj, n_clusters)
+            clusters = hierarchical_clustering(adj, n_clusters, verbose)
         elif aggregation == "random":
             clusters = random_clustering(adj, n_clusters)
         elif aggregation == "kmeans":
