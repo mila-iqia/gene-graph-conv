@@ -3,7 +3,6 @@ import glob
 import os
 import urllib
 import zipfile
-
 import h5py
 import pandas as pd
 import numpy as np
@@ -24,26 +23,28 @@ class GeneDataset(Dataset):
 
 
 class TCGADataset(GeneDataset):
-    def __init__(self, nb_examples=None, at_hash="4070a45bc7dd69584f33e86ce193a2c903f0776d", datastore=""):
+    def __init__(self, nb_examples=None, at_hash="e4081b995625f9fc599ad860138acf7b6eb1cf6f", datastore=""):
         self.at_hash = at_hash
         self.datastore = datastore
         self.nb_examples = nb_examples # In case you don't want to load the whole dataset from disk
         super(TCGADataset, self).__init__()
 
     def load_data(self):
-        self.file_path = at.get(self.at_hash, datastore=self.datastore)
-        self.file = h5py.File(self.file_path, 'r')
-        self.labels = self.file['labels_data']
-        self.sample_names = self.file['sample_names']
-        self.node_names = np.array(self.file['gene_names']).astype("str")
-        self.df = pd.DataFrame(np.array(self.file['expression_data'][:self.nb_examples]))
-        self.df.columns = self.node_names[:len(self.df.columns)]
+        csv_file = at.get(self.at_hash, datastore=self.datastore)
+        hdf_file = csv_file.split(".gz")[0] + ".hdf5"
+        if not os.path.isfile(hdf_file):
+            print("We are converting a CSV dataset of TCGA to HDF5. Please wait a minute, this only happens the first time you use the TCGA dataset.")
+            df = pd.read_csv(csv_file, compression="gzip", sep="\t")
+            df = df.transpose()
+            df.columns = df.iloc[0]
+            df = df.drop(df.index[0])
+            df = df.astype(float)
+            df.to_hdf(hdf_file, key="data", complevel=5)
+        self.df = pd.read_hdf(hdf_file)
+        self.sample_names = self.df.index.values.tolist()
+        self.node_names = np.array(self.df.columns.values.tolist()).astype("str")
         self.nb_nodes = self.df.shape[1]
-        self.label_name = self.node_names[len(self.df.columns)+1:]
-
-        if self.labels.shape != self.labels[:].reshape(-1).shape:
-            print("Converting one-hot labels to integers")
-            self.labels = np.argmax(self.labels[:], axis=1)
+        self.labels = [0 for _ in range(self.df.shape[0])]
 
     def __getitem__(self, idx):
         sample = np.array(self.df.iloc[idx])
