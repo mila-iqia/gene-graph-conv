@@ -1,4 +1,5 @@
 """Imports Datasets"""
+import csv
 import glob
 import os
 import urllib
@@ -14,6 +15,22 @@ class GeneDataset(Dataset):
     """Gene Expression Dataset."""
     def __init__(self):
         self.load_data()
+
+    def relabel_df(self):
+        # This gene code map was generated on February 18th, 2019
+        # at this URL: https://www.genenames.org/cgi-bin/download/custom?col=gd_app_sym&col=gd_prev_sym&status=Approved&status=Entry%20Withdrawn&hgnc_dbtag=on&order_by=gd_app_sym_sort&format=text&submit=submit
+        # it enables us to map the gene names to the newest version of the gene labels
+        with open('gene_code_map.txt') as csv_file:
+            csv_reader = csv.reader(csv_file, delimiter='\t')
+            line_count = 0
+            x = {row[0]: row[1] for row in csv_reader}
+
+            map = {}
+            for key, val in x.items():
+                for v in val.split(", "):
+                    if key not in self.df.columns:
+                        map[v] = key
+            self.df.rename(map, axis="columns", inplace=True)
 
     def load_data(self):
         raise NotImplementedError()
@@ -41,6 +58,7 @@ class TCGADataset(GeneDataset):
             df = df.astype(float)
             df.to_hdf(hdf_file, key="data", complevel=5)
         self.df = pd.read_hdf(hdf_file)
+        self.relabel_df()
         self.sample_names = self.df.index.values.tolist()
         self.node_names = np.array(self.df.columns.values.tolist()).astype("str")
         self.nb_nodes = self.df.shape[1]

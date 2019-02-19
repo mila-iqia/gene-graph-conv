@@ -1,5 +1,6 @@
 """ This file contains the wrapper around our gene interaction graph, which is essentially a big adjacency matrix"""
 
+import csv
 import numpy as np
 import pandas as pd
 import h5py
@@ -11,8 +12,10 @@ class GeneInteractionGraph(object):
     """ This class manages the data pertaining to the relationships between genes.
         It has an nx_graph, and some helper functions.
     """
-    def __init__(self):
+    def __init__(self, relabel_genes=True):
         self.load_data()
+        if relabel_genes:
+            self.relabel()
 
     def load_data(self):
         raise NotImplementedError
@@ -43,9 +46,25 @@ class GeneInteractionGraph(object):
                 if neighbors.has_node(u) and neighbors.has_node(v):
                     neighbors.add_weighted_edges_from([(u, v, d)])
         return neighbors
-    
+
     def adj(self):
         return nx.to_numpy_matrix(self.nx_graph)
+
+    def relabel(self):
+        # This gene code map was generated on February 18th, 2019
+        # at this URL: https://www.genenames.org/cgi-bin/download/custom?col=gd_app_sym&col=gd_prev_sym&status=Approved&status=Entry%20Withdrawn&hgnc_dbtag=on&order_by=gd_app_sym_sort&format=text&submit=submit
+        # it enables us to map the gene names to the newest version of the gene labels
+        with open('gene_code_map.txt') as csv_file:
+            csv_reader = csv.reader(csv_file, delimiter='\t')
+            line_count = 0
+            x = {row[0]: row[1] for row in csv_reader}
+            map = {}
+
+            for key, val in x.items():
+                for v in val.split(", "):
+                    map[v] = key
+            remapped_nx_graph = nx.relabel.relabel_nodes(self.nx_graph, map)
+            self.nx_graph = remapped_nx_graph
 
 class RegNetGraph(GeneInteractionGraph):
     def __init__(self, at_hash="e109e087a8fc8aec45bae3a74a193922ce27fc58", datastore=""):
