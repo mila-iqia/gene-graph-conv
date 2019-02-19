@@ -6,6 +6,6 @@ torch
 torchvision
 sklearn
 networkx
-academictorrents>=2.1.11
+academictorrents>=2.1.15
 matplotlib
 joblib
