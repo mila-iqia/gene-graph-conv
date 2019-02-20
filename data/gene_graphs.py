@@ -6,7 +6,7 @@ import pandas as pd
 import h5py
 import networkx as nx
 import academictorrents as at
-
+import os
 
 class GeneInteractionGraph(object):
     """ This class manages the data pertaining to the relationships between genes.
@@ -84,6 +84,18 @@ class GeneManiaGraph(GeneInteractionGraph):
 
     def load_data(self):
         self.nx_graph = nx.OrderedGraph(nx.readwrite.gpickle.read_gpickle(at.get(self.at_hash, datastore=self.datastore)))
+
+class HetIOGraph(GeneInteractionGraph):
+    def __init__(self, datadir):
+        # TODO convert to academictorrents interface
+        if not os.path.exists(datadir):
+            print('Run notebooks/hetio.ipynb to generate pickle file for graph')
+            raise FileNotFoundError
+        self.datadir = datadir + 'hetnet.pkl'
+        super(HetIOGraph, self).__init__()
+
+    def load_data(self):
+        self.nx_graph = nx.read_gpickle(self.datadir)
 
 
 class EcoliEcocycGraph(GeneInteractionGraph):
