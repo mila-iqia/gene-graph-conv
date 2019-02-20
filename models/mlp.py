@@ -4,6 +4,7 @@ from models.utils import *
 import torch.nn.functional as F
 from torch import nn
 import torch
+import numpy as np
 
 class MLP(Model):
     def __init__(self, **kwargs):

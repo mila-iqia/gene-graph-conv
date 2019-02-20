@@ -3,6 +3,7 @@ from models.models import Model
 from models.utils import *
 import torch.nn.functional as F
 import torch
+from torch import nn
 
 class SLR(Model):
     def __init__(self, **kwargs):
