@@ -48,16 +48,18 @@ class TCGADataset(GeneDataset):
 
     def load_data(self):
         csv_file = at.get(self.at_hash, datastore=self.datastore)
-        hdf_file = csv_file.split(".gz")[0] + ".hdf5"
-        if not os.path.isfile(hdf_file):
-            print("We are converting a CSV dataset of TCGA to HDF5. Please wait a minute, this only happens the first time you use the TCGA dataset.")
+        pkl_file = csv_file.split(".gz")[0] + ".pkl"
+        if not os.path.isfile(pkl_file):
+            print("Converting a CSV dataset of TCGA to a Pandas Pickled DataFrame. Please wait a minute, this only happens the first time you use the TCGA dataset.")
             df = pd.read_csv(csv_file, compression="gzip", sep="\t")
-            df = df.transpose()
-            df.columns = df.iloc[0]
-            df = df.drop(df.index[0])
-            df = df.astype(float)
-            df.to_hdf(hdf_file, key="data", complevel=5)
-        self.df = pd.read_hdf(hdf_file)
+            columns = df.Sample.tolist()
+            df = df.drop(columns='Sample')
+            indices = df.columns.tolist()
+            df = df.values.transpose()
+            df = pd.DataFrame(df, index=indices, columns=columns)
+            df.to_pickle(pkl_file)
+            
+        self.df = pd.read_pickle(pkl_file)
         self.relabel_df()
         self.sample_names = self.df.index.values.tolist()
         self.node_names = np.array(self.df.columns.values.tolist()).astype("str")
@@ -78,7 +80,7 @@ class DatasetFromCSV(GeneDataset):
         self.expr_path = expr_path
         self.label_path = label_path
         self.label_name = label_name
-        super(CustomDataset, self).__init__()
+        super(DatasetFromCSV, self).__init__()
 
     def load_data(self):
         # Load expression and label files, samples as rows and genes/label names as columns
