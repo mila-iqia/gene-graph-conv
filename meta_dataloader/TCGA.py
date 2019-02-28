@@ -190,7 +190,7 @@ def get_TCGA_task_ids(data_dir=None, min_samples_per_class=3, task_variables_fil
         all_sample_ids_file = os.path.join(data_dir, 'all_sample_ids')
         all_sample_ids = _read_string_list(all_sample_ids_file)
     except:
-        print('TCGA_tissue_ppi.hdf5 could not be read from the data_dir.')
+        print('TCGA_HiSeqV2.hdf5 could not be read from the data_dir.')
         sys.exit()
 
     if task_variables_file is None:
@@ -277,7 +277,7 @@ def _download(data_dir, cancers):
     gene_ids_file = os.path.join(data_dir, 'gene_ids')
     all_sample_ids_file = os.path.join(data_dir, 'all_sample_ids')
 
-    print('Downloading TCGA_HiSeqV2 using Academic Torrents')
+    print('Downloading or checking for TCGA_HiSeqV2 using Academic Torrents')
     csv_file = at.get("e4081b995625f9fc599ad860138acf7b6eb1cf6f", datastore=data_dir)
     if not os.path.isfile(hdf_file) and os.path.isfile(csv_file):
         print("Downloaded to: " + csv_file)
