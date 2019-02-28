@@ -1,1 +1,0 @@
-{"duration": 0.0013971328735351562, "input_args": {"X": "array([[1, 0, 0],\n       [1, 0, 0],\n       [1, 0, 0]], dtype=uint8)", "connectivity": "<3x3 sparse matrix of type '<class 'numpy.uint8'>'\n\twith 3 stored elements in Compressed Sparse Row format>", "n_clusters": "None", "return_distance": "False"}}

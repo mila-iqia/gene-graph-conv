@@ -6,7 +6,7 @@ def build_parser():
     parser.add_argument('--epoch', default=10, type=int, help='The number of epochs we want ot train the network.')
     parser.add_argument('--seed', default=0, type=int, help='Seed for random initialization and stuff.')
     parser.add_argument('--batch-size', default=10, type=int, help="The batch size.")
-    parser.add_argument('--agg-reduce', default=2, type=int, help="amount to reduce the graph at each conv layer.")
+    parser.add_argument('--agg-reduce', default=2., type=float, help="amount to reduce the graph at each conv layer.")
     parser.add_argument('--tensorboard-dir', default='./experiments/experiments/', help='The folder where to store the experiments. Will be created if not already exists.')
     parser.add_argument('--lr', default=1e-3, type=float, help='learning rate')
     parser.add_argument('--weight-decay', default=0., type=float, help='weight decay (L2 loss).')

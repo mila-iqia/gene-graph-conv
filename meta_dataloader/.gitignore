@@ -105,6 +105,7 @@ venv.bak/
 
 # Data folder
 data/
+tcga/clinicalMatrices/*
 
 # Pycharm settings
 .idea/
