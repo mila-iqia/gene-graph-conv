@@ -34,7 +34,7 @@ class TCGAMeta(Dataset):
 
         if preload:
             try:
-                hdf_file = os.path.join(data_dir, "TCGA_tissue_ppi.hdf5")
+                hdf_file = os.path.join(data_dir, "TCGA_HiSeqV2.hdf5")
                 f = h5py.File(hdf_file)
                 self.gene_expression_data = f['dataset'][:]
                 f.close()
@@ -153,7 +153,7 @@ class TCGATask(Dataset):
 
         # lazy loading or loading from preloaded data if available
         if preloaded is None:
-            hdf_file = os.path.join(data_dir, "TCGA_tissue_ppi.hdf5")
+            hdf_file = os.path.join(data_dir, "TCGA_HiSeqV2.hdf5")
             with h5py.File(hdf_file) as f:
                 self._samples = f['dataset'][indices_to_load, :]
         else:
@@ -268,34 +268,34 @@ def _download(data_dir, cancers):
             error.filename = decompressed_file_path
             raise error
 
-    hdf_file = os.path.join(data_dir, "TCGA_tissue_ppi.hdf5")
-    csv_file = os.path.join(data_dir, 'HiSeqV2.gz')
+    hdf_file = os.path.join(data_dir, "TCGA_HiSeqV2.hdf5")
+    #csv_file = os.path.join(data_dir, 'HiSeqV2.gz')
     gene_ids_file = os.path.join(data_dir, 'gene_ids')
     all_sample_ids_file = os.path.join(data_dir, 'all_sample_ids')
 
-    if not os.path.isfile(hdf_file):
-        print('Downloading TCGA_tissue_ppi.hdf5 using academictorrents')
-        at.get("e4081b995625f9fc599ad860138acf7b6eb1cf6f", datastore=data_dir)
-        if not os.path.isfile(hdf_file) and os.path.isfile(csv_file):
-            print("We are converting a CSV dataset of TCGA to HDF5. Please wait a minute, this only happens the first time you use the TCGA dataset.")
-            df = pd.read_csv(csv_file, compression="gzip", sep="\t")
-            df = df.transpose()
-            df.columns = df.iloc[0]
-            df = df.drop(df.index[0])
-            df = df.astype(float)
-            df.rename(symbol_map(df.columns), axis="columns", inplace=True)
-            gene_ids = df.columns.values.tolist()
-            all_sample_ids = df.index.values.tolist()
-            with open(gene_ids_file, "w") as text_file:
-                for gene_id in gene_ids:
-                    text_file.write('{}\n'.format(gene_id))
-            with open(all_sample_ids_file, "w") as text_file:
-                for sample_id in all_sample_ids:
-                    text_file.write('{}\n'.format(sample_id))
+    print('Downloading TCGA_HiSeqV2 using Academic Torrents')
+    csv_file = at.get("e4081b995625f9fc599ad860138acf7b6eb1cf6f", datastore=data_dir)
+    if not os.path.isfile(hdf_file) and os.path.isfile(csv_file):
+        print("Downloaded to: " + csv_file)
+        print("Converting TCGA CSV dataset to HDF5. This only happens on first run.")
+        df = pd.read_csv(csv_file, compression="gzip", sep="\t")
+        df = df.transpose()
+        df.columns = df.iloc[0]
+        df = df.drop(df.index[0])
+        df = df.astype(float)
+        df.rename(symbol_map(df.columns), axis="columns", inplace=True)
+        gene_ids = df.columns.values.tolist()
+        all_sample_ids = df.index.values.tolist()
+        with open(gene_ids_file, "w") as text_file:
+            for gene_id in gene_ids:
+                text_file.write('{}\n'.format(gene_id))
+        with open(all_sample_ids_file, "w") as text_file:
+            for sample_id in all_sample_ids:
+                text_file.write('{}\n'.format(sample_id))
 
-            f = h5py.File(hdf_file)
-            f.create_dataset("dataset", data=df.values)
-            f.close()
+        f = h5py.File(hdf_file)
+        f.create_dataset("dataset", data=df.values)
+        f.close()
 
 
 def _read_string_list(path):
