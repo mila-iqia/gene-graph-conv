@@ -11,3 +11,4 @@ cache/*
 slurm/*
 *.ipynb_checkpoints*
 .spyproject/
+.cache
