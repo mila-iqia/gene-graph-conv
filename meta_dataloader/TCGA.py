@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import h5py
 from collections import Counter
-from data.utils import symbol_map
+import csv
 
 
 class TCGAMeta(Dataset):
@@ -13,10 +13,11 @@ class TCGAMeta(Dataset):
 
     """
 
-    def __init__(self, data_dir=None, dataset_transform=None, transform=None, target_transform=None, download=False, preload=True, min_samples_per_class=3, task_variables_file=None):
+    def __init__(self, data_dir=None, dataset_transform=None, transform=None, target_transform=None, download=False, preload=True, min_samples_per_class=3, task_variables_file=None, gene_symbol_map_file=None):
         self.dataset_transform = dataset_transform
         self.target_transform = target_transform
         self.transform = transform
+        self.gene_symbol_map_file = gene_symbol_map_file
 
         # specify a default data directory
         if data_dir is None:
@@ -29,7 +30,7 @@ class TCGAMeta(Dataset):
             cancers = [x.strip() for x in cancers]
 
             _download(data_dir, cancers)
-
+        
         self.task_ids = get_TCGA_task_ids(data_dir, min_samples_per_class, task_variables_file)
 
         if preload:
@@ -44,7 +45,7 @@ class TCGAMeta(Dataset):
                 self.all_sample_ids = _read_string_list(all_sample_ids_file)
                 self.preloaded = (self.all_sample_ids, self.gene_ids, self.gene_expression_data)
             except:
-                print('TCGA_tissue_ppi.hdf5 could not be read from the data_dir.')
+                print('TCGA_HiSeqV2.hdf5 could not be read from the data_dir.')
                 sys.exit()
 
         else:
@@ -95,7 +96,7 @@ class TCGAMeta(Dataset):
             The target variable is a combination of a clinical attribute and one of 39 types of cancer.
             An example of a target variable is: 'gender-BRCA', where we predict gender for breast cancer(BRCA) patients.
         """
-        dataset = TCGATask(self.task_ids[index], transform=self.transform, target_transform=self.target_transform, download=False, preloaded=self.preloaded)
+        dataset = TCGATask(self.task_ids[index], transform=self.transform, target_transform=self.target_transform, download=False, preloaded=self.preloaded, gene_symbol_map_file=self.gene_symbol_map_file)
 
         if self.dataset_transform is not None:
             dataset = self.dataset_transform(dataset)
@@ -106,7 +107,7 @@ class TCGAMeta(Dataset):
 
 
 class TCGATask(Dataset):
-    def __init__(self, task_id, data_dir=None, transform=None, target_transform=None, download=False, preloaded=None):
+    def __init__(self, task_id, data_dir=None, transform=None, target_transform=None, download=False, preloaded=None, gene_symbol_map_file=None):
         self.id = task_id
         self.transform = transform
         self.target_transform = target_transform
@@ -131,6 +132,9 @@ class TCGATask(Dataset):
             self._all_sample_ids = _read_string_list(all_sample_ids_file)
         else:
             self._all_sample_ids, self.gene_ids, self._data = preloaded
+            
+        if gene_symbol_map_file:
+            self.gene_ids = symbol_map(self.gene_ids, gene_symbol_map_file)
 
         # load the cancer specific matrix
         matrix = pd.read_csv(os.path.join(data_dir, 'clinicalMatrices', cancer + '_clinicalMatrix'), delimiter='\t')
@@ -158,7 +162,7 @@ class TCGATask(Dataset):
                 self._samples = f['dataset'][indices_to_load, :]
         else:
             self._samples = self._data[np.array(list(indices_to_load), dtype=int), :]
-
+            
         self.input_size = self._samples.shape[1]
 
     def __getitem__(self, index):
@@ -283,7 +287,6 @@ def _download(data_dir, cancers):
         df.columns = df.iloc[0]
         df = df.drop(df.index[0])
         df = df.astype(float)
-        df.rename(symbol_map(df.columns), axis="columns", inplace=True)
         gene_ids = df.columns.values.tolist()
         all_sample_ids = df.index.values.tolist()
         with open(gene_ids_file, "w") as text_file:
@@ -304,3 +307,21 @@ def _read_string_list(path):
     # remove whitespace
     string_list = [x.strip() for x in string_list]
     return string_list
+
+def symbol_map(gene_symbols, gene_symbol_map_file):
+    # This gene code map was generated on February 18th, 2019
+    # at this URL: https://www.genenames.org/cgi-bin/download/custom?col=gd_app_sym&col=gd_prev_sym&status=Approved&status=Entry%20Withdrawn&hgnc_dbtag=on&order_by=gd_app_sym_sort&format=text&submit=submit
+    # it enables us to map the gene names to the newest version of the gene labels
+    with open(gene_symbol_map_file) as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter='\t')
+        line_count = 0
+        x = {row[0]: row[1] for row in csv_reader}
+
+        gene_symbol_map = {}
+        for key, val in x.items():
+            for v in val.split(", "):
+                if key not in gene_symbols:
+                    gene_symbol_map[v] = key
+        
+        
+    return pd.Series(gene_symbols).replace(gene_symbol_map).values.tolist()
