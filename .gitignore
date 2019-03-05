@@ -1,3 +1,4 @@
+meta_dataloader/
 venv/
 .python-version
 gene_inference_results/
@@ -12,3 +13,4 @@ slurm/*
 .spyproject/
 scratch/
 data/hetionet/
+.cache

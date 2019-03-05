@@ -12,6 +12,8 @@ import sklearn.cluster
 import joblib
 import numpy as np
 from sklearn.cluster import KMeans
+from scipy import sparse
+
 
 cache_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/.cache/" # this needs to change if we move utils.py
 
@@ -85,7 +87,8 @@ def kmeans_clustering(adj, n_clusters):
 
 
 # This function takes in the full adjacency matrix and a number of layers, then returns a bunch of clustered adjacencies
-def setup_aggregates(adj, nb_layer, aggregation="hierarchy", agg_reduce=2, verbose=True):
+def setup_aggregates(adj, nb_layer, x, aggregation="hierarchy", agg_reduce=2, verbose=True):
+    adj.resize((x.shape[1], x.shape[1]))
     adj = (adj > 0.).astype(int)
     adj.setdiag(np.ones(adj.shape[0]))
     adjs = [norm_laplacian(adj)]
@@ -117,5 +120,5 @@ def save_computations(self, input, output):
     setattr(self, "output", output)
 
 def get_every_n(a, n=2):
-    for i in range(0, a.shape[0], n): 
+    for i in range(0, a.shape[0], n):
         yield a[i:i+n]

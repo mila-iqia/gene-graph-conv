@@ -15,17 +15,17 @@ def classwise_split(dataset, shuffle=True):
 
         # We add the current sample to the bucket of its class
         classwise_indices[label].append(index)
-        
+
     if shuffle:
         # Torch randperm based shuffle of all buckets
         for key, value in classwise_indices.items():
             classwise_indices[key] = [value[index] for index in iter(torch.randperm(len(value)))]
-            
+
     return [data.Subset(dataset, classwise_indices[key]) for key in classwise_indices.keys()]
 
 
 def stratified_split(dataset, lengths, min_num_minority=1):
-    
+
     total_length = sum(lengths)
     if total_length != len(dataset):
         raise ValueError("Sum of input lengths does not equal the length of the input dataset.")
@@ -85,10 +85,8 @@ def stratified_split(dataset, lengths, min_num_minority=1):
         second_split = data.random_split(classwise_dataset, class_specific_lengths)
         rejoined_datasets = [data.ConcatDataset([first, second]) for first, second in zip(class_specific_single_elements, second_split)]
         class_specific_split_datasets.append(rejoined_datasets)
-        
+
     datasets = []
     for i in range(num_splits):
         datasets.append(data.ConcatDataset([class_specific_dataset[i] for class_specific_dataset in class_specific_split_datasets]))
-    return datasets 
-
-
+    return datasets

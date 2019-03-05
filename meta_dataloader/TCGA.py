@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import h5py
 from collections import Counter
+import csv
 
 
 class TCGAMeta(Dataset):
@@ -12,10 +13,11 @@ class TCGAMeta(Dataset):
 
     """
 
-    def __init__(self, data_dir=None, dataset_transform=None, transform=None, target_transform=None, download=False, preload=True, min_samples_per_class=3, task_variables_file=None):
+    def __init__(self, data_dir=None, dataset_transform=None, transform=None, target_transform=None, download=False, preload=True, min_samples_per_class=3, task_variables_file=None, gene_symbol_map_file=None):
         self.dataset_transform = dataset_transform
         self.target_transform = target_transform
         self.transform = transform
+        self.gene_symbol_map_file = gene_symbol_map_file
 
         # specify a default data directory
         if data_dir is None:
@@ -28,22 +30,22 @@ class TCGAMeta(Dataset):
             cancers = [x.strip() for x in cancers]
 
             _download(data_dir, cancers)
-
+        
         self.task_ids = get_TCGA_task_ids(data_dir, min_samples_per_class, task_variables_file)
 
         if preload:
             try:
-                with h5py.File(os.path.join(data_dir, 'TCGA_tissue_ppi.hdf5'), 'r') as f:
-                    self.gene_expression_data = f['expression_data'][()]
-
-                    gene_ids_file = os.path.join(data_dir, 'gene_ids')
-                    all_sample_ids_file = os.path.join(data_dir, 'all_sample_ids')
-                    self.gene_ids = _read_string_list(gene_ids_file)
-                    self.all_sample_ids = _read_string_list(all_sample_ids_file)
-
-                    self.preloaded = (self.all_sample_ids, self.gene_ids, self.gene_expression_data)
+                hdf_file = os.path.join(data_dir, "TCGA_HiSeqV2.hdf5")
+                f = h5py.File(hdf_file)
+                self.gene_expression_data = f['dataset'][:]
+                f.close()
+                gene_ids_file = os.path.join(data_dir, 'gene_ids')
+                all_sample_ids_file = os.path.join(data_dir, 'all_sample_ids')
+                self.gene_ids = _read_string_list(gene_ids_file)
+                self.all_sample_ids = _read_string_list(all_sample_ids_file)
+                self.preloaded = (self.all_sample_ids, self.gene_ids, self.gene_expression_data)
             except:
-                print('TCGA_tissue_ppi.hdf5 could not be read from the data_dir.')
+                print('TCGA_HiSeqV2.hdf5 could not be read from the data_dir.')
                 sys.exit()
 
         else:
@@ -94,7 +96,7 @@ class TCGAMeta(Dataset):
             The target variable is a combination of a clinical attribute and one of 39 types of cancer.
             An example of a target variable is: 'gender-BRCA', where we predict gender for breast cancer(BRCA) patients.
         """
-        dataset = TCGATask(self.task_ids[index], transform=self.transform, target_transform=self.target_transform, download=False, preloaded=self.preloaded)
+        dataset = TCGATask(self.task_ids[index], transform=self.transform, target_transform=self.target_transform, download=False, preloaded=self.preloaded, gene_symbol_map_file=self.gene_symbol_map_file)
 
         if self.dataset_transform is not None:
             dataset = self.dataset_transform(dataset)
@@ -105,7 +107,7 @@ class TCGAMeta(Dataset):
 
 
 class TCGATask(Dataset):
-    def __init__(self, task_id, data_dir=None, transform=None, target_transform=None, download=False, preloaded=None):
+    def __init__(self, task_id, data_dir=None, transform=None, target_transform=None, download=False, preloaded=None, gene_symbol_map_file=None):
         self.id = task_id
         self.transform = transform
         self.target_transform = target_transform
@@ -130,6 +132,9 @@ class TCGATask(Dataset):
             self._all_sample_ids = _read_string_list(all_sample_ids_file)
         else:
             self._all_sample_ids, self.gene_ids, self._data = preloaded
+            
+        if gene_symbol_map_file:
+            self.gene_ids = symbol_map(self.gene_ids, gene_symbol_map_file)
 
         # load the cancer specific matrix
         matrix = pd.read_csv(os.path.join(data_dir, 'clinicalMatrices', cancer + '_clinicalMatrix'), delimiter='\t')
@@ -152,11 +157,12 @@ class TCGATask(Dataset):
 
         # lazy loading or loading from preloaded data if available
         if preloaded is None:
-            with h5py.File(os.path.join(data_dir, 'TCGA_tissue_ppi.hdf5'), 'r') as f:
-                self._samples = f['expression_data'][indices_to_load, :]
+            hdf_file = os.path.join(data_dir, "TCGA_HiSeqV2.hdf5")
+            with h5py.File(hdf_file) as f:
+                self._samples = f['dataset'][indices_to_load, :]
         else:
             self._samples = self._data[np.array(list(indices_to_load), dtype=int), :]
-
+            
         self.input_size = self._samples.shape[1]
 
     def __getitem__(self, index):
@@ -181,10 +187,10 @@ def get_TCGA_task_ids(data_dir=None, min_samples_per_class=3, task_variables_fil
         data_dir = os.path.join(os.path.dirname(__file__), 'data')
 
     try:
-        with h5py.File(os.path.join(data_dir, 'TCGA_tissue_ppi.hdf5'), 'r') as f:
-            all_sample_ids = [x.decode('utf-8') for x in f['sample_names']]
+        all_sample_ids_file = os.path.join(data_dir, 'all_sample_ids')
+        all_sample_ids = _read_string_list(all_sample_ids_file)
     except:
-        print('TCGA_tissue_ppi.hdf5 could not be read from the data_dir.')
+        print('TCGA_HiSeqV2.hdf5 could not be read from the data_dir.')
         sys.exit()
 
     if task_variables_file is None:
@@ -266,31 +272,33 @@ def _download(data_dir, cancers):
             error.filename = decompressed_file_path
             raise error
 
-    gene_expression_data = os.path.join(data_dir, 'TCGA_tissue_ppi.hdf5')
-    if not os.path.isfile(gene_expression_data):
-        print('Downloading TCGA_tissue_ppi.hdf5 using academictorrents')
-        at.get("4070a45bc7dd69584f33e86ce193a2c903f0776d", datastore=data_dir)
-
+    hdf_file = os.path.join(data_dir, "TCGA_HiSeqV2.hdf5")
+    #csv_file = os.path.join(data_dir, 'HiSeqV2.gz')
     gene_ids_file = os.path.join(data_dir, 'gene_ids')
     all_sample_ids_file = os.path.join(data_dir, 'all_sample_ids')
 
-    if not os.path.isfile(gene_ids_file):
-        print('Processing...')
-
-        with h5py.File(gene_expression_data, 'r') as f:
-            gene_ids = [x.decode('utf-8') for x in f['gene_names']]
-            all_sample_ids = [x.decode('utf-8') for x in f['sample_names']]
-
+    print('Downloading or checking for TCGA_HiSeqV2 using Academic Torrents')
+    csv_file = at.get("e4081b995625f9fc599ad860138acf7b6eb1cf6f", datastore=data_dir)
+    if not os.path.isfile(hdf_file) and os.path.isfile(csv_file):
+        print("Downloaded to: " + csv_file)
+        print("Converting TCGA CSV dataset to HDF5. This only happens on first run.")
+        df = pd.read_csv(csv_file, compression="gzip", sep="\t")
+        df = df.transpose()
+        df.columns = df.iloc[0]
+        df = df.drop(df.index[0])
+        df = df.astype(float)
+        gene_ids = df.columns.values.tolist()
+        all_sample_ids = df.index.values.tolist()
         with open(gene_ids_file, "w") as text_file:
             for gene_id in gene_ids:
                 text_file.write('{}\n'.format(gene_id))
+        with open(all_sample_ids_file, "w") as text_file:
+            for sample_id in all_sample_ids:
+                text_file.write('{}\n'.format(sample_id))
 
-        if not os.path.isfile(all_sample_ids_file):
-            with open(all_sample_ids_file, "w") as text_file:
-                for sample_id in all_sample_ids:
-                    text_file.write('{}\n'.format(sample_id))
-
-        print('Done!')
+        f = h5py.File(hdf_file)
+        f.create_dataset("dataset", data=df.values)
+        f.close()
 
 
 def _read_string_list(path):
@@ -300,4 +308,20 @@ def _read_string_list(path):
     string_list = [x.strip() for x in string_list]
     return string_list
 
+def symbol_map(gene_symbols, gene_symbol_map_file):
+    # This gene code map was generated on February 18th, 2019
+    # at this URL: https://www.genenames.org/cgi-bin/download/custom?col=gd_app_sym&col=gd_prev_sym&status=Approved&status=Entry%20Withdrawn&hgnc_dbtag=on&order_by=gd_app_sym_sort&format=text&submit=submit
+    # it enables us to map the gene names to the newest version of the gene labels
+    with open(gene_symbol_map_file) as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter='\t')
+        line_count = 0
+        x = {row[0]: row[1] for row in csv_reader}
 
+        gene_symbol_map = {}
+        for key, val in x.items():
+            for v in val.split(", "):
+                if key not in gene_symbols:
+                    gene_symbol_map[v] = key
+        
+        
+    return pd.Series(gene_symbols).replace(gene_symbol_map).values.tolist()
