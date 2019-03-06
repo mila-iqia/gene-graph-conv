@@ -1,4 +1,13 @@
-name: clinical-tasks-6
-algorithms: BayesianOptimizer
+name: clinical-tasks
+algorithms: 
+        BayesianOptimizer:
+                strategy: cl_max
+                n_initial_points: 10
+                noise: null
+
+# algorithms: random
+#
+# run an experiment with 20 on random, then branch off and optimize (if I want to tweak the bayesian hyper-params)
+
 # https://cloud.mongodb.com/v2/5c65bd849ccf640cd1206ec7#metrics/replicaSet/5c65bf17fd4cbaaffda3a316/explorer/test/experiments/find
 # orion -vv hunt --config bayes.yaml --branch sgi1 --max-trial=10 --code-change-type noeffect ./fig-5.py --lr~'loguniform(0.0001, 0.01)'
