@@ -212,7 +212,8 @@ def get_TCGA_task_ids(data_dir=None, min_samples_per_class=3, task_variables_fil
                 # filter out all sample_ids for which no valid value exists
                 potential_sample_ids = matrix['sampleID'][filter_clinical_variable_present]
                 # filter out all sample_ids for which no gene expression data exists
-                task_sample_ids = [sample_id for sample_id in potential_sample_ids if sample_id in all_sample_ids]
+                task_sample_ids = set(potential_sample_ids).intersection(all_sample_ids)
+#                task_sample_ids = [sample_id for sample_id in potential_sample_ids if sample_id in all_sample_ids]
             except KeyError:
                 continue
 
@@ -283,10 +284,8 @@ def _download(data_dir, cancers):
         print("Downloaded to: " + csv_file)
         print("Converting TCGA CSV dataset to HDF5. This only happens on first run.")
         df = pd.read_csv(csv_file, compression="gzip", sep="\t")
+        df = df.set_index('Sample')
         df = df.transpose()
-        df.columns = df.iloc[0]
-        df = df.drop(df.index[0])
-        df = df.astype(float)
         gene_ids = df.columns.values.tolist()
         all_sample_ids = df.index.values.tolist()
         with open(gene_ids_file, "w") as text_file:

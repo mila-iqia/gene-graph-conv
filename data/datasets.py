@@ -33,14 +33,12 @@ class TCGADataset(GeneDataset):
 
     def load_data(self):
         csv_file = at.get(self.at_hash, datastore=self.datastore)
-        pkl_file = csv_file.split(".gz")[0] + ".pkl"
-        if not os.path.isfile(pkl_file):
+        hdf_file = csv_file.split(".gz")[0] + ".hdf5"
+        if not os.path.isfile(hdf_file):
             print("Converting a CSV dataset of TCGA to a Pandas Pickled DataFrame. Please wait a minute, this only happens the first time you use the TCGA dataset.")
             df = pd.read_csv(csv_file, compression="gzip", sep="\t")
+            df = df.set_index('Sample')
             df = df.transpose()
-            df.columns = df.iloc[0]
-            df = df.drop(df.index[0])
-            df = df.astype(float)
             df.to_hdf(hdf_file, key="data", complevel=5)
         self.df = pd.read_hdf(hdf_file)
         self.df.rename(symbol_map(self.df.columns), axis="columns", inplace=True)
