@@ -106,3 +106,16 @@ class EcoliEcocycGraph(GeneInteractionGraph):
         self.adj = adj
         self.adjs = adjs
         self.adjs_name = adjs_name
+
+
+class EvolvedGraph(GeneInteractionGraph):
+    def __init__(self, adjacency_path):
+        """
+        Given an adjacency matrix, builds the correponding GeneInteractionGraph
+        :param adjacency_path: Path to numpy array (N_nodes, N_nodes)
+        """
+        self.adjacency_path = adjacency_path
+        super(EvolvedGraph, self).__init__()
+
+    def load_data(self):
+        self.nx_graph = nx.OrderedGraph(nx.from_numpy_matrix(np.load(self.adjacency_path)))
