@@ -35,7 +35,7 @@ class TCGADataset(GeneDataset):
         csv_file = at.get(self.at_hash, datastore=self.datastore)
         hdf_file = csv_file.split(".gz")[0] + ".hdf5"
         if not os.path.isfile(hdf_file):
-            print("Converting a CSV dataset of TCGA to a Pandas Pickled DataFrame. Please wait a minute, this only happens the first time you use the TCGA dataset.")
+            print("Converting a CSV dataset of TCGA to HDF5. Please wait a minute, this only happens the first time you use the TCGA dataset.")
             df = pd.read_csv(csv_file, compression="gzip", sep="\t")
             df = df.set_index('Sample')
             df = df.transpose()

@@ -70,18 +70,6 @@ class GeneManiaGraph(GeneInteractionGraph):
     def load_data(self):
         self.nx_graph = nx.OrderedGraph(nx.readwrite.gpickle.read_gpickle(at.get(self.at_hash, datastore=self.datastore)))
 
-class HetIOGraph(GeneInteractionGraph):
-    def __init__(self, datadir):
-        # TODO convert to academictorrents interface
-        if not os.path.exists(datadir):
-            print('Run notebooks/hetio.ipynb to generate pickle file for graph')
-            raise FileNotFoundError
-        self.datadir = datadir + 'hetnet.pkl'
-        super(HetIOGraph, self).__init__()
-
-    def load_data(self):
-        self.nx_graph = nx.read_gpickle(self.datadir)
-
 
 class EcoliEcocycGraph(GeneInteractionGraph):
     def __init__(self, path):  # data/ecocyc-21.5-pathways.col
