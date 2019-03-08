@@ -6,7 +6,7 @@ import pandas as pd
 import h5py
 import networkx as nx
 import academictorrents as at
-from data.utils import symbol_map
+from data.utils import symbol_map, ncbi_to_hugo_map
 
 
 class GeneInteractionGraph(object):
@@ -106,3 +106,35 @@ class EcoliEcocycGraph(GeneInteractionGraph):
         self.adj = adj
         self.adjs = adjs
         self.adjs_name = adjs_name
+
+
+class EvolvedGraph(GeneInteractionGraph):
+    def __init__(self, adjacency_path):
+        """
+        Given an adjacency matrix, builds the correponding GeneInteractionGraph
+        :param adjacency_path: Path to numpy array (N_nodes, N_nodes)
+        """
+        self.adjacency_path = adjacency_path
+        super(EvolvedGraph, self).__init__()
+
+    def load_data(self):
+        self.nx_graph = nx.OrderedGraph(nx.from_numpy_matrix(np.load(self.adjacency_path)))
+
+
+class HumanNetV1Graph(GeneInteractionGraph):
+    """
+    More info on HumanNet V1 : http://www.functionalnet.org/humannet/about.html
+    """
+    def __init__(self):
+        self.benchmark = "../data/graphs/HumanNet.v1.benchmark.txt"
+        super(HumanNetV1Graph, self).__init__()
+
+    def load_data(self):
+        edgelist = pd.read_csv(self.benchmark, header=None, sep="\t").values.tolist()
+        self.nx_graph = nx.OrderedGraph(edgelist)
+        # Map nodes from ncbi to hugo names
+        self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, ncbi_to_hugo_map(self.nx_graph.nodes))
+        # Remove nodes which are not covered by the map
+        for node in list(self.nx_graph.nodes):
+            if isinstance(node, int):
+                self.nx_graph.remove_node(node)
