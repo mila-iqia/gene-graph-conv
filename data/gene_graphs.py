@@ -7,6 +7,7 @@ import h5py
 import networkx as nx
 import academictorrents as at
 from data.utils import symbol_map, ncbi_to_hugo_map
+import os
 
 
 class GeneInteractionGraph(object):
@@ -158,4 +159,44 @@ class HumanNetV2Graph(GeneInteractionGraph):
             if isinstance(node, int):
                 self.nx_graph.remove_node(node)
 
+
+class FunCoupGraph(GeneInteractionGraph):
+    """
+    Class for loading and processing FunCoup into a NetworkX object
+    Please download the data file - 'FC4.0_H.sapiens_full.gz' from
+    http://funcoup.sbc.su.se/downloads/ and place it in the 
+    graphs folder before instantiating this class
+    """
+    def __init__(self, filename='funcoup.pkl'):
+        self.filename = filename
+        super(FunCoupGraph, self).__init__()
+
+    def load_data(self):
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+        self.location = os.path.join(dir_path, 'graphs/')
+        pkl_file = os.path.join(self.location, self.filename)
+        if not os.path.isfile(pkl_file):
+            self._preprocess_and_pickle(save_name=pkl_file)
+        self.nx_graph = nx.OrderedGraph(nx.read_gpickle(pkl_file))
+        
+            
+    def _preprocess_and_pickle(self, save_name):
+        names_map_file =  os.path.join(self.location, 'ensembl_to_hugo.tsv')
+        data_file = os.path.join(self.location,'FC4.0_H.sapiens_full.gz')
+        
+        names = pd.read_csv(names_map_file, sep='\t')
+        names.columns = ['symbol', 'ensembl']
+        names = names.dropna(subset=['ensembl']).drop_duplicates('ensembl')
+        names = names.set_index('ensembl').squeeze()
+
+        data = pd.read_csv(data_file, sep='\t', usecols=['#0:PFC', '1:FBS_max',
+                                                         '2:Gene1','3:Gene2'])
+        data['2:Gene1'] = data['2:Gene1'].map(names)
+        data['3:Gene2'] = data['3:Gene2'].map(names)
+        data = data.dropna(subset=['2:Gene1', '3:Gene2'])
+        
+        graph = nx.from_pandas_edgelist(data, source='2:Gene1', target='3:Gene2', 
+                                       # edge_attr=['#0:PFC', '1:FBS_max'], # Uncomment to include edge attributes
+                                        create_using=nx.OrderedGraph)
+        nx.write_gpickle(graph, save_name)
 

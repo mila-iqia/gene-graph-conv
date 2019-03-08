@@ -11,7 +11,7 @@ import torch
 
 from models.mlp import MLP
 from data import datasets
-from data.gene_graphs import GeneManiaGraph, RegNetGraph
+from data.gene_graphs import GeneManiaGraph, RegNetGraph, HumanNetV2Graph, FunCoupGraph
 from data.utils import record_result
 
 parser = argparse.ArgumentParser()
@@ -36,7 +36,8 @@ test_size = 1000
 trials = 3
 cuda = torch.cuda.is_available()
 
-graph_dict = {"regnet": RegNetGraph, "genemania": GeneManiaGraph}
+graph_dict = {"regnet": RegNetGraph, "genemania": GeneManiaGraph, 
+              "humannetv2":HumanNetV2Graph, "funcoup":FunCoupGraph}
 
 # Select graph and set variables
 if args.graph:
