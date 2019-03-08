@@ -138,3 +138,24 @@ class HumanNetV1Graph(GeneInteractionGraph):
         for node in list(self.nx_graph.nodes):
             if isinstance(node, int):
                 self.nx_graph.remove_node(node)
+
+
+class HumanNetV2Graph(GeneInteractionGraph):
+    """
+    More info on HumanNet V1 : http://www.functionalnet.org/humannet/about.html
+    """
+    def __init__(self):
+        self.benchmark = "../data/graphs/HumanNet-XN.tsv"
+        super(HumanNetV2Graph, self).__init__()
+
+    def load_data(self):
+        edgelist = pd.read_csv(self.benchmark, header=None, sep="\t", skiprows=1).values[:, :2].tolist()
+        self.nx_graph = nx.OrderedGraph(edgelist)
+        # Map nodes from ncbi to hugo names
+        self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, ncbi_to_hugo_map(self.nx_graph.nodes))
+        # Remove nodes which are not covered by the map
+        for node in list(self.nx_graph.nodes):
+            if isinstance(node, int):
+                self.nx_graph.remove_node(node)
+
+
