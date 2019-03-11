@@ -35,7 +35,7 @@ def ncbi_to_hugo_map(gene_symbols):
     with open('../data/graphs/enterez_NCBI_to_hugo_gene_symbol_march_2019.txt') as csv_file:
         next(csv_file)  # Skip first line
         csv_reader = csv.reader(csv_file, delimiter='\t')
-        x = {int(row[0]): row[1] for row in csv_reader if row[0] != ""}
+        x = {int(row[1]): row[0] for row in csv_reader if row[1] != ""}
 
         map = {}
         for key, val in x.items():
