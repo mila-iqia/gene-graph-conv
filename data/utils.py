@@ -44,11 +44,12 @@ def ncbi_to_hugo_map(gene_symbols):
 
 
 def ens_to_hugo_map():
-    with open("datastore/map_lm.txt") as csv_file:
+    with open("datastore/ensembl_map.txt") as csv_file:
+        next(csv_file)  # Skip first line
         csv_reader = csv.reader(csv_file, delimiter='\t')
-        x_lm = {row[1]: row[0] for row in csv_reader}
-    with open("datastore/map_tg.txt") as csv_file:
-        csv_reader = csv.reader(csv_file, delimiter='\t')
-        x_tg = {row[1]: row[0] for row in csv_reader}
+        x = {row[1]: row[0] for row in csv_reader if row[0] != ""}
 
-    return {**x_lm, **x_tg}
+        map = {}
+        for key, val in x.items():
+            map[key] = val
+    return map
