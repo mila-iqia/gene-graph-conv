@@ -10,12 +10,14 @@ import sklearn
 import torch
 
 from models.mlp import MLP
-from data import datasets
-from data.gene_graphs import GeneManiaGraph, RegNetGraph, HumanNetV2Graph, FunCoupGraph
+from data.datasets import TCGADataset, GTexDataset
+from data.gene_graphs import GeneManiaGraph, RegNetGraph, HumanNetV2Graph, FunCoupGraph, HetIOGraph
 from data.utils import record_result
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--graph', default=None, type=str, help='Which graph to evaluate? Default - no graph, all nodes used')
+parser.add_argument('--dataset', default='tcga', type=str, help='Gene expression data to be used. Default - TCGA. Valid options are tcga, gtex, geo')
+parser.add_argument('--edge', default=None, type=str, help='Edge type for HetIO graph. Must be one of [interaction, regulation, covariation]')
 parser.add_argument('--results', default='all_nodes', type=str, help='Name of file to save results to. Default - all_nodes')
 args = parser.parse_args()
 
@@ -37,22 +39,31 @@ trials = 3
 cuda = torch.cuda.is_available()
 
 graph_dict = {"regnet": RegNetGraph, "genemania": GeneManiaGraph, 
-              "humannetv2":HumanNetV2Graph, "funcoup":FunCoupGraph}
-
+              "humannetv2":HumanNetV2Graph, "funcoup":FunCoupGraph,
+              "hetio":HetIOGraph}
+data_dict = {"tcga": TCGADataset, "gtex":GTexDataset, "geo":0}
 # Select graph and set variables
 if args.graph:
     # Check graph arg is valid
     assert args.graph in graph_dict.keys()
     graph_name = args.graph
-    gene_graph = graph_dict[graph_name]()
+    if graph_name == 'hetio':
+        gene_graph = graph_dict[graph_name](graph_type=args.edge)
+    else:
+        gene_graph = graph_dict[graph_name]()
     is_first_degree = True
 else:
     is_first_degree = False
     graph_name = "all_nodes"
 
 # Read in data
-dataset = datasets.TCGADataset()
-
+try:
+    assert args.dataset in data_dict
+    dataset = data_dict[args.dataset]()
+except:
+    print("Please enter a valid argument for the dataset. Valid options are tcga, gtex and geo")
+    import sys;sys.exit()
+    
 # Create list of the genes to perform inference on
 # If assessing first-degree neighbours, then train only for those genes 
 # that are there in the graph 
