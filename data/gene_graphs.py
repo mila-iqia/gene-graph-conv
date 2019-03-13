@@ -156,7 +156,7 @@ class HumanNetV2Graph(GeneInteractionGraph):
         self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, ncbi_to_hugo_map(self.nx_graph.nodes))
         # Remove nodes which are not covered by the map
         for node in list(self.nx_graph.nodes):
-            if isinstance(node, int):
+            if isinstance(node, float):
                 self.nx_graph.remove_node(node)
 
 
@@ -199,4 +199,3 @@ class FunCoupGraph(GeneInteractionGraph):
                                        # edge_attr=['#0:PFC', '1:FBS_max'], # Uncomment to include edge attributes
                                         create_using=nx.OrderedGraph)
         nx.write_gpickle(graph, save_name)
-

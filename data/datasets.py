@@ -9,7 +9,8 @@ import pandas as pd
 import numpy as np
 from torch.utils.data import Dataset
 import academictorrents as at
-from data.utils import symbol_map
+from data.utils import symbol_map, ens_to_hugo_map
+from cmapPy.pandasGEXpress.parse import parse
 
 
 class GeneDataset(Dataset):
@@ -35,7 +36,8 @@ class TCGADataset(GeneDataset):
         csv_file = at.get(self.at_hash, datastore=self.datastore)
         hdf_file = csv_file.split(".gz")[0] + ".hdf5"
         if not os.path.isfile(hdf_file):
-            print("Converting a CSV dataset of TCGA to HDF5. Please wait a minute, this only happens the first time you use the TCGA dataset.")
+            print("We are converting a CSV dataset of TCGA to HDF5. Please wait a minute, this only happens the first "
+                  "time you use the TCGA dataset.")
             df = pd.read_csv(csv_file, compression="gzip", sep="\t")
             df = df.set_index('Sample')
             df = df.transpose()
@@ -87,6 +89,7 @@ class DatasetFromCSV(GeneDataset):
 
     def __len__(self):
         pass
+
 
 class EcoliDataset(GeneDataset):
     def __init__(self):
@@ -166,3 +169,31 @@ class EcoliDataset(GeneDataset):
         if type(self.label_name[str(l)]) == np.ndarray:
             return self.label_name[str(l)][0]
         return self.label_name[str(l)]
+
+
+class GTexDataset(GeneDataset):
+    """
+    You should download the following files and store them in data/datastore/ :
+    - https://cbcl.ics.uci.edu/public_data/D-GEX/GTEx_RNASeq_RPKM_n2921x55993.gctx
+    - https://www.genenames.org/cgi-bin/download/custom?col=gd_app_sym&col=md_ensembl_id&status=Approved&status=Entry
+    %20Withdrawn&hgnc_dbtag=on&order_by=gd_app_sym_sort&format=text&submit=submit
+    """
+    def __init__(self, nb_examples=None, data_path="datastore/GTEx_RNASeq_RPKM_n2921x55993.gctx"):
+        self.data_path = data_path
+        self.nb_examples = nb_examples  # In case you don't want to load the whole dataset from disk
+        super(GTexDataset, self).__init__()
+
+    def load_data(self):
+        self.df = parse(self.data_path).data_df.T
+        # Map gene names
+        eh_map = ens_to_hugo_map()
+        columns_to_drop = [i for i in self.df.columns if str(i)[2:].split('.')[0] not in eh_map.keys()]
+        self.df = self.df.drop(columns_to_drop, axis=1)  # Drop columns whose gene is not covered by the map
+
+        self.df.columns = [eh_map[str(i)[2:].split('.')[0]] for i in self.df.columns]  # Rename columns
+
+    def __getitem__(self, idx):
+        sample = self.df.iloc[idx, :].values
+        sample = np.expand_dims(sample, axis=-1)
+        sample = {'sample': sample}
+        return sample
