@@ -217,7 +217,7 @@ class HetIOGraph(GeneInteractionGraph):
         super(HetIOGraph, self).__init__()
 
     def load_data(self):
-        self.location = os.path.join(__file__, './graphs_files')
+        self.location = os.path.join(__file__, './graphs/')
         pkl_file = os.path.join(self.location, self.filename)
         if not os.path.isfile(pkl_file):
             self._process_and_pickle(save_name=pkl_file)
