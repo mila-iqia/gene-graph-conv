@@ -58,7 +58,7 @@ else:
 
 # Read in data
 try:
-    assert args.dataset in data_dict
+    assert args.dataset in data_dict.keys()
     dataset = data_dict[args.dataset]()
 except:
     print("Please enter a valid argument for the dataset. Valid options are tcga, gtex and geo")
