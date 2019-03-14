@@ -9,3 +9,4 @@ networkx
 academictorrents>=2.1.15
 matplotlib
 joblib
+cmapPy

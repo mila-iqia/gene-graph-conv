@@ -60,7 +60,9 @@ else:
 try:
     assert args.dataset in data_dict.keys()
     dataset = data_dict[args.dataset]()
-except:
+except Exception:
+    tb = traceback.format_exc()
+    print(tb)
     print("Please enter a valid argument for the dataset. Valid options are tcga, gtex and geo")
     import sys;sys.exit()
     
@@ -121,8 +123,6 @@ for row in todo:
     X_test[gene] = 1
     try:
         model.fit(X_train, y_train)
-        if cuda:
-            X_test = X_test.cuda()
         y_hat = model.predict(X_test)
         auc = sklearn.metrics.roc_auc_score(y_test, np.argmax(y_hat, axis=1))
         experiment["auc"] = auc
