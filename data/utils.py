@@ -79,6 +79,7 @@ def ensp_to_hugo_map():
         csv_reader = csv.reader(csv_file, delimiter='\t')
         ensg_map = {row[1]: row[0] for row in csv_reader if row[0] != ""}
 
+    # ENSP to hugo map
     ensmap = {}
     for index, row in df.iterrows():
         if row['gene_id'] in ensg_map.keys():
