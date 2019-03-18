@@ -39,10 +39,8 @@ class TCGADataset(GeneDataset):
             print("We are converting a CSV dataset of TCGA to HDF5. Please wait a minute, this only happens the first "
                   "time you use the TCGA dataset.")
             df = pd.read_csv(csv_file, compression="gzip", sep="\t")
+            df = df.set_index('Sample')
             df = df.transpose()
-            df.columns = df.iloc[0]
-            df = df.drop(df.index[0])
-            df = df.astype(float)
             df.to_hdf(hdf_file, key="data", complevel=5)
         self.df = pd.read_hdf(hdf_file)
         self.df.rename(symbol_map(self.df.columns), axis="columns", inplace=True)

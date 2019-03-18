@@ -11,4 +11,6 @@ cache/*
 slurm/*
 *.ipynb_checkpoints*
 .spyproject/
+scratch/
+data/hetionet/
 .cache

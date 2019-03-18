@@ -7,6 +7,7 @@ import h5py
 import networkx as nx
 import academictorrents as at
 from data.utils import symbol_map, ncbi_to_hugo_map
+import os
 
 
 class GeneInteractionGraph(object):
@@ -157,3 +158,95 @@ class HumanNetV2Graph(GeneInteractionGraph):
         for node in list(self.nx_graph.nodes):
             if isinstance(node, float):
                 self.nx_graph.remove_node(node)
+
+
+class FunCoupGraph(GeneInteractionGraph):
+    """
+    Class for loading and processing FunCoup into a NetworkX object
+    Please download the data file - 'FC4.0_H.sapiens_full.gz' from
+    http://funcoup.sbc.su.se/downloads/ and place it in the 
+    graphs folder before instantiating this class
+    """
+    def __init__(self, filename='funcoup.pkl'):
+        self.filename = filename
+        super(FunCoupGraph, self).__init__()
+
+    def load_data(self):
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+        self.location = os.path.join(dir_path, 'graphs/')
+        pkl_file = os.path.join(self.location, self.filename)
+        if not os.path.isfile(pkl_file):
+            self._preprocess_and_pickle(save_name=pkl_file)
+        self.nx_graph = nx.OrderedGraph(nx.read_gpickle(pkl_file))
+        
+            
+    def _preprocess_and_pickle(self, save_name):
+        names_map_file =  os.path.join(self.location, 'ensembl_to_hugo.tsv')
+        data_file = os.path.join(self.location,'FC4.0_H.sapiens_full.gz')
+        
+        names = pd.read_csv(names_map_file, sep='\t')
+        names.columns = ['symbol', 'ensembl']
+        names = names.dropna(subset=['ensembl']).drop_duplicates('ensembl')
+        names = names.set_index('ensembl').squeeze()
+
+        data = pd.read_csv(data_file, sep='\t', usecols=['#0:PFC', '1:FBS_max',
+                                                         '2:Gene1','3:Gene2'])
+        data['2:Gene1'] = data['2:Gene1'].map(names)
+        data['3:Gene2'] = data['3:Gene2'].map(names)
+        data = data.dropna(subset=['2:Gene1', '3:Gene2'])
+        
+        graph = nx.from_pandas_edgelist(data, source='2:Gene1', target='3:Gene2', 
+                                       # edge_attr=['#0:PFC', '1:FBS_max'], # Uncomment to include edge attributes
+                                        create_using=nx.OrderedGraph)
+        nx.write_gpickle(graph, save_name)
+
+
+class HetIOGraph(GeneInteractionGraph):
+    """
+    Class for the HetIO graph. More information about HetIO can be found on - 
+    github.com/hetio/hetionet
+    het.io
+    """
+    def __init__(self, graph_type='interaction'):
+        name_to_edge = {'interaction':'GiG', 'regulation':'Gr>G', 'covariation':'GcG',
+                        'all': 'GiG|Gr>G|GcG'}
+        assert graph_type in name_to_edge.keys()
+        self.graph_type = graph_type
+        self.edge = name_to_edge[graph_type]
+        self.filename = 'hetio_{}_graph.pkl'.format(graph_type)
+        super(HetIOGraph, self).__init__()
+
+    def load_data(self):
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+        self.location = os.path.join(dir_path, 'graphs/')
+        pkl_file = os.path.join(self.location, self.filename)
+        if not os.path.isfile(pkl_file):
+            self._process_and_pickle(save_name=pkl_file)
+        self.nx_graph = nx.OrderedGraph(nx.read_gpickle(pkl_file))
+        
+            
+    def _process_and_pickle(self, save_name):
+        names_map_file =  os.path.join(self.location, 'hetionet-v1.0-nodes.tsv')
+        data_file = os.path.join(self.location, 'hetionet-v1.0-edges.sif.gz')
+        if not(os.path.isfile(names_map_file) or os.path.isfile(data_file)):
+            print(""" Please download the files from https://github.com/hetio/hetionet/tree/master/hetnet/tsv:
+            
+            -- hetionet-v1.0-nodes.tsv
+            -- hetionet-v1.0-edges.sif.gz""")
+            import sys;sys.exit()
+
+              
+        node_ids = pd.read_csv(names_map_file, sep='\t')
+        node_ids = node_ids.loc[node_ids.kind == 'Gene'].drop(columns='kind')
+        node_ids = node_ids.set_index('id').squeeze()
+        
+        edges = pd.read_csv(data_file, sep='\t', compression='gzip')
+        edges = edges.loc[edges.metaedge.str.contains(self.edge)].drop(columns='metaedge')
+        
+        # Convert the HetIO Entrez IDs into gene symbols
+        edges = edges.stack().map(node_ids).unstack()
+        edges = edges.dropna().drop_duplicates() 
+
+        graph = nx.from_pandas_edgelist(edges, create_using=nx.OrderedGraph)
+        nx.write_gpickle(graph, save_name)
+        
