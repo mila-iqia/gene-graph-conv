@@ -6,14 +6,16 @@ import pandas as pd
 import h5py
 import networkx as nx
 import academictorrents as at
-from data.utils import symbol_map, ncbi_to_hugo_map
+from data.utils import symbol_map, ncbi_to_hugo_map, ensp_to_hugo_map
 import os
+import itertools
 
 
 class GeneInteractionGraph(object):
     """ This class manages the data pertaining to the relationships between genes.
         It has an nx_graph, and some helper functions.
     """
+
     def __init__(self, relabel_genes=True):
         self.load_data()
         self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, symbol_map(self.nx_graph.nodes))
@@ -27,7 +29,7 @@ class GeneInteractionGraph(object):
         try:
             neighbors = neighbors.union(set(self.nx_graph.neighbors(gene)))
         except Exception as e:
-            #print(e)
+            # print(e)
             pass
         neighborhood = np.asarray(nx.to_numpy_matrix(self.nx_graph.subgraph(neighbors)))
         return neighbors, neighborhood
@@ -51,6 +53,7 @@ class GeneInteractionGraph(object):
     def adj(self):
         return nx.to_numpy_matrix(self.nx_graph)
 
+
 class RegNetGraph(GeneInteractionGraph):
     def __init__(self, at_hash="e109e087a8fc8aec45bae3a74a193922ce27fc58", datastore=""):
         self.at_hash = at_hash
@@ -58,7 +61,8 @@ class RegNetGraph(GeneInteractionGraph):
         super(RegNetGraph, self).__init__()
 
     def load_data(self):
-        self.nx_graph = nx.OrderedGraph(nx.readwrite.gpickle.read_gpickle(at.get(self.at_hash, datastore=self.datastore)))
+        self.nx_graph = nx.OrderedGraph(
+            nx.readwrite.gpickle.read_gpickle(at.get(self.at_hash, datastore=self.datastore)))
 
 
 class GeneManiaGraph(GeneInteractionGraph):
@@ -68,7 +72,8 @@ class GeneManiaGraph(GeneInteractionGraph):
         super(GeneManiaGraph, self).__init__()
 
     def load_data(self):
-        self.nx_graph = nx.OrderedGraph(nx.readwrite.gpickle.read_gpickle(at.get(self.at_hash, datastore=self.datastore)))
+        self.nx_graph = nx.OrderedGraph(
+            nx.readwrite.gpickle.read_gpickle(at.get(self.at_hash, datastore=self.datastore)))
 
 
 class EcoliEcocycGraph(GeneInteractionGraph):
@@ -77,21 +82,21 @@ class EcoliEcocycGraph(GeneInteractionGraph):
         super(EcoliEcocycGraph, self).__init__()
 
     def load_data(self):
-        d = pd.read_csv(self.path, sep="\t", skiprows=40,header=None)
+        d = pd.read_csv(self.path, sep="\t", skiprows=40, header=None)
         d = d.set_index(0)
         del d[1]
-        d = d.loc[:,:110] # filter gene ids
+        d = d.loc[:, :110]  # filter gene ids
 
         # collect global names for nodes so all adj are aligned
         node_names = d.as_matrix().reshape(-1).astype(str)
-        node_names = np.unique(node_names[node_names!= "nan"]) # nan removal
+        node_names = np.unique(node_names[node_names != "nan"])  # nan removal
 
-        #stores all subgraphs and their pathway names
+        # stores all subgraphs and their pathway names
         adjs = []
         adjs_name = []
         # for each pathway create a graph, add the edges and create a matrix
         for i, name in enumerate(d.index):
-            G=nx.Graph()
+            G = nx.Graph()
             G.add_nodes_from(node_names)
             pathway_genes = np.unique(d.iloc[i].dropna().astype(str).as_matrix())
             for e1, e2 in itertools.product(pathway_genes, pathway_genes):
@@ -100,9 +105,9 @@ class EcoliEcocycGraph(GeneInteractionGraph):
             adjs.append(adj)
             adjs_name.append(name)
 
-        #collapse all graphs to one graph
-        adj = np.sum(adjs,axis=0)
-        adj = np.clip(adj,0,1)
+        # collapse all graphs to one graph
+        adj = np.sum(adjs, axis=0)
+        adj = np.clip(adj, 0, 1)
 
         self.adj = adj
         self.adjs = adjs
@@ -126,6 +131,7 @@ class HumanNetV1Graph(GeneInteractionGraph):
     """
     More info on HumanNet V1 : http://www.functionalnet.org/humannet/about.html
     """
+
     def __init__(self):
         self.benchmark = "../data/graphs/HumanNet.v1.benchmark.txt"
         super(HumanNetV1Graph, self).__init__()
@@ -145,6 +151,7 @@ class HumanNetV2Graph(GeneInteractionGraph):
     """
     More info on HumanNet V1 : http://www.functionalnet.org/humannet/about.html
     """
+
     def __init__(self):
         self.benchmark = "../data/graphs/HumanNet-XN.tsv"
         super(HumanNetV2Graph, self).__init__()
@@ -167,6 +174,7 @@ class FunCoupGraph(GeneInteractionGraph):
     http://funcoup.sbc.su.se/downloads/ and place it in the 
     graphs folder before instantiating this class
     """
+
     def __init__(self, filename='funcoup.pkl'):
         self.filename = filename
         super(FunCoupGraph, self).__init__()
@@ -178,25 +186,24 @@ class FunCoupGraph(GeneInteractionGraph):
         if not os.path.isfile(pkl_file):
             self._preprocess_and_pickle(save_name=pkl_file)
         self.nx_graph = nx.OrderedGraph(nx.read_gpickle(pkl_file))
-        
-            
+
     def _preprocess_and_pickle(self, save_name):
-        names_map_file =  os.path.join(self.location, 'ensembl_to_hugo.tsv')
-        data_file = os.path.join(self.location,'FC4.0_H.sapiens_full.gz')
-        
+        names_map_file = os.path.join(self.location, 'ensembl_to_hugo.tsv')
+        data_file = os.path.join(self.location, 'FC4.0_H.sapiens_full.gz')
+
         names = pd.read_csv(names_map_file, sep='\t')
         names.columns = ['symbol', 'ensembl']
         names = names.dropna(subset=['ensembl']).drop_duplicates('ensembl')
         names = names.set_index('ensembl').squeeze()
 
         data = pd.read_csv(data_file, sep='\t', usecols=['#0:PFC', '1:FBS_max',
-                                                         '2:Gene1','3:Gene2'])
+                                                         '2:Gene1', '3:Gene2'])
         data['2:Gene1'] = data['2:Gene1'].map(names)
         data['3:Gene2'] = data['3:Gene2'].map(names)
         data = data.dropna(subset=['2:Gene1', '3:Gene2'])
-        
-        graph = nx.from_pandas_edgelist(data, source='2:Gene1', target='3:Gene2', 
-                                       # edge_attr=['#0:PFC', '1:FBS_max'], # Uncomment to include edge attributes
+
+        graph = nx.from_pandas_edgelist(data, source='2:Gene1', target='3:Gene2',
+                                        # edge_attr=['#0:PFC', '1:FBS_max'], # Uncomment to include edge attributes
                                         create_using=nx.OrderedGraph)
         nx.write_gpickle(graph, save_name)
 
@@ -207,8 +214,9 @@ class HetIOGraph(GeneInteractionGraph):
     github.com/hetio/hetionet
     het.io
     """
+
     def __init__(self, graph_type='interaction'):
-        name_to_edge = {'interaction':'GiG', 'regulation':'Gr>G', 'covariation':'GcG',
+        name_to_edge = {'interaction': 'GiG', 'regulation': 'Gr>G', 'covariation': 'GcG',
                         'all': 'GiG|Gr>G|GcG'}
         assert graph_type in name_to_edge.keys()
         self.graph_type = graph_type
@@ -223,30 +231,68 @@ class HetIOGraph(GeneInteractionGraph):
         if not os.path.isfile(pkl_file):
             self._process_and_pickle(save_name=pkl_file)
         self.nx_graph = nx.OrderedGraph(nx.read_gpickle(pkl_file))
-        
-            
+
     def _process_and_pickle(self, save_name):
-        names_map_file =  os.path.join(self.location, 'hetionet-v1.0-nodes.tsv')
+        names_map_file = os.path.join(self.location, 'hetionet-v1.0-nodes.tsv')
         data_file = os.path.join(self.location, 'hetionet-v1.0-edges.sif.gz')
-        if not(os.path.isfile(names_map_file) or os.path.isfile(data_file)):
+        if not (os.path.isfile(names_map_file) or os.path.isfile(data_file)):
             print(""" Please download the files from https://github.com/hetio/hetionet/tree/master/hetnet/tsv:
             
             -- hetionet-v1.0-nodes.tsv
             -- hetionet-v1.0-edges.sif.gz""")
-            import sys;sys.exit()
+            import sys;
+            sys.exit()
 
-              
         node_ids = pd.read_csv(names_map_file, sep='\t')
         node_ids = node_ids.loc[node_ids.kind == 'Gene'].drop(columns='kind')
         node_ids = node_ids.set_index('id').squeeze()
-        
+
         edges = pd.read_csv(data_file, sep='\t', compression='gzip')
         edges = edges.loc[edges.metaedge.str.contains(self.edge)].drop(columns='metaedge')
-        
+
         # Convert the HetIO Entrez IDs into gene symbols
         edges = edges.stack().map(node_ids).unstack()
-        edges = edges.dropna().drop_duplicates() 
+        edges = edges.dropna().drop_duplicates()
 
         graph = nx.from_pandas_edgelist(edges, create_using=nx.OrderedGraph)
         nx.write_gpickle(graph, save_name)
-        
+
+
+class StringDBGraph(GeneInteractionGraph):
+    """
+    String DB graph. Note that there are several types of interactions.
+    One can select the desired interactions among name_to_edge keys
+
+    Download link : https://string-db.org/cgi/download.pl?sessionId=qJO5wpaPqJC7&species_text=Homo+sapiens
+    """
+
+    def __init__(self, graph_type='all'):
+        self.proteinlinks = "../data/graphs/9606.protein.links.detailed.v11.0.txt"
+        self.name_to_edge = {"neighborhood": "neighborhood",
+                             "fusion": "fusion",
+                             "cooccurence": "cooccurence",
+                             "coexpression": "coexpression",
+                             "experimental": "experimental",
+                             "database": "database",
+                             "textmining": "textmining",
+                             "all": "combined_score"}
+        assert graph_type in self.name_to_edge.keys()
+        self.graph_type = graph_type
+        super(StringDBGraph, self).__init__()
+
+    def load_data(self):
+        print("Building StringDB Graph. It can take a while the first time...")
+        savefile = "graphs/stringdb_graph_" + self.graph_type + "_edges.adjlist"
+        if os.path.isfile(savefile):
+            self.nx_graph = nx.read_adjlist(savefile)
+        else:
+            ensmap = ensp_to_hugo_map()
+            edges = pd.read_csv(self.proteinlinks, sep=' ')
+            selected_edges = edges[self.name_to_edge[self.graph_type]] != 0
+            edgelist = edges[selected_edges][["protein1", "protein2"]].values.tolist()
+            edgelist = [[ensmap[edge[0][5:]], ensmap[edge[1][5:]]] for edge in edgelist
+                        if edge[0][5:] in ensmap.keys() and edge[1][5:] in ensmap.keys()]
+
+            self.nx_graph = nx.OrderedGraph(edgelist)
+            nx.write_adjlist(self.nx_graph, savefile)
+        print("Graph built !")

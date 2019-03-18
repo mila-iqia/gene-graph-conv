@@ -9,7 +9,7 @@ import pandas as pd
 import numpy as np
 from torch.utils.data import Dataset
 import academictorrents as at
-from data.utils import symbol_map, ens_to_hugo_map
+from data.utils import symbol_map, ensg_to_hugo_map
 from cmapPy.pandasGEXpress.parse import parse
 
 
@@ -186,7 +186,7 @@ class GTexDataset(GeneDataset):
     def load_data(self):
         self.df = parse(self.data_path).data_df.T
         # Map gene names
-        eh_map = ens_to_hugo_map()
+        eh_map = ensg_to_hugo_map()
         columns_to_drop = [i for i in self.df.columns if str(i)[2:].split('.')[0] not in eh_map.keys()]
         self.df = self.df.drop(columns_to_drop, axis=1)  # Drop columns whose gene is not covered by the map
 
