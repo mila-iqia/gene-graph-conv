@@ -19,6 +19,7 @@ parser.add_argument('--graph', default=None, type=str, help='Which graph to eval
 parser.add_argument('--dataset', default='tcga', type=str, help='Gene expression data to be used. Default - TCGA. Valid options are tcga, gtex, geo')
 parser.add_argument('--edge', default=None, type=str, help='Edge type for HetIO graph. Must be one of [interaction, regulation, covariation]')
 parser.add_argument('--results', default='all_nodes', type=str, help='Name of file to save results to. Default - all_nodes')
+parser.add_argument('--trials', default=5, type=int, help='Number of trials to run')
 args = parser.parse_args()
 
 # Setup the results dictionary
@@ -33,9 +34,9 @@ except Exception as e:
     print("Created a New Results Dictionary - {}".format(filename))
 
 
-train_size = 50
+train_size = 80
 test_size = 1000
-trials = 3
+trials = args.trials
 cuda = torch.cuda.is_available()
 
 graph_dict = {"regnet": RegNetGraph, "genemania": GeneManiaGraph, 
@@ -93,7 +94,8 @@ for row in todo:
         print(len(results))
     gene = row["gene"]
     seed = row["seed"]
-    model = MLP(column_names=dataset.df.columns, dropout=False, cuda=cuda, metric=sklearn.metrics.roc_auc_score)
+    model = MLP(column_names=dataset.df.columns, num_layer=1, dropout=False, 
+                cuda=cuda, metric=sklearn.metrics.roc_auc_score)
 
     experiment = {
         "gene": gene,
@@ -107,7 +109,7 @@ for row in todo:
 
     try:
         X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(dataset.df, dataset.labels, stratify=dataset.labels, 
-                             train_size=train_size, test_size=test_size)
+                             train_size=train_size, test_size=test_size, random_state=seed)
     except ValueError:
         results = record_result(results, experiment, filename)
         continue
