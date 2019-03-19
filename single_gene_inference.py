@@ -101,7 +101,7 @@ for row in todo:
         print(len(results))
     gene = row["gene"]
     seed = row["seed"]
-    model = MLP(column_names=dataset.df.columns, num_layer=1, dropout=False, 
+    model = MLP(column_names=dataset.df.columns, num_layer=1, dropout=False, train_valid_split=0.5,
                 cuda=cuda, metric=sklearn.metrics.roc_auc_score)
 
     experiment = {
