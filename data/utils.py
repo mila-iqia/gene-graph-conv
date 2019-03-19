@@ -34,7 +34,7 @@ def symbol_map(gene_symbols):
 
 
 def ncbi_to_hugo_map(gene_symbols):
-    with open('../data/graphs/enterez_NCBI_to_hugo_gene_symbol_march_2019.txt') as csv_file:
+    with open('data/graphs/enterez_NCBI_to_hugo_gene_symbol_march_2019.txt') as csv_file:
         next(csv_file)  # Skip first line
         csv_reader = csv.reader(csv_file, delimiter='\t')
         x = {int(row[1]): row[0] for row in csv_reader if row[1] != ""}
@@ -46,7 +46,7 @@ def ncbi_to_hugo_map(gene_symbols):
 
 
 def ensg_to_hugo_map():
-    with open("datastore/ensembl_map.txt") as csv_file:
+    with open("data/datastore/ensembl_map.txt") as csv_file:
         next(csv_file)  # Skip first line
         csv_reader = csv.reader(csv_file, delimiter='\t')
         ensmap = {row[1]: row[0] for row in csv_reader if row[0] != ""}
@@ -61,7 +61,7 @@ def ensp_to_hugo_map():
 
     Store the file in datastore
     """
-    savefile = "datastore/ensp_ensg_df.pkl"
+    savefile = "data/datastore/ensp_ensg_df.pkl"
 
     # If df is already stored, return the corresponding dictionary
     if os.path.isfile(savefile):
@@ -69,12 +69,12 @@ def ensp_to_hugo_map():
         df = pickle.load(f)
         f.close()
     else:
-        df = read_gtf("datastore/Homo_sapiens.GRCh38.95.gtf")
+        df = read_gtf("data/datastore/Homo_sapiens.GRCh38.95.gtf")
         df = df[df['protein_id'] != ''][['gene_id', 'protein_id']].drop_duplicates()
         df.to_pickle(savefile)
 
     # ENSG to hugo map
-    with open("datastore/ensembl_map.txt") as csv_file:
+    with open("data/datastore/ensembl_map.txt") as csv_file:
         next(csv_file)  # Skip first line
         csv_reader = csv.reader(csv_file, delimiter='\t')
         ensg_map = {row[1]: row[0] for row in csv_reader if row[0] != ""}

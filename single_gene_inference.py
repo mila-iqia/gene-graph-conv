@@ -11,14 +11,18 @@ import torch
 
 from models.mlp import MLP
 from data.datasets import TCGADataset, GTexDataset
-from data.gene_graphs import GeneManiaGraph, RegNetGraph, HumanNetV2Graph, FunCoupGraph, HetIOGraph
+from data.gene_graphs import GeneManiaGraph, RegNetGraph, HumanNetV2Graph, FunCoupGraph, HetIOGraph, StringDBGraph
 from data.utils import record_result
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--graph', default=None, type=str, help='Which graph to evaluate? Default - no graph, all nodes used')
-parser.add_argument('--dataset', default='tcga', type=str, help='Gene expression data to be used. Default - TCGA. Valid options are tcga, gtex, geo')
-parser.add_argument('--edge', default=None, type=str, help='Edge type for HetIO graph. Must be one of [interaction, regulation, covariation]')
-parser.add_argument('--results', default='all_nodes', type=str, help='Name of file to save results to. Default - all_nodes')
+parser.add_argument('--graph', default=None, type=str,
+                    help='Which graph to evaluate? Default - no graph, all nodes used')
+parser.add_argument('--dataset', default='tcga', type=str,
+                    help='Gene expression data to be used. Default - TCGA. Valid options are tcga, gtex, geo')
+parser.add_argument('--edge', default=None, type=str,
+                    help='Edge type for HetIO graph. Must be one of [interaction, regulation, covariation]')
+parser.add_argument('--results', default='all_nodes', type=str,
+                    help='Name of file to save results to. Default - all_nodes')
 args = parser.parse_args()
 
 # Setup the results dictionary
@@ -32,16 +36,15 @@ except Exception as e:
     results = pd.DataFrame(columns=['auc', 'gene', 'model', 'graph', 'seed', 'train_size', 'error'])
     print("Created a New Results Dictionary - {}".format(filename))
 
-
 train_size = 50
 test_size = 1000
 trials = 3
 cuda = torch.cuda.is_available()
 
-graph_dict = {"regnet": RegNetGraph, "genemania": GeneManiaGraph, 
-              "humannetv2":HumanNetV2Graph, "funcoup":FunCoupGraph,
-              "hetio":HetIOGraph}
-data_dict = {"tcga": TCGADataset, "gtex":GTexDataset, "geo":0}
+graph_dict = {"regnet": RegNetGraph, "genemania": GeneManiaGraph,
+              "humannetv2": HumanNetV2Graph, "funcoup": FunCoupGraph,
+              "hetio": HetIOGraph, "stringdb": StringDBGraph}
+data_dict = {"tcga": TCGADataset, "gtex": GTexDataset, "geo": 0}
 # Select graph and set variables
 if args.graph:
     # Check graph arg is valid
@@ -64,15 +67,15 @@ except Exception:
     tb = traceback.format_exc()
     print(tb)
     print("Please enter a valid argument for the dataset. Valid options are tcga, gtex and geo")
-    import sys;sys.exit()
-    
+    import sys
+    sys.exit()
+
 # Create list of the genes to perform inference on
 # If assessing first-degree neighbours, then train only for those genes 
 # that are there in the graph 
 which_genes = dataset.df.columns.tolist()
 if args.graph:
     which_genes = set(gene_graph.nx_graph.nodes).intersection(which_genes)
-
 
 # Create the set of all experiment ids and see which are left to do
 columns = ["gene", "seed"]
@@ -86,7 +89,6 @@ todo = all_exp_ids.drop(intersection_ids).to_dict(orient="records")
 
 print("todo: " + str(len(todo)))
 print("done: " + str(len(results)))
-
 
 for row in todo:
     if len(results) % 10 == 0:
@@ -106,8 +108,10 @@ for row in todo:
     dataset.labels = dataset.labels.values if type(dataset.labels) == pd.Series else dataset.labels
 
     try:
-        X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(dataset.df, dataset.labels, stratify=dataset.labels, 
-                             train_size=train_size, test_size=test_size)
+        X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(dataset.df, dataset.labels,
+                                                                                    stratify=dataset.labels,
+                                                                                    train_size=train_size,
+                                                                                    test_size=test_size)
     except ValueError:
         results = record_result(results, experiment, filename)
         continue
@@ -126,11 +130,11 @@ for row in todo:
         y_hat = model.predict(X_test)
         auc = sklearn.metrics.roc_auc_score(y_test, np.argmax(y_hat, axis=1))
         experiment["auc"] = auc
-        model.best_model = None # cleanup
+        model.best_model = None  # cleanup
         del model
         torch.cuda.empty_cache()
     except Exception:
         tb = traceback.format_exc()
         experiment['error'] = tb
-    
+
     results = record_result(results, experiment, filename)
