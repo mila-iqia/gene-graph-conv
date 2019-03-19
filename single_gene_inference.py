@@ -47,7 +47,7 @@ cuda = torch.cuda.is_available()
 graph_dict = {"regnet": RegNetGraph, "genemania": GeneManiaGraph,
               "humannetv2": HumanNetV2Graph, "funcoup": FunCoupGraph,
               "hetio": HetIOGraph, "stringdb": StringDBGraph}
-data_dict = {"tcga": TCGADataset, "gtex": GTexDataset, "geo": 0}
+
 # Select graph and set variables
 if args.graph:
     # Check graph arg is valid
