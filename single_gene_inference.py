@@ -10,7 +10,7 @@ import sklearn
 import torch
 
 from models.mlp import MLP
-from data.datasets import TCGADataset, GTexDataset
+from data.datasets import TCGADataset, GTexDataset, GEODataset
 from data.gene_graphs import GeneManiaGraph, RegNetGraph, HumanNetV2Graph, FunCoupGraph, HetIOGraph
 from data.utils import record_result
 
@@ -59,8 +59,15 @@ else:
 
 # Read in data
 try:
-    assert args.dataset in data_dict.keys()
-    dataset = data_dict[args.dataset]()
+    assert args.dataset in ['tcga', 'gtex', 'geo']
+    if args.dataset == 'tcga':
+        dataset = TCGADataset()
+    elif args.dataset == 'gtex':
+        dataset = GTexDataset()
+    elif args.dataset == 'geo':
+        dataset = GEODataset(file_path='/network/data1/genomics/D-GEX/bgedv2.hdf5', load_full=False,
+                             nb_examples=(train_size+test_size))
+
 except Exception:
     tb = traceback.format_exc()
     print(tb)
