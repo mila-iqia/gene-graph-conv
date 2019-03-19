@@ -133,7 +133,7 @@ class HumanNetV1Graph(GeneInteractionGraph):
     """
 
     def __init__(self):
-        self.benchmark = "../data/graphs/HumanNet.v1.benchmark.txt"
+        self.benchmark = "data/graphs/HumanNet.v1.benchmark.txt"
         super(HumanNetV1Graph, self).__init__()
 
     def load_data(self):
@@ -153,7 +153,7 @@ class HumanNetV2Graph(GeneInteractionGraph):
     """
 
     def __init__(self):
-        self.benchmark = "../data/graphs/HumanNet-XN.tsv"
+        self.benchmark = "data/graphs/HumanNet-XN.tsv"
         super(HumanNetV2Graph, self).__init__()
 
     def load_data(self):
@@ -267,7 +267,7 @@ class StringDBGraph(GeneInteractionGraph):
     """
 
     def __init__(self, graph_type='all'):
-        self.proteinlinks = "../data/graphs/9606.protein.links.detailed.v11.0.txt"
+        self.proteinlinks = "data/graphs/9606.protein.links.detailed.v11.0.txt"
         self.name_to_edge = {"neighborhood": "neighborhood",
                              "fusion": "fusion",
                              "cooccurence": "cooccurence",
@@ -282,7 +282,7 @@ class StringDBGraph(GeneInteractionGraph):
 
     def load_data(self):
         print("Building StringDB Graph. It can take a while the first time...")
-        savefile = "graphs/stringdb_graph_" + self.graph_type + "_edges.adjlist"
+        savefile = "data/graphs/stringdb_graph_" + self.graph_type + "_edges.adjlist"
         if os.path.isfile(savefile):
             self.nx_graph = nx.read_adjlist(savefile)
         else:
