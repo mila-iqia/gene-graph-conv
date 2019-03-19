@@ -1,6 +1,7 @@
 import os
 import csv
 import pickle
+from gtfparse import read_gtf
 
 
 def record_result(results, experiment, filename):
@@ -33,7 +34,7 @@ def symbol_map(gene_symbols):
 
 
 def ncbi_to_hugo_map(gene_symbols):
-    with open('../data/graphs/enterez_NCBI_to_hugo_gene_symbol_march_2019.txt') as csv_file:
+    with open('data/graphs/enterez_NCBI_to_hugo_gene_symbol_march_2019.txt') as csv_file:
         next(csv_file)  # Skip first line
         csv_reader = csv.reader(csv_file, delimiter='\t')
         x = {int(row[1]): row[0] for row in csv_reader if row[1] != ""}
@@ -44,13 +45,44 @@ def ncbi_to_hugo_map(gene_symbols):
     return map
 
 
-def ens_to_hugo_map():
-    with open("datastore/ensembl_map.txt") as csv_file:
+def ensg_to_hugo_map():
+    with open("data/datastore/ensembl_map.txt") as csv_file:
         next(csv_file)  # Skip first line
         csv_reader = csv.reader(csv_file, delimiter='\t')
-        x = {row[1]: row[0] for row in csv_reader if row[0] != ""}
+        ensmap = {row[1]: row[0] for row in csv_reader if row[0] != ""}
 
-        map = {}
-        for key, val in x.items():
-            map[key] = val
-    return map
+    return ensmap
+
+
+def ensp_to_hugo_map():
+    """
+    You should download the file Homo_sapiens.GRCh38.95.gtf from :
+    ftp://ftp.ensembl.org/pub/release-95/gtf/homo_sapiens/Homo_sapiens.GRCh38.95.gtf.gz
+
+    Store the file in datastore
+    """
+    savefile = "data/datastore/ensp_ensg_df.pkl"
+
+    # If df is already stored, return the corresponding dictionary
+    if os.path.isfile(savefile):
+        f = open(savefile, 'rb')
+        df = pickle.load(f)
+        f.close()
+    else:
+        df = read_gtf("data/datastore/Homo_sapiens.GRCh38.95.gtf")
+        df = df[df['protein_id'] != ''][['gene_id', 'protein_id']].drop_duplicates()
+        df.to_pickle(savefile)
+
+    # ENSG to hugo map
+    with open("data/datastore/ensembl_map.txt") as csv_file:
+        next(csv_file)  # Skip first line
+        csv_reader = csv.reader(csv_file, delimiter='\t')
+        ensg_map = {row[1]: row[0] for row in csv_reader if row[0] != ""}
+
+    # ENSP to hugo map
+    ensmap = {}
+    for index, row in df.iterrows():
+        if row['gene_id'] in ensg_map.keys():
+            ensmap[row['protein_id']] = ensg_map[row['gene_id']]
+
+    return ensmap
