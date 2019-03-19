@@ -10,7 +10,7 @@ import sklearn
 import torch
 
 from models.mlp import MLP
-from data.datasets import TCGADataset, GTexDataset
+from data.datasets import TCGADataset, GTexDataset, GEODataset
 from data.gene_graphs import GeneManiaGraph, RegNetGraph, HumanNetV2Graph, FunCoupGraph, HetIOGraph, StringDBGraph
 from data.utils import record_result
 
@@ -23,6 +23,8 @@ parser.add_argument('--edge', default=None, type=str,
                     help='Edge type for HetIO graph. Must be one of [interaction, regulation, covariation]')
 parser.add_argument('--results', default='all_nodes', type=str,
                     help='Name of file to save results to. Default - all_nodes')
+parser.add_argument('--trials', default=5, type=int, help='Number of trials to run')
+
 args = parser.parse_args()
 
 # Setup the results dictionary
@@ -36,9 +38,10 @@ except Exception as e:
     results = pd.DataFrame(columns=['auc', 'gene', 'model', 'graph', 'seed', 'train_size', 'error'])
     print("Created a New Results Dictionary - {}".format(filename))
 
-train_size = 50
+
+train_size = 80
 test_size = 1000
-trials = 3
+trials = args.trials
 cuda = torch.cuda.is_available()
 
 graph_dict = {"regnet": RegNetGraph, "genemania": GeneManiaGraph,
@@ -61,8 +64,15 @@ else:
 
 # Read in data
 try:
-    assert args.dataset in data_dict.keys()
-    dataset = data_dict[args.dataset]()
+    assert args.dataset in ['tcga', 'gtex', 'geo']
+    if args.dataset == 'tcga':
+        dataset = TCGADataset()
+    elif args.dataset == 'gtex':
+        dataset = GTexDataset()
+    elif args.dataset == 'geo':
+        dataset = GEODataset(file_path='/network/data1/genomics/D-GEX/bgedv2.hdf5', load_full=False,
+                             nb_examples=(train_size+test_size))
+
 except Exception:
     tb = traceback.format_exc()
     print(tb)
@@ -95,7 +105,8 @@ for row in todo:
         print(len(results))
     gene = row["gene"]
     seed = row["seed"]
-    model = MLP(column_names=dataset.df.columns, dropout=False, cuda=cuda, metric=sklearn.metrics.roc_auc_score)
+    model = MLP(column_names=dataset.df.columns, num_layer=1, dropout=False, train_valid_split=0.5,
+                cuda=cuda, metric=sklearn.metrics.roc_auc_score)
 
     experiment = {
         "gene": gene,
@@ -111,7 +122,9 @@ for row in todo:
         X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(dataset.df, dataset.labels,
                                                                                     stratify=dataset.labels,
                                                                                     train_size=train_size,
-                                                                                    test_size=test_size)
+                                                                                    test_size=test_size,
+                                                                                    random_state=seed)
+
     except ValueError:
         results = record_result(results, experiment, filename)
         continue
