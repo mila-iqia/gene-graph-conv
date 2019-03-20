@@ -6,6 +6,7 @@ from torch import nn
 import torch
 import numpy as np
 
+
 class MLP(Model):
     def __init__(self, **kwargs):
         super(MLP, self).__init__(**kwargs)

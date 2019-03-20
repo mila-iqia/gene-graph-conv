@@ -11,7 +11,8 @@ import torch
 
 from models.mlp import MLP
 from data.datasets import TCGADataset, GTexDataset, GEODataset
-from data.gene_graphs import GeneManiaGraph, RegNetGraph, HumanNetV2Graph, FunCoupGraph, HetIOGraph, StringDBGraph
+from data.gene_graphs import GeneManiaGraph, RegNetGraph,HumanNetV1Graph, HumanNetV2Graph, \
+    FunCoupGraph, HetIOGraph, StringDBGraph
 from data.utils import record_result
 
 parser = argparse.ArgumentParser()
@@ -20,7 +21,8 @@ parser.add_argument('--graph', default=None, type=str,
 parser.add_argument('--dataset', default='tcga', type=str,
                     help='Gene expression data to be used. Default - TCGA. Valid options are tcga, gtex, geo')
 parser.add_argument('--edge', default=None, type=str,
-                    help='Edge type for HetIO graph. Must be one of [interaction, regulation, covariation]')
+                    help='Edge type for HetIO graph [interaction, regulation, covariation] and Stringdb ['
+                         'neighborhood, fusion, cooccurence, coexpression, experimental, database, textmining, all]')
 parser.add_argument('--results', default='all_nodes', type=str,
                     help='Name of file to save results to. Default - all_nodes')
 parser.add_argument('--trials', default=5, type=int, help='Number of trials to run')
@@ -44,7 +46,7 @@ test_size = 1000
 trials = args.trials
 cuda = torch.cuda.is_available()
 
-graph_dict = {"regnet": RegNetGraph, "genemania": GeneManiaGraph,
+graph_dict = {"regnet": RegNetGraph, "genemania": GeneManiaGraph, "humannetv1": HumanNetV1Graph,
               "humannetv2": HumanNetV2Graph, "funcoup": FunCoupGraph,
               "hetio": HetIOGraph, "stringdb": StringDBGraph}
 
@@ -53,7 +55,7 @@ if args.graph:
     # Check graph arg is valid
     assert args.graph in graph_dict.keys()
     graph_name = args.graph
-    if graph_name == 'hetio':
+    if graph_name == 'hetio' or graph_name == 'stringdb':
         gene_graph = graph_dict[graph_name](graph_type=args.edge)
     else:
         gene_graph = graph_dict[graph_name]()
@@ -87,6 +89,8 @@ which_genes = dataset.df.columns.tolist()
 if args.graph:
     which_genes = set(gene_graph.nx_graph.nodes).intersection(which_genes)
 
+print("Number of covered genes", len(which_genes))
+
 # Create the set of all experiment ids and see which are left to do
 columns = ["gene", "seed"]
 all_exp_ids = [x for x in itertools.product(which_genes, range(trials))]
@@ -106,7 +110,7 @@ for row in todo:
     gene = row["gene"]
     seed = row["seed"]
     model = MLP(column_names=dataset.df.columns, num_layer=1, dropout=False, train_valid_split=0.5,
-                cuda=cuda, metric=sklearn.metrics.roc_auc_score)
+                cuda=cuda, metric=sklearn.metrics.roc_auc_score, channels=16)
 
     experiment = {
         "gene": gene,
