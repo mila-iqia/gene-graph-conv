@@ -178,7 +178,7 @@ class GTexDataset(GeneDataset):
     - https://www.genenames.org/cgi-bin/download/custom?col=gd_app_sym&col=md_ensembl_id&status=Approved&status=Entry
     %20Withdrawn&hgnc_dbtag=on&order_by=gd_app_sym_sort&format=text&submit=submit
     """
-    def __init__(self, nb_examples=None, data_path="datastore/GTEx_RNASeq_RPKM_n2921x55993.gctx"):
+    def __init__(self, nb_examples=None, data_path="data/datastore/GTEx_RNASeq_RPKM_n2921x55993.gctx"):
         self.data_path = data_path
         self.nb_examples = nb_examples  # In case you don't want to load the whole dataset from disk
         super(GTexDataset, self).__init__()
@@ -187,10 +187,10 @@ class GTexDataset(GeneDataset):
         self.df = parse(self.data_path).data_df.T
         # Map gene names
         eh_map = ensg_to_hugo_map()
-        columns_to_drop = [i for i in self.df.columns if str(i)[2:].split('.')[0] not in eh_map.keys()]
+        columns_to_drop = [i for i in self.df.columns if str(i)[str(i).find('ENS'):].split('.')[0] not in eh_map.keys()]
         self.df = self.df.drop(columns_to_drop, axis=1)  # Drop columns whose gene is not covered by the map
 
-        self.df.columns = [eh_map[str(i)[2:].split('.')[0]] for i in self.df.columns]  # Rename columns
+        self.df.columns = [eh_map[str(i)[str(i).find('ENS'):].split('.')[0]] for i in self.df.columns]  # Rename columns
 
     def __getitem__(self, idx):
         sample = self.df.iloc[idx, :].values
