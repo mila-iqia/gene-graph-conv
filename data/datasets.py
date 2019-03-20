@@ -197,3 +197,54 @@ class GTexDataset(GeneDataset):
         sample = np.expand_dims(sample, axis=-1)
         sample = {'sample': sample}
         return sample
+
+
+class GEODataset(GeneDataset):
+
+    def __init__(self, file_path, load_full=False, nb_examples=1200):
+        """
+        Args:
+            file_path: Path to the HDF5 file
+            load_full: Load the entire dataset into memory or not
+            nb_examples: Number of examples to load if load_full is False.
+
+        If load_full is False, the object will load only a randomly sampled dataframe
+        with the length nb_examples. The randomize_dataset method can be used to generate
+        a new dataset with a specified seed.
+        """
+        self.file_path = file_path
+        self.load_full = load_full
+        self.nb_examples = nb_examples
+        super(GEODataset, self).__init__()
+
+    def load_data(self):
+        self.hdf5 = h5py.File(name=self.file_path, mode='r')
+        self.expression_data = self.hdf5['expression_data']
+        self.nrows, self.ncols = self.expression_data.shape
+
+        # Load all gene names to memory
+        self.genes = [x.decode() for x in self.hdf5['gene_names'][()].tolist()]
+
+        if self.load_full:
+            self.df = pd.DataFrame(data=self.expression_data[()], columns=self.genes)
+        else:
+            self.df = self._load_nb_examples(seed=0)
+
+    def randomize_dataset(self, random_state):
+        """
+        Sample a new self.df of the same length, but with a new seed.
+        """
+        self.df = self._load_nb_examples(seed=random_state)
+
+    def _load_nb_examples(self, seed=0):
+        np.random.seed(seed)
+        indices = np.sort(np.random.choice(self.nrows, size=(self.nb_examples), replace=False))
+
+        # This indexing is very slow
+        data = self.expression_data[indices.tolist()]
+        return pd.DataFrame(data=data, columns=self.genes)
+
+    def __getitem__(self, idx):
+        sample = self.expression_data[idx]
+        sample = np.expand_dims(sample, axis=-1)
+        return sample

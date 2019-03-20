@@ -23,7 +23,7 @@ class Model(nn.Module):
     def __init__(self, name=None, column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=0.,
                  dropout=False, cuda=False, seed=0, adj=None, graph_name=None, aggregation=None, prepool_extralayers=0,
                  lr=0.0001, patience=10, agg_reduce=2, scheduler=False, metric=sklearn.metrics.accuracy_score,
-                 optimizer=torch.optim.Adam, weight_decay=0.0001, batch_size=10, verbose=True):
+                 optimizer=torch.optim.Adam, weight_decay=0.0001, batch_size=10, train_valid_split=0.8, verbose=True):
         self.name = name
         self.column_names = column_names
         self.num_layer = num_layer
@@ -44,7 +44,7 @@ class Model(nn.Module):
         self.batch_size = batch_size
         self.start_patience = patience
         self.attention_head = 0
-        self.train_valid_split = 0.8
+        self.train_valid_split = train_valid_split
         self.best_model = None
         self.metric = metric
         self.optimizer = optimizer
