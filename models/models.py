@@ -23,7 +23,8 @@ class Model(nn.Module):
     def __init__(self, name=None, column_names=None, num_epochs=100, channels=16, num_layer=2, embedding=8, gating=0.,
                  dropout=False, cuda=False, seed=0, adj=None, graph_name=None, aggregation=None, prepool_extralayers=0,
                  lr=0.0001, patience=10, agg_reduce=2, scheduler=False, metric=sklearn.metrics.accuracy_score,
-                 optimizer=torch.optim.Adam, weight_decay=0.0001, batch_size=10, train_valid_split=0.8, verbose=True):
+                 optimizer=torch.optim.Adam, weight_decay=0.0001, batch_size=10, train_valid_split=0.8, 
+                 evaluate_train=True, verbose=True, full_data_cuda=True):
         self.name = name
         self.column_names = column_names
         self.num_layer = num_layer
@@ -50,6 +51,8 @@ class Model(nn.Module):
         self.optimizer = optimizer
         self.weight_decay = weight_decay
         self.verbose = verbose
+        self.evaluate_train = evaluate_train
+        self.full_data_cuda = full_data_cuda
         if self.verbose:
             print("Early stopping metric is " + self.metric.__name__)
         super(Model, self).__init__()
@@ -60,11 +63,22 @@ class Model(nn.Module):
         self.y = y
         self.setup_layers()
         x_train, x_valid, y_train, y_valid = sklearn.model_selection.train_test_split(X, y, stratify=y, train_size=self.train_valid_split, test_size=1-self.train_valid_split, random_state=self.seed)
+        
+        y_true = y_train # Save copy on CPU for evaluation
 
         x_train = torch.FloatTensor(np.expand_dims(x_train, axis=2))
         x_valid = torch.FloatTensor(np.expand_dims(x_valid, axis=2))
         y_train = torch.FloatTensor(y_train)
-
+        if self.on_cuda and self.full_data_cuda:
+            try:
+                x_train = x_train.cuda()
+                x_valid = x_valid.cuda()
+                y_train = y_train.cuda()
+            except:
+                # Move data to GPU batch by batch
+                self.full_data_cuda = False
+                
+        
         criterion = torch.nn.CrossEntropyLoss(reduction='mean')
         optimizer = self.optimizer(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
         if self.scheduler:
@@ -81,7 +95,7 @@ class Model(nn.Module):
                 inputs, labels = x_train[i:i + self.batch_size], y_train[i:i + self.batch_size]
 
                 inputs = Variable(inputs, requires_grad=False).float()
-                if self.on_cuda:
+                if self.on_cuda and not self.full_data_cuda:
                     inputs = inputs.cuda()
                     labels = labels.cuda()
 
@@ -100,19 +114,20 @@ class Model(nn.Module):
             start = time.time()
 
             auc = {'train': 0., 'valid': 0.}
-            res = []
-            for i in range(0, x_train.shape[0], self.batch_size):
-                inputs = Variable(x_train[i:i + self.batch_size]).float()
-                if self.on_cuda:
-                    inputs = inputs.cuda()
-                res.append(self(inputs).data.cpu().numpy())
-            y_hat = np.concatenate(res)
-            auc['train'] = self.metric(y_train.numpy(), np.argmax(y_hat, axis=1))
+            if self.evaluate_train:
+                res = []
+                for i in range(0, x_train.shape[0], self.batch_size):
+                    inputs = Variable(x_train[i:i + self.batch_size]).float()
+                    if self.on_cuda and not self.full_data_cuda:
+                        inputs = inputs.cuda()
+                    res.append(self(inputs).data.cpu().numpy())
+                y_hat = np.concatenate(res)
+                auc['train'] = self.metric(y_true, np.argmax(y_hat, axis=1))
 
             res = []
             for i in range(0, x_valid.shape[0], self.batch_size):
                 inputs = Variable(x_valid[i:i + self.batch_size]).float()
-                if self.on_cuda:
+                if self.on_cuda and not self.full_data_cuda:
                     inputs = inputs.cuda()
                 res.append(self(inputs).data.cpu().numpy())
             y_hat = np.concatenate(res)
