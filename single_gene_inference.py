@@ -14,6 +14,7 @@ from data.datasets import TCGADataset, GTexDataset, GEODataset
 from data.gene_graphs import GeneManiaGraph, RegNetGraph,HumanNetV1Graph, HumanNetV2Graph, \
     FunCoupGraph, HetIOGraph, StringDBGraph
 from data.utils import record_result
+from tqdm import tqdm
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--graph', default=None, type=str,
@@ -25,12 +26,14 @@ parser.add_argument('--edge', default=None, type=str,
                          'neighborhood, fusion, cooccurence, coexpression, experimental, database, textmining, all]')
 parser.add_argument('--results', default='all_nodes', type=str,
                     help='Name of file to save results to. Default - all_nodes')
-parser.add_argument('--trials', default=5, type=int, help='Number of trials to run')
+parser.add_argument('--seed', default=0, type=int, help='Seed for training')
 
 args = parser.parse_args()
+print(args)
+seed = args.seed
 
 # Setup the results dictionary
-filename = "./experiments/results/{}.pkl".format(args.results)
+filename = "./experiments/results/{}_seed{}.pkl".format(args.results, seed)
 try:
     with open(filename, 'rb') as f:
         results = pickle.load(f, encoding='latin1')
@@ -41,9 +44,8 @@ except Exception as e:
     print("Created a New Results Dictionary - {}".format(filename))
 
 
-train_size = 80
+train_size = 2000
 test_size = 1000
-trials = args.trials
 cuda = torch.cuda.is_available()
 
 graph_dict = {"regnet": RegNetGraph, "genemania": GeneManiaGraph, "humannetv1": HumanNetV1Graph,
@@ -92,25 +94,29 @@ if args.graph:
 print("Number of covered genes", len(which_genes))
 
 # Create the set of all experiment ids and see which are left to do
-columns = ["gene", "seed"]
-all_exp_ids = [x for x in itertools.product(which_genes, range(trials))]
+columns = ["gene"]
+all_exp_ids = [x for x in itertools.product(which_genes)]
 all_exp_ids = pd.DataFrame(all_exp_ids, columns=columns)
 all_exp_ids.index = ["-".join(map(str, tup[1:])) for tup in all_exp_ids.itertuples(name=None)]
 results_exp_ids = results[columns].copy()
 results_exp_ids.index = ["-".join(map(str, tup[1:])) for tup in results_exp_ids.itertuples(name=None)]
 intersection_ids = all_exp_ids.index.intersection(results_exp_ids.index)
-todo = all_exp_ids.drop(intersection_ids).to_dict(orient="records")
+todo = all_exp_ids.drop(intersection_ids).sort_values(by='gene').to_dict(orient="records")
 
 print("todo: " + str(len(todo)))
 print("done: " + str(len(results)))
 
-for row in todo:
-    if len(results) % 10 == 0:
-        print(len(results))
+name = "{}_seed{}.pkl".format(args.results, seed)
+for row in tqdm(todo, desc=name):
+#    if len(results) % 100 == 0:
+#        print("\nRemaining: {}".format(len(results)))
     gene = row["gene"]
-    seed = row["seed"]
-    model = MLP(column_names=dataset.df.columns, num_layer=1, dropout=False, train_valid_split=0.5,
-                cuda=cuda, metric=sklearn.metrics.roc_auc_score, channels=16)
+    seed = seed
+    model = MLP(column_names=dataset.df.columns, num_layer=1, dropout=False, 
+                train_valid_split=0.5, cuda=cuda, metric=sklearn.metrics.roc_auc_score, 
+                channels=16, batch_size=50, lr=0.001, weight_decay=0.0001, 
+                verbose=False, patience=5, num_epochs=20, seed=seed,
+                full_data_cuda=True, evaluate_train=False)
 
     experiment = {
         "gene": gene,
@@ -140,9 +146,10 @@ for row in todo:
     else:
         X_train = X_train.copy()
         X_test = X_test.copy()
-    X_train[gene] = 1
-    X_test[gene] = 1
+
     try:
+        X_train[gene] = 1
+        X_test[gene] = 1
         model.fit(X_train, y_train)
         y_hat = model.predict(X_test)
         auc = sklearn.metrics.roc_auc_score(y_test, np.argmax(y_hat, axis=1))
