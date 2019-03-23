@@ -192,6 +192,9 @@ class GTexDataset(GeneDataset):
 
         self.df.columns = [eh_map[str(i)[str(i).find('ENS'):].split('.')[0]] for i in self.df.columns]  # Rename columns
 
+        self.df = self.df.loc[:, (self.df != self.df.iloc[0]).any()]
+        self.df = (self.df - self.df.min()) / (self.df.max() - self.df.min()) * 20 - 10
+
     def __getitem__(self, idx):
         sample = self.df.iloc[idx, :].values
         sample = np.expand_dims(sample, axis=-1)
