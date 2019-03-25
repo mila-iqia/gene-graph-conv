@@ -75,7 +75,7 @@ class DatasetFromCSV(GeneDataset):
         sep = separators[os.path.splitext(self.label_path)[1]]
         self.lab = pd.read_csv(self.label_path, sep=sep, index_col=0)
         self.node_names = self.df.columns.values
-        self.sample_names =  self.df.index.values
+        self.sample_names = self.df.index.values
         self.nb_nodes = self.df.shape[1]
         self.labels = self.lab[self.label_name].values
 
@@ -193,6 +193,7 @@ class GTexDataset(GeneDataset):
 
         self.df.columns = [eh_map[str(i)[str(i).find('ENS'):].split('.')[0]] for i in self.df.columns]  # Rename columns
         self.df = self.df.loc[:, (self.df != self.df.iloc[0]).any()]
+        self.df = self.df - self.df.mean(axis=0)
 
         if self.normalize:
             self.df = (self.df - self.df.min()) / (self.df.max() - self.df.min()) * 20 - 10
