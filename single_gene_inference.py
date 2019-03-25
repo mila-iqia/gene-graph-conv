@@ -74,7 +74,8 @@ try:
     elif args.dataset == 'gtex':
         dataset = GTexDataset()
     elif args.dataset == 'geo':
-        dataset = GEODataset(file_path='/network/data1/genomics/D-GEX/bgedv2.hdf5', load_full=False,
+        dataset = GEODataset(file_path='/network/data1/genomics/D-GEX/bgedv2.hdf5', 
+                             seed=seed, load_full=False,
                              nb_examples=(train_size+test_size))
 
 except Exception:

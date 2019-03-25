@@ -206,7 +206,7 @@ class GTexDataset(GeneDataset):
 
 class GEODataset(GeneDataset):
 
-    def __init__(self, file_path, load_full=False, nb_examples=1200, normalize=True):
+    def __init__(self, file_path, seed=0, load_full=False, nb_examples=1200, normalize=True):
         """
         Args:
             file_path: Path to the HDF5 file
@@ -221,6 +221,7 @@ class GEODataset(GeneDataset):
         self.load_full = load_full
         self.nb_examples = nb_examples
         self.normalize = normalize
+        self.seed = seed
         super(GEODataset, self).__init__()
 
     def load_data(self):
@@ -234,24 +235,24 @@ class GEODataset(GeneDataset):
         if self.load_full:
             self.df = pd.DataFrame(data=self.expression_data[()], columns=self.genes)
         else:
-            self.df = self._load_nb_examples(seed=0)
+            self.df = self._load_nb_examples()
         self.df.rename(symbol_map(self.df.columns), axis="columns", inplace=True)
         if self.normalize:
             self.df = self.df - self.df.mean(axis=0)
 
 
-    def randomize_dataset(self, random_state):
+    def randomize_dataset(self, new_seed):
         """
         Sample a new self.df of the same length, but with a new seed.
         """
-        self.df = self._load_nb_examples(seed=random_state)
+        self.df = self._load_nb_examples(seed=new_seed)
         self.df.rename(symbol_map(self.df.columns), axis="columns", inplace=True)
 
         if self.normalize:
             self.df = self.df - self.df.mean(axis=0)
 
-    def _load_nb_examples(self, seed=0):
-        np.random.seed(seed)
+    def _load_nb_examples(self):
+        np.random.seed(self.seed)
         indices = np.sort(np.random.choice(self.nrows, size=(self.nb_examples), replace=False))
 
         # This indexing is very slow
