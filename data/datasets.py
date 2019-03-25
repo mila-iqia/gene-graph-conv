@@ -178,9 +178,10 @@ class GTexDataset(GeneDataset):
     - https://www.genenames.org/cgi-bin/download/custom?col=gd_app_sym&col=md_ensembl_id&status=Approved&status=Entry
     %20Withdrawn&hgnc_dbtag=on&order_by=gd_app_sym_sort&format=text&submit=submit
     """
-    def __init__(self, nb_examples=None, data_path="data/datastore/GTEx_RNASeq_RPKM_n2921x55993.gctx"):
+    def __init__(self, nb_examples=None, data_path="data/datastore/GTEx_RNASeq_RPKM_n2921x55993.gctx", normalize=False):
         self.data_path = data_path
         self.nb_examples = nb_examples  # In case you don't want to load the whole dataset from disk
+        self.normalize = normalize
         super(GTexDataset, self).__init__()
 
     def load_data(self):
@@ -191,9 +192,10 @@ class GTexDataset(GeneDataset):
         self.df = self.df.drop(columns_to_drop, axis=1)  # Drop columns whose gene is not covered by the map
 
         self.df.columns = [eh_map[str(i)[str(i).find('ENS'):].split('.')[0]] for i in self.df.columns]  # Rename columns
-
         self.df = self.df.loc[:, (self.df != self.df.iloc[0]).any()]
-        self.df = (self.df - self.df.min()) / (self.df.max() - self.df.min()) * 20 - 10
+
+        if self.normalize:
+            self.df = (self.df - self.df.min()) / (self.df.max() - self.df.min()) * 20 - 10
 
     def __getitem__(self, idx):
         sample = self.df.iloc[idx, :].values
