@@ -206,7 +206,7 @@ class GTexDataset(GeneDataset):
 
 class GEODataset(GeneDataset):
 
-    def __init__(self, file_path, load_full=False, nb_examples=1200):
+    def __init__(self, file_path, load_full=False, nb_examples=1200, normalize=True):
         """
         Args:
             file_path: Path to the HDF5 file
@@ -220,6 +220,7 @@ class GEODataset(GeneDataset):
         self.file_path = file_path
         self.load_full = load_full
         self.nb_examples = nb_examples
+        self.normalize = normalize
         super(GEODataset, self).__init__()
 
     def load_data(self):
@@ -234,12 +235,20 @@ class GEODataset(GeneDataset):
             self.df = pd.DataFrame(data=self.expression_data[()], columns=self.genes)
         else:
             self.df = self._load_nb_examples(seed=0)
+        self.df.rename(symbol_map(self.df.columns), axis="columns", inplace=True)
+        if self.normalize:
+            self.df = self.df - self.df.mean(axis=0)
+
 
     def randomize_dataset(self, random_state):
         """
         Sample a new self.df of the same length, but with a new seed.
         """
         self.df = self._load_nb_examples(seed=random_state)
+        self.df.rename(symbol_map(self.df.columns), axis="columns", inplace=True)
+
+        if self.normalize:
+            self.df = self.df - self.df.mean(axis=0)
 
     def _load_nb_examples(self, seed=0):
         np.random.seed(seed)
