@@ -2,6 +2,7 @@ import os
 import csv
 import pickle
 from gtfparse import read_gtf
+import random
 
 
 def record_result(results, experiment, filename):
@@ -86,3 +87,15 @@ def ensp_to_hugo_map():
             ensmap[row['protein_id']] = ensg_map[row['gene_id']]
 
     return ensmap
+
+
+def randmap(nodelist, seed=0):
+    """
+    :param nodelist: nx_graph.nodes
+    :return: permutation map on the set of nodes of the graph
+    """
+    nodes = list(nodelist)
+    randnodes = nodes.copy()
+    random.seed(seed)
+    random.shuffle(randnodes)
+    return dict(zip(nodes, randnodes))
