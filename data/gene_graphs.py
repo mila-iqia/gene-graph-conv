@@ -6,7 +6,7 @@ import pandas as pd
 import h5py
 import networkx as nx
 import academictorrents as at
-from data.utils import symbol_map, ncbi_to_hugo_map, ensp_to_hugo_map
+from data.utils import symbol_map, ncbi_to_hugo_map, ensp_to_hugo_map, randmap
 import os
 import itertools
 
@@ -56,25 +56,36 @@ class GeneInteractionGraph(object):
 
 
 class RegNetGraph(GeneInteractionGraph):
-    def __init__(self, at_hash="e109e087a8fc8aec45bae3a74a193922ce27fc58", **kwargs):
+    
+    def __init__(self, at_hash="e109e087a8fc8aec45bae3a74a193922ce27fc58", randomize=False, **kwargs):
         self.at_hash = at_hash
         self.datastore = datastore
+        self.randomize = randomize
         super(RegNetGraph, self).__init__(**kwargs)
 
     def load_data(self):
         self.nx_graph = nx.OrderedGraph(
             nx.readwrite.gpickle.read_gpickle(at.get(self.at_hash, datastore=self.datastore)))
+        # Randomize
+        if self.randomize:
+            self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, randmap(self.nx_graph.nodes))
 
 
 class GeneManiaGraph(GeneInteractionGraph):
-    def __init__(self, at_hash="5adbacb0b7ea663ac4a7758d39250a1bd28c5b40", **kwargs):
+
+    def __init__(self, at_hash="5adbacb0b7ea663ac4a7758d39250a1bd28c5b40", randomize=False, **kwargs):
         self.at_hash = at_hash
         self.datastore = datastore
+        self.randomize = randomize
         super(GeneManiaGraph, self).__init__(**kwargs)
+
 
     def load_data(self):
         self.nx_graph = nx.OrderedGraph(
             nx.readwrite.gpickle.read_gpickle(at.get(self.at_hash, datastore=self.datastore)))
+        # Randomize
+        if self.randomize:
+            self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, randmap(self.nx_graph.nodes))
 
 
 class EcoliEcocycGraph(GeneInteractionGraph):
@@ -153,8 +164,9 @@ class HumanNetV2Graph(GeneInteractionGraph):
     More info on HumanNet V1 : http://www.functionalnet.org/humannet/about.html
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, randomize=False, **kwargs):
         self.benchmark = self.datastore + "/graphs/HumanNet-XN.tsv"
+        self.randomize = randomize
         super(HumanNetV2Graph, self).__init__(**kwargs)
 
     def load_data(self):
@@ -166,6 +178,9 @@ class HumanNetV2Graph(GeneInteractionGraph):
         for node in list(self.nx_graph.nodes):
             if isinstance(node, float):
                 self.nx_graph.remove_node(node)
+        # Randomize
+        if self.randomize:
+            self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, randmap(self.nx_graph.nodes))
 
 
 class FunCoupGraph(GeneInteractionGraph):
@@ -176,8 +191,9 @@ class FunCoupGraph(GeneInteractionGraph):
     graphs folder before instantiating this class
     """
 
-    def __init__(self, filename='funcoup.pkl', **kwargs):
+    def __init__(self, filename='funcoup.pkl', randomize=False, **kwargs):
         self.filename = filename
+        self.randomize = randomize
         super(FunCoupGraph, self).__init__(**kwargs)
 
     def load_data(self):
@@ -187,6 +203,9 @@ class FunCoupGraph(GeneInteractionGraph):
         if not os.path.isfile(pkl_file):
             self._preprocess_and_pickle(save_name=pkl_file)
         self.nx_graph = nx.OrderedGraph(nx.read_gpickle(pkl_file))
+        # Randomize
+        if self.randomize:
+            self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, randmap(self.nx_graph.nodes))
 
     def _preprocess_and_pickle(self, save_name):
         names_map_file = os.path.join(self.location, 'ensembl_to_hugo.tsv')
@@ -216,15 +235,16 @@ class HetIOGraph(GeneInteractionGraph):
     het.io
     """
 
-    def __init__(self, graph_type='interaction', **kwargs):
+    def __init__(self, graph_type='interaction', randomize=False, **kwargs):
         name_to_edge = {'interaction': 'GiG', 'regulation': 'Gr>G', 'covariation': 'GcG',
                         'all': 'GiG|Gr>G|GcG'}
         assert graph_type in name_to_edge.keys()
         self.graph_type = graph_type
         self.edge = name_to_edge[graph_type]
         self.filename = 'hetio_{}_graph.pkl'.format(graph_type)
+        self.randomize = randomize
         super(HetIOGraph, self).__init__(**kwargs)
-
+        
     def load_data(self):
         dir_path = self.datastore#os.path.dirname(os.path.realpath(__file__))
         self.location = os.path.join(dir_path, 'graphs/')
@@ -232,6 +252,9 @@ class HetIOGraph(GeneInteractionGraph):
         if not os.path.isfile(pkl_file):
             self._process_and_pickle(save_name=pkl_file)
         self.nx_graph = nx.OrderedGraph(nx.read_gpickle(pkl_file))
+        # Randomize
+        if self.randomize:
+            self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, randmap(self.nx_graph.nodes))
 
     def _process_and_pickle(self, save_name):
         names_map_file = os.path.join(self.location, 'hetionet-v1.0-nodes.tsv')
@@ -267,7 +290,8 @@ class StringDBGraph(GeneInteractionGraph):
     Download link : https://string-db.org/cgi/download.pl?sessionId=qJO5wpaPqJC7&species_text=Homo+sapiens
     """
 
-    def __init__(self, graph_type='all', **kwargs):
+    def __init__(self, graph_type='all', randomize=False, **kwargs):
+        self.proteinlinks = "data/graphs/9606.protein.links.detailed.v11.0.txt"
         self.name_to_edge = {"neighborhood": "neighborhood",
                              "fusion": "fusion",
                              "cooccurence": "cooccurence",
@@ -278,6 +302,7 @@ class StringDBGraph(GeneInteractionGraph):
                              "all": "combined_score"}
         assert graph_type in self.name_to_edge.keys()
         self.graph_type = graph_type
+        self.randomize = randomize
         super(StringDBGraph, self).__init__(**kwargs)
 
     def load_data(self):
@@ -299,4 +324,7 @@ class StringDBGraph(GeneInteractionGraph):
             self.nx_graph = nx.OrderedGraph(edgelist)
             print(" writing graph")
             nx.write_adjlist(self.nx_graph, savefile)
+        # Randomize
+        if self.randomize:
+            self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, randmap(self.nx_graph.nodes))
         print("Graph built !")
