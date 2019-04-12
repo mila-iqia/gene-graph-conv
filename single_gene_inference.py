@@ -27,10 +27,12 @@ parser.add_argument('--edge', default=None, type=str,
 parser.add_argument('--results', default='all_nodes', type=str,
                     help='Name of file to save results to. Default - all_nodes')
 parser.add_argument('--seed', default=0, type=int, help='Seed for training')
+parser.add_argument('--rand', default=False, type=bool, help='Randomize graph ?')
 
 args = parser.parse_args()
 print(args)
 seed = args.seed
+randomize = args.rand
 
 # Setup the results dictionary
 filename = "./experiments/results/{}_seed{}.pkl".format(args.results, seed)
@@ -50,20 +52,28 @@ cuda = torch.cuda.is_available()
 
 graph_dict = {"regnet": RegNetGraph, "genemania": GeneManiaGraph, "humannetv1": HumanNetV1Graph,
               "humannetv2": HumanNetV2Graph, "funcoup": FunCoupGraph,
-              "hetio": HetIOGraph, "stringdb": StringDBGraph}
+              "hetio": HetIOGraph, "stringdb": StringDBGraph, "landmark": None}
 
 # Select graph and set variables
 if args.graph:
     # Check graph arg is valid
     assert args.graph in graph_dict.keys()
-    graph_name = args.graph
-    if graph_name == 'hetio' or graph_name == 'stringdb':
-        gene_graph = graph_dict[graph_name](graph_type=args.edge)
+    if args.graph == 'landmark':
+        landmark_genes = np.load("data/datastore/landmarkgenes.npy")
+        is_first_degree = True
+        is_landmark = True
+        graph_name = "landmark"
     else:
-        gene_graph = graph_dict[graph_name]()
-    is_first_degree = True
+        graph_name = args.graph
+        if graph_name == 'hetio' or graph_name == 'stringdb':
+            gene_graph = graph_dict[graph_name](graph_type=args.edge, randomize=randomize)
+        else:
+            gene_graph = graph_dict[graph_name](randomize=randomize)
+        is_first_degree = True
+        is_landmark = False
 else:
     is_first_degree = False
+    is_landmark = False
     graph_name = "all_nodes"
 
 # Read in data
@@ -88,8 +98,11 @@ except Exception:
 # If assessing first-degree neighbours, then train only for those genes 
 # that are there in the graph 
 which_genes = dataset.df.columns.tolist()
-if args.graph:
+if args.graph and args.graph != 'landmark':
     which_genes = set(gene_graph.nx_graph.nodes).intersection(which_genes)
+if args.graph and args.graph == 'landmark':
+    landmark_genes = [x for x in which_genes if x in landmark_genes]
+    print("Number of covered landmark genes", len(landmark_genes))
 
 print("Number of covered genes", len(which_genes))
 
@@ -112,10 +125,10 @@ for row in tqdm(todo, desc=name):
 #        print("\nRemaining: {}".format(len(results)))
     gene = row["gene"]
     seed = seed
-    model = MLP(column_names=dataset.df.columns, num_layer=1, dropout=False, 
-                train_valid_split=0.5, cuda=cuda, metric=sklearn.metrics.roc_auc_score, 
-                channels=16, batch_size=50, lr=0.001, weight_decay=0.0001, 
-                verbose=False, patience=5, num_epochs=20, seed=seed,
+    model = MLP(column_names=dataset.df.columns, num_layer=1, dropout=False,
+                train_valid_split=0.5, cuda=cuda, metric=sklearn.metrics.roc_auc_score,
+                channels=16, batch_size=10, lr=0.0007, weight_decay=0.00000001,
+                verbose=False, patience=5, num_epochs=10, seed=seed,
                 full_data_cuda=True, evaluate_train=False)
 
     experiment = {
@@ -139,8 +152,11 @@ for row in tqdm(todo, desc=name):
         results = record_result(results, experiment, filename)
         continue
     if is_first_degree:
-        neighbors = list(gene_graph.first_degree(gene)[0])
-        neighbors = [n for n in neighbors if n in X_train.columns.values]
+        if is_landmark:
+            neighbors = landmark_genes
+        else:
+            neighbors = list(gene_graph.first_degree(gene)[0])
+            neighbors = [n for n in neighbors if n in X_train.columns.values]
         X_train = X_train.loc[:, neighbors].copy()
         X_test = X_test.loc[:, neighbors].copy()
     else:
