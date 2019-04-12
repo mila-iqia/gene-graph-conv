@@ -1,4 +1,9 @@
-""" This file contains the wrapper around our gene interaction graph, which is essentially a big adjacency matrix"""
+""" This file contains the wrapper around our gene interaction graph, which is essentially a big adjacency matrix
+
+    The landmark graph is directly implemented in the single_gene_inference.py script. It corresponds to the graph
+     where each gene is connected to the 978 landmark genes identified in the LINCS project
+    see https://clue.io/connectopedia/what_are_landmark_genes for details.
+"""
 
 import csv
 import numpy as np
