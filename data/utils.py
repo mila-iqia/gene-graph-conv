@@ -34,8 +34,8 @@ def symbol_map(gene_symbols):
     return map
 
 
-def ncbi_to_hugo_map(gene_symbols):
-    with open('data/graphs/enterez_NCBI_to_hugo_gene_symbol_march_2019.txt') as csv_file:
+def ncbi_to_hugo_map(gene_symbols, datastore="./data"):
+    with open(datastore + '/graphs/enterez_NCBI_to_hugo_gene_symbol_march_2019.txt') as csv_file:
         next(csv_file)  # Skip first line
         csv_reader = csv.reader(csv_file, delimiter='\t')
         x = {int(row[1]): row[0] for row in csv_reader if row[1] != ""}
@@ -46,8 +46,8 @@ def ncbi_to_hugo_map(gene_symbols):
     return map
 
 
-def ensg_to_hugo_map():
-    with open("data/datastore/ensembl_map.txt") as csv_file:
+def ensg_to_hugo_map(datastore="./data"):
+    with open(datastore + "/datastore/ensembl_map.txt") as csv_file:
         next(csv_file)  # Skip first line
         csv_reader = csv.reader(csv_file, delimiter='\t')
         ensmap = {row[1]: row[0] for row in csv_reader if row[0] != ""}

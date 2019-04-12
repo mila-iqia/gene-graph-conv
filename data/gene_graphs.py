@@ -75,7 +75,6 @@ class GeneManiaGraph(GeneInteractionGraph):
 
     def __init__(self, at_hash="5adbacb0b7ea663ac4a7758d39250a1bd28c5b40", randomize=False, **kwargs):
         self.at_hash = at_hash
-        self.datastore = datastore
         self.randomize = randomize
         super(GeneManiaGraph, self).__init__(**kwargs)
 
@@ -152,7 +151,7 @@ class HumanNetV1Graph(GeneInteractionGraph):
         edgelist = pd.read_csv(self.benchmark, header=None, sep="\t").values.tolist()
         self.nx_graph = nx.OrderedGraph(edgelist)
         # Map nodes from ncbi to hugo names
-        self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, ncbi_to_hugo_map(self.nx_graph.nodes))
+        self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, ncbi_to_hugo_map(self.nx_graph.nodes, datastore=self.datastore))
         # Remove nodes which are not covered by the map
         for node in list(self.nx_graph.nodes):
             if isinstance(node, int):
@@ -165,15 +164,15 @@ class HumanNetV2Graph(GeneInteractionGraph):
     """
 
     def __init__(self, randomize=False, **kwargs):
-        self.benchmark = self.datastore + "/graphs/HumanNet-XN.tsv"
         self.randomize = randomize
         super(HumanNetV2Graph, self).__init__(**kwargs)
 
     def load_data(self):
+        self.benchmark = self.datastore + "/graphs/HumanNet-XN.tsv"
         edgelist = pd.read_csv(self.benchmark, header=None, sep="\t", skiprows=1).values[:, :2].tolist()
         self.nx_graph = nx.OrderedGraph(edgelist)
         # Map nodes from ncbi to hugo names
-        self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, ncbi_to_hugo_map(self.nx_graph.nodes))
+        self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, ncbi_to_hugo_map(self.nx_graph.nodes, datastore=self.datastore))
         # Remove nodes which are not covered by the map
         for node in list(self.nx_graph.nodes):
             if isinstance(node, float):
