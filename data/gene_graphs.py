@@ -16,7 +16,8 @@ class GeneInteractionGraph(object):
         It has an nx_graph, and some helper functions.
     """
 
-    def __init__(self, relabel_genes=True):
+    def __init__(self, relabel_genes=True, datastore="./data"):
+        self.datastore = datastore
         self.load_data()
         self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, symbol_map(self.nx_graph.nodes))
 
@@ -55,10 +56,10 @@ class GeneInteractionGraph(object):
 
 
 class RegNetGraph(GeneInteractionGraph):
-    def __init__(self, at_hash="e109e087a8fc8aec45bae3a74a193922ce27fc58", datastore=""):
+    def __init__(self, at_hash="e109e087a8fc8aec45bae3a74a193922ce27fc58", **kwargs):
         self.at_hash = at_hash
         self.datastore = datastore
-        super(RegNetGraph, self).__init__()
+        super(RegNetGraph, self).__init__(**kwargs)
 
     def load_data(self):
         self.nx_graph = nx.OrderedGraph(
@@ -66,10 +67,10 @@ class RegNetGraph(GeneInteractionGraph):
 
 
 class GeneManiaGraph(GeneInteractionGraph):
-    def __init__(self, at_hash="5adbacb0b7ea663ac4a7758d39250a1bd28c5b40", datastore=""):
+    def __init__(self, at_hash="5adbacb0b7ea663ac4a7758d39250a1bd28c5b40", **kwargs):
         self.at_hash = at_hash
         self.datastore = datastore
-        super(GeneManiaGraph, self).__init__()
+        super(GeneManiaGraph, self).__init__(**kwargs)
 
     def load_data(self):
         self.nx_graph = nx.OrderedGraph(
@@ -132,9 +133,9 @@ class HumanNetV1Graph(GeneInteractionGraph):
     More info on HumanNet V1 : http://www.functionalnet.org/humannet/about.html
     """
 
-    def __init__(self):
-        self.benchmark = "data/graphs/HumanNet.v1.benchmark.txt"
-        super(HumanNetV1Graph, self).__init__()
+    def __init__(self, **kwargs):
+        self.benchmark = self.datastore + "/graphs/HumanNet.v1.benchmark.txt"
+        super(HumanNetV1Graph, self).__init__(**kwargs)
 
     def load_data(self):
         edgelist = pd.read_csv(self.benchmark, header=None, sep="\t").values.tolist()
@@ -152,9 +153,9 @@ class HumanNetV2Graph(GeneInteractionGraph):
     More info on HumanNet V1 : http://www.functionalnet.org/humannet/about.html
     """
 
-    def __init__(self):
-        self.benchmark = "data/graphs/HumanNet-XN.tsv"
-        super(HumanNetV2Graph, self).__init__()
+    def __init__(self, **kwargs):
+        self.benchmark = self.datastore + "/graphs/HumanNet-XN.tsv"
+        super(HumanNetV2Graph, self).__init__(**kwargs)
 
     def load_data(self):
         edgelist = pd.read_csv(self.benchmark, header=None, sep="\t", skiprows=1).values[:, :2].tolist()
@@ -175,9 +176,9 @@ class FunCoupGraph(GeneInteractionGraph):
     graphs folder before instantiating this class
     """
 
-    def __init__(self, filename='funcoup.pkl'):
+    def __init__(self, filename='funcoup.pkl', **kwargs):
         self.filename = filename
-        super(FunCoupGraph, self).__init__()
+        super(FunCoupGraph, self).__init__(**kwargs)
 
     def load_data(self):
         dir_path = os.path.dirname(os.path.realpath(__file__))
@@ -215,17 +216,17 @@ class HetIOGraph(GeneInteractionGraph):
     het.io
     """
 
-    def __init__(self, graph_type='interaction'):
+    def __init__(self, graph_type='interaction', **kwargs):
         name_to_edge = {'interaction': 'GiG', 'regulation': 'Gr>G', 'covariation': 'GcG',
                         'all': 'GiG|Gr>G|GcG'}
         assert graph_type in name_to_edge.keys()
         self.graph_type = graph_type
         self.edge = name_to_edge[graph_type]
         self.filename = 'hetio_{}_graph.pkl'.format(graph_type)
-        super(HetIOGraph, self).__init__()
+        super(HetIOGraph, self).__init__(**kwargs)
 
     def load_data(self):
-        dir_path = os.path.dirname(os.path.realpath(__file__))
+        dir_path = self.datastore#os.path.dirname(os.path.realpath(__file__))
         self.location = os.path.join(dir_path, 'graphs/')
         pkl_file = os.path.join(self.location, self.filename)
         if not os.path.isfile(pkl_file):
@@ -266,8 +267,7 @@ class StringDBGraph(GeneInteractionGraph):
     Download link : https://string-db.org/cgi/download.pl?sessionId=qJO5wpaPqJC7&species_text=Homo+sapiens
     """
 
-    def __init__(self, graph_type='all'):
-        self.proteinlinks = "data/graphs/9606.protein.links.detailed.v11.0.txt"
+    def __init__(self, graph_type='all', **kwargs):
         self.name_to_edge = {"neighborhood": "neighborhood",
                              "fusion": "fusion",
                              "cooccurence": "cooccurence",
@@ -278,21 +278,25 @@ class StringDBGraph(GeneInteractionGraph):
                              "all": "combined_score"}
         assert graph_type in self.name_to_edge.keys()
         self.graph_type = graph_type
-        super(StringDBGraph, self).__init__()
+        super(StringDBGraph, self).__init__(**kwargs)
 
     def load_data(self):
         print("Building StringDB Graph. It can take a while the first time...")
-        savefile = "data/graphs/stringdb_graph_" + self.graph_type + "_edges.adjlist"
+        self.proteinlinks = self.datastore + "/graphs/9606.protein.links.detailed.v11.0.txt"
+        savefile = self.datastore + "/graphs/stringdb_graph_" + self.graph_type + "_edges.adjlist"
         if os.path.isfile(savefile):
             self.nx_graph = nx.read_adjlist(savefile)
         else:
-            ensmap = ensp_to_hugo_map()
+            print(" ensp_to_hugo_map")
+            ensmap = ensp_to_hugo_map(self.datastore)
+            print(" reading self.proteinlinks")
             edges = pd.read_csv(self.proteinlinks, sep=' ')
             selected_edges = edges[self.name_to_edge[self.graph_type]] != 0
             edgelist = edges[selected_edges][["protein1", "protein2"]].values.tolist()
             edgelist = [[ensmap[edge[0][5:]], ensmap[edge[1][5:]]] for edge in edgelist
                         if edge[0][5:] in ensmap.keys() and edge[1][5:] in ensmap.keys()]
-
+            print(" creating OrderedGraph")
             self.nx_graph = nx.OrderedGraph(edgelist)
+            print(" writing graph")
             nx.write_adjlist(self.nx_graph, savefile)
         print("Graph built !")
