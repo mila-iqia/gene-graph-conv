@@ -14,7 +14,6 @@ def record_result(results, experiment, filename):
     pickle.dump(results, open(filename, "wb"))
     return results
 
-
 def symbol_map(gene_symbols):
     """
     This gene code map was generated on February 18th, 2019
@@ -99,3 +98,9 @@ def randmap(nodelist, seed=0):
     random.seed(seed)
     random.shuffle(randnodes)
     return dict(zip(nodes, randnodes))
+
+def get_file_separator(filename):
+    separators = {'.tsv' : '\t', '.txt': '\t', '.csv': ','}
+    sep = separators[os.path.splitext(filename.replace('.gz', ''))[-1]]
+    return sep
+
