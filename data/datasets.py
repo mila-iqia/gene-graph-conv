@@ -9,10 +9,8 @@ import pandas as pd
 import numpy as np
 from torch.utils.data import Dataset
 import academictorrents as at
+import data.utils
 from data.utils import symbol_map, ensg_to_hugo_map
-from cmapPy.pandasGEXpress.parse import parse
-
-import utils
 
 class GeneDataset(Dataset):
     """Gene Expression Dataset."""
@@ -71,10 +69,10 @@ class DatasetFromCSV(GeneDataset):
     def load_data(self):
         # Load expression and label files, samples as rows and genes/label names as columns
         separators = {'.tsv' : '\t', '.txt': '\t', '.csv': ','}
-        sep = utils.get_file_separator(self.expr_path)
+        sep = data.utils.get_file_separator(self.expr_path)
         self.df = pd.read_csv(self.expr_path, sep=sep, index_col=0)
 
-        sep = utils.get_file_separator(self.label_path)
+        sep = data.utils.get_file_separator(self.label_path)
         self.lab = pd.read_csv(self.label_path, sep=sep, index_col=0)
 
         self.node_names = self.df.columns.values
@@ -195,6 +193,7 @@ class GTexDataset(GeneDataset):
         super(GTexDataset, self).__init__()
 
     def load_data(self):
+        from cmapPy.pandasGEXpress.parse import parse
         self.df = parse(self.data_path).data_df.T
         # Map gene names
         eh_map = ensg_to_hugo_map()
