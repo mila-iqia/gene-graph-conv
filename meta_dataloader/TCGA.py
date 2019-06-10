@@ -158,7 +158,7 @@ class TCGATask(Dataset):
         # lazy loading or loading from preloaded data if available
         if preloaded is None:
             hdf_file = os.path.join(data_dir, "TCGA_HiSeqV2.hdf5")
-            with h5py.File(hdf_file) as f:
+            with h5py.File(hdf_file, 'r') as f:
                 self._samples = f['dataset'][indices_to_load, :]
         else:
             self._samples = self._data[np.array(list(indices_to_load), dtype=int), :]
