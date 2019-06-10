@@ -38,7 +38,7 @@ tasks = meta_dataloader.TCGA.TCGAMeta(download=True,
 # clinical_M  PAM50Call_RNAseq
 task = meta_dataloader.TCGA.TCGATask((args.task, args.study), gene_symbol_map_file="genenames_code_map_Feb2019.txt")
 
-
+graph = data.gene_graphs.StringDBGraph(datastore="./data")
 
 print(task.id)
 print(task._samples.shape)
@@ -147,7 +147,7 @@ results_mlp = doMLP()
 def doGGC():
     
     if args.graph == "stringdb":
-        graph = data.gene_graphs.StringDBGraph(datastore="/network/data1/genomics/graphs")
+        graph = data.gene_graphs.StringDBGraph(datastore="./data")
     elif args.graph == "genemania":
         graph = data.gene_graphs.GeneManiaGraph()
     else:
