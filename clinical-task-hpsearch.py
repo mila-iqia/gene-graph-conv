@@ -25,9 +25,9 @@ parser.add_argument('-graph', type=str, default="stringdb")
 args = parser.parse_args()
 print(args)
 
-# tasks = meta_dataloader.TCGA.TCGAMeta(download=True, 
-#                                       min_samples_per_class=10, 
-#                                       gene_symbol_map_file="../genenames_code_map_Feb2019.txt")
+tasks = meta_dataloader.TCGA.TCGAMeta(download=True, 
+                                      min_samples_per_class=10, 
+                                      gene_symbol_map_file="genenames_code_map_Feb2019.txt")
 
 
 # for taskid in tasks.task_ids:
@@ -36,7 +36,7 @@ print(args)
 
 
 # clinical_M  PAM50Call_RNAseq
-task = meta_dataloader.TCGA.TCGATask((args.task, args.study), gene_symbol_map_file="../genenames_code_map_Feb2019.txt")
+task = meta_dataloader.TCGA.TCGATask((args.task, args.study), gene_symbol_map_file="genenames_code_map_Feb2019.txt")
 
 
 
