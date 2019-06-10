@@ -19,6 +19,7 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-seed', type=int, default=0)
+parser.add_argument('-ntrain', type=int, default=50)
 parser.add_argument('-task', type=str, default="histological_type")
 parser.add_argument('-study', type=str, default="LGG")
 parser.add_argument('-graph', type=str, default="stringdb")
@@ -27,7 +28,7 @@ print(args)
 
 tasks = meta_dataloader.TCGA.TCGAMeta(download=True, 
                                       min_samples_per_class=10, 
-                                      gene_symbol_map_file="genenames_code_map_Feb2019.txt")
+                                      gene_symbol_map_file="data/genenames_code_map_Feb2019.txt")
 
 
 # for taskid in tasks.task_ids:
@@ -36,7 +37,7 @@ tasks = meta_dataloader.TCGA.TCGAMeta(download=True,
 
 
 # clinical_M  PAM50Call_RNAseq
-task = meta_dataloader.TCGA.TCGATask((args.task, args.study), gene_symbol_map_file="genenames_code_map_Feb2019.txt")
+task = meta_dataloader.TCGA.TCGATask((args.task, args.study), gene_symbol_map_file="data/genenames_code_map_Feb2019.txt")
 
 print(task.id)
 print(task._samples.shape)
@@ -48,7 +49,7 @@ print(collections.Counter(task._labels))
 X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(task._samples, 
                                                                             task._labels, 
                                                                             stratify=task._labels,
-                                                                            train_size=100,
+                                                                            train_size=args.ntrain,
                                                                             test_size=100,
                                                                             shuffle=True,
                                                                             random_state=args.seed
