@@ -296,7 +296,7 @@ def _download(data_dir, cancers):
                 text_file.write('{}\n'.format(sample_id))
 
         f = h5py.File(hdf_file)
-        f.create_dataset("dataset", data=df.values)
+        f.create_dataset("dataset", data=df.values, compression="gzip")
         f.close()
 
 
