@@ -20,7 +20,7 @@ def symbol_map(gene_symbols):
     at this URL: https://www.genenames.org/cgi-bin/download/custom?col=gd_app_sym&col=gd_prev_sym&status=Approved&status=Entry%20Withdrawn&hgnc_dbtag=on&order_by=gd_app_sym_sort&format=text&submit=submit
     it enables us to map the gene names to the newest version of the gene labels
     """
-    filename = os.path.join(os.path.dirname(__file__), '..', 'genenames_code_map_Feb2019.txt')
+    filename = os.path.join(os.path.dirname(__file__), 'genenames_code_map_Feb2019.txt')
     with open(filename) as csv_file:
         csv_reader = csv.reader(csv_file, delimiter='\t')
         x = {row[0]: row[1] for row in csv_reader}
