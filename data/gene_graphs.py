@@ -21,8 +21,12 @@ class GeneInteractionGraph(object):
         It has an nx_graph, and some helper functions.
     """
 
-    def __init__(self, relabel_genes=True, datastore="./data"):
-        self.datastore = datastore
+    def __init__(self, relabel_genes=True, datastore=None):
+        
+        if datastore is None:
+            self.datastore = os.path.dirname(os.path.abspath(__file__))
+        else:
+            self.datastore = datastore
         self.load_data()
         self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, symbol_map(self.nx_graph.nodes))
 
