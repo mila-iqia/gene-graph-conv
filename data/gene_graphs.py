@@ -341,12 +341,15 @@ class StringDBGraph(GeneInteractionGraph):
         super(StringDBGraph, self).__init__(**kwargs)
 
     def load_data(self):
-        print("Building StringDB Graph. It can take a while the first time...")
-        self.proteinlinks = self.datastore + "/graphs/9606.protein.links.detailed.v11.0.txt"
+        
         savefile = self.datastore + "/graphs/stringdb_graph_" + self.graph_type + "_edges.adjlist"
+        
         if os.path.isfile(savefile):
+            print(" loading from cache file" + savefile)
             self.nx_graph = nx.read_adjlist(savefile)
         else:
+            print("Building StringDB Graph. It can take a while the first time...")
+            self.proteinlinks = self.datastore + "/graphs/9606.protein.links.detailed.v11.0.txt"
             print(" ensp_to_hugo_map")
             ensmap = ensp_to_hugo_map(self.datastore)
             print(" reading self.proteinlinks")
