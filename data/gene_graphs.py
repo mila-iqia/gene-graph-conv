@@ -253,7 +253,8 @@ class HetIOGraph(GeneInteractionGraph):
     het.io
     """
 
-    def __init__(self, graph_type='interaction', randomize=False, **kwargs):
+    def __init__(self, graph_name="hetio", graph_type='interaction', randomize=False, **kwargs):
+        self.graph_name = graph_name
         name_to_edge = {'interaction': 'GiG', 'regulation': 'Gr>G', 'covariation': 'GcG',
                         'all': 'GiG|Gr>G|GcG'}
         assert graph_type in name_to_edge.keys()
@@ -264,19 +265,29 @@ class HetIOGraph(GeneInteractionGraph):
         super(HetIOGraph, self).__init__(**kwargs)
         
     def load_data(self):
-        dir_path = self.datastore#os.path.dirname(os.path.realpath(__file__))
-        self.location = os.path.join(dir_path, 'graphs/')
-        pkl_file = os.path.join(self.location, self.filename)
-        if not os.path.isfile(pkl_file):
-            self._process_and_pickle(save_name=pkl_file)
-        self.nx_graph = nx.OrderedGraph(nx.read_gpickle(pkl_file))
+        
+        savefile = os.path.join(self.datastore,"graphs", 'hetio_{}'.format(self.graph_type) + ".adjlist.gz")
+        
+        if os.path.isfile(savefile):
+            print(" loading from cache file" + savefile)
+            self.nx_graph = nx.read_adjlist(savefile)
+        else:
+            pkl_file = os.path.join(self.datastore,"graphs", 'hetio_{}_graph'.format(self.graph_type) + ".pkl")
+        
+            if not os.path.isfile(pkl_file):
+                self._process_and_pickle(save_name=pkl_file)
+            self.nx_graph = nx.OrderedGraph(nx.read_gpickle(pkl_file))
+            
+            print(" writing graph")
+            nx.write_adjlist(self.nx_graph, savefile)
+            
         # Randomize
         if self.randomize:
             self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, randmap(self.nx_graph.nodes))
 
     def _process_and_pickle(self, save_name):
-        names_map_file = os.path.join(self.location, 'hetionet-v1.0-nodes.tsv')
-        data_file = os.path.join(self.location, 'hetionet-v1.0-edges.sif.gz')
+        names_map_file = os.path.join(self.datastore,"graphs", 'hetionet-v1.0-nodes.tsv')
+        data_file = os.path.join(self.datastore,"graphs", 'hetionet-v1.0-edges.sif.gz')
         if not (os.path.isfile(names_map_file) or os.path.isfile(data_file)):
             print(""" Please download the files from https://github.com/hetio/hetionet/tree/master/hetnet/tsv:
             
