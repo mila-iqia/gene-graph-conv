@@ -363,3 +363,29 @@ class StringDBGraph(GeneInteractionGraph):
             print(" writing graph")
             nx.write_adjlist(self.nx_graph, savefile)
             print("Graph built !")
+
+            
+class LandmarkGraph(GeneInteractionGraph):
+    
+    def __init__(self, gene_names, graph_name="landmark", **kwargs):
+        self.graph_name = graph_name
+        self.gene_names = gene_names
+        super(LandmarkGraph, self).__init__(**kwargs)
+
+    def load_data(self):
+        from tqdm import tqdm
+        self.nx_graph = nx.Graph()
+        
+        landmark_genes = list(np.load(self.datastore + "/datastore/landmarkgenes.npy"))
+        self.nx_graph.add_nodes_from(landmark_genes)
+        print(" loaded landmark genes. nodes="+str(len(self.nx_graph.nodes)))
+        
+        self.nx_graph.add_nodes_from(self.gene_names)
+        print(" merged gene_names to graph. nodes="+str(len(self.nx_graph.nodes)))
+
+        print(" attaching edges to landmark genes...")
+        to_add = itertools.product(self.nx_graph.nodes, landmark_genes)
+        self.nx_graph.add_edges_from(tqdm(to_add, total=(len(self.nx_graph.nodes)*len(landmark_genes))))
+        
+        
+        
