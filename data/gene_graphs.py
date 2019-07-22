@@ -199,25 +199,35 @@ class FunCoupGraph(GeneInteractionGraph):
     graphs folder before instantiating this class
     """
 
-    def __init__(self, filename='funcoup.pkl', randomize=False, **kwargs):
-        self.filename = filename
+    def __init__(self, graph_name='funcoup', randomize=False, **kwargs):
+        self.graph_name = graph_name
         self.randomize = randomize
         super(FunCoupGraph, self).__init__(**kwargs)
 
     def load_data(self):
-        dir_path = os.path.dirname(os.path.realpath(__file__))
-        self.location = os.path.join(dir_path, 'graphs/')
-        pkl_file = os.path.join(self.location, self.filename)
-        if not os.path.isfile(pkl_file):
-            self._preprocess_and_pickle(save_name=pkl_file)
-        self.nx_graph = nx.OrderedGraph(nx.read_gpickle(pkl_file))
-        # Randomize
+        
+        savefile = os.path.join(self.datastore,"graphs", self.graph_name + ".adjlist.gz")
+        
+        if os.path.isfile(savefile):
+            print(" loading from cache file" + savefile)
+            self.nx_graph = nx.read_adjlist(savefile)
+        else:
+            pkl_file = os.path.join(self.datastore,"graphs", self.graph_name + ".pkl")
+            if not os.path.isfile(pkl_file):
+                print(" creating graph")
+                self._preprocess_and_pickle(save_name=pkl_file)
+            self.nx_graph = nx.OrderedGraph(nx.read_gpickle(pkl_file))
+                                
+            print(" writing graph")
+            nx.write_adjlist(self.nx_graph, savefile)
+                                
+        # Randomize0
         if self.randomize:
             self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, randmap(self.nx_graph.nodes))
 
     def _preprocess_and_pickle(self, save_name):
-        names_map_file = os.path.join(self.location, 'ensembl_to_hugo.tsv')
-        data_file = os.path.join(self.location, 'FC4.0_H.sapiens_full.gz')
+        names_map_file = os.path.join(self.datastore,"graphs", 'ensembl_to_hugo.tsv')
+        data_file = os.path.join(self.datastore,"graphs", 'FC4.0_H.sapiens_full.gz')
 
         names = pd.read_csv(names_map_file, sep='\t')
         names.columns = ['symbol', 'ensembl']
