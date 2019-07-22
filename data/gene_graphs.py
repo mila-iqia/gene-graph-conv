@@ -94,15 +94,28 @@ class RegNetGraph(GeneInteractionGraph):
 
 class GeneManiaGraph(GeneInteractionGraph):
 
-    def __init__(self, at_hash="5adbacb0b7ea663ac4a7758d39250a1bd28c5b40", randomize=False, **kwargs):
+    def __init__(self, graph_name="genemania", at_hash="5adbacb0b7ea663ac4a7758d39250a1bd28c5b40", randomize=False, **kwargs):
+        self.graph_name = graph_name
         self.at_hash = at_hash
         self.randomize = randomize
         super(GeneManiaGraph, self).__init__(**kwargs)
 
 
     def load_data(self):
-        self.nx_graph = nx.OrderedGraph(
-            nx.readwrite.gpickle.read_gpickle(at.get(self.at_hash, datastore=self.datastore)))
+        
+        savefile = os.path.join(self.datastore,"graphs", self.graph_name + ".adjlist.gz")
+        
+        if os.path.isfile(savefile):
+            print(" loading from cache file" + savefile)
+            self.nx_graph = nx.read_adjlist(savefile)
+        else:
+        
+            self.nx_graph = nx.OrderedGraph(
+                nx.readwrite.gpickle.read_gpickle(at.get(self.at_hash, datastore=self.datastore)))
+            
+            print(" writing graph")
+            nx.write_adjlist(self.nx_graph, savefile)
+            
         # Randomize
         if self.randomize:
             self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, randmap(self.nx_graph.nodes))
