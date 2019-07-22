@@ -21,7 +21,7 @@ class GeneInteractionGraph(object):
         It has an nx_graph, and some helper functions.
     """
 
-    def __init__(self, relabel_genes=True, datastore=None):
+    def __init__(self, relabel_genes=True, datastore=None, randomize=False):
         
         if datastore is None:
             self.datastore = os.path.dirname(os.path.abspath(__file__))
@@ -29,6 +29,12 @@ class GeneInteractionGraph(object):
             self.datastore = datastore
         self.load_data()
         self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, symbol_map(self.nx_graph.nodes))
+        
+        # Randomize
+        self.randomize = randomize
+        if self.randomize:
+            print("Randomizing the graph")
+            self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, randmap(self.nx_graph.nodes))
 
     def load_data(self):
         raise NotImplementedError
@@ -69,7 +75,6 @@ class RegNetGraph(GeneInteractionGraph):
     def __init__(self, graph_name="regnet", at_hash="e109e087a8fc8aec45bae3a74a193922ce27fc58", randomize=False, **kwargs):
         self.graph_name = graph_name
         self.at_hash = at_hash
-        self.randomize = randomize
         super(RegNetGraph, self).__init__(**kwargs)
 
     def load_data(self):
@@ -86,18 +91,12 @@ class RegNetGraph(GeneInteractionGraph):
             
             print(" writing graph")
             nx.write_adjlist(self.nx_graph, savefile)
-            
-        # Randomize
-        if self.randomize:
-            self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, randmap(self.nx_graph.nodes))
-
 
 class GeneManiaGraph(GeneInteractionGraph):
 
-    def __init__(self, graph_name="genemania", at_hash="5adbacb0b7ea663ac4a7758d39250a1bd28c5b40", randomize=False, **kwargs):
+    def __init__(self, graph_name="genemania", at_hash="5adbacb0b7ea663ac4a7758d39250a1bd28c5b40", **kwargs):
         self.graph_name = graph_name
         self.at_hash = at_hash
-        self.randomize = randomize
         super(GeneManiaGraph, self).__init__(**kwargs)
 
 
@@ -115,10 +114,6 @@ class GeneManiaGraph(GeneInteractionGraph):
             
             print(" writing graph")
             nx.write_adjlist(self.nx_graph, savefile)
-            
-        # Randomize
-        if self.randomize:
-            self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, randmap(self.nx_graph.nodes))
 
 
 class EcoliEcocycGraph(GeneInteractionGraph):
@@ -198,7 +193,6 @@ class HumanNetV2Graph(GeneInteractionGraph):
     """
 
     def __init__(self, randomize=False, **kwargs):
-        self.randomize = randomize
         super(HumanNetV2Graph, self).__init__(**kwargs)
 
     def load_data(self):
@@ -211,9 +205,6 @@ class HumanNetV2Graph(GeneInteractionGraph):
         for node in list(self.nx_graph.nodes):
             if isinstance(node, float):
                 self.nx_graph.remove_node(node)
-        # Randomize
-        if self.randomize:
-            self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, randmap(self.nx_graph.nodes))
 
 
 class FunCoupGraph(GeneInteractionGraph):
@@ -226,7 +217,6 @@ class FunCoupGraph(GeneInteractionGraph):
 
     def __init__(self, graph_name='funcoup', randomize=False, **kwargs):
         self.graph_name = graph_name
-        self.randomize = randomize
         super(FunCoupGraph, self).__init__(**kwargs)
 
     def load_data(self):
@@ -245,10 +235,6 @@ class FunCoupGraph(GeneInteractionGraph):
                                 
             print(" writing graph")
             nx.write_adjlist(self.nx_graph, savefile)
-                                
-        # Randomize0
-        if self.randomize:
-            self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, randmap(self.nx_graph.nodes))
 
     def _preprocess_and_pickle(self, save_name):
         names_map_file = os.path.join(self.datastore,"graphs", 'ensembl_to_hugo.tsv')
@@ -286,7 +272,6 @@ class HetIOGraph(GeneInteractionGraph):
         self.graph_type = graph_type
         self.edge = name_to_edge[graph_type]
         self.filename = 'hetio_{}_graph.pkl'.format(graph_type)
-        self.randomize = randomize
         super(HetIOGraph, self).__init__(**kwargs)
         
     def load_data(self):
@@ -306,9 +291,6 @@ class HetIOGraph(GeneInteractionGraph):
             print(" writing graph")
             nx.write_adjlist(self.nx_graph, savefile)
             
-        # Randomize
-        if self.randomize:
-            self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, randmap(self.nx_graph.nodes))
 
     def _process_and_pickle(self, save_name):
         names_map_file = os.path.join(self.datastore,"graphs", 'hetionet-v1.0-nodes.tsv')
@@ -356,7 +338,6 @@ class StringDBGraph(GeneInteractionGraph):
                              "all": "combined_score"}
         assert graph_type in self.name_to_edge.keys()
         self.graph_type = graph_type
-        self.randomize = randomize
         super(StringDBGraph, self).__init__(**kwargs)
 
     def load_data(self):
@@ -378,7 +359,4 @@ class StringDBGraph(GeneInteractionGraph):
             self.nx_graph = nx.OrderedGraph(edgelist)
             print(" writing graph")
             nx.write_adjlist(self.nx_graph, savefile)
-        # Randomize
-        if self.randomize:
-            self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, randmap(self.nx_graph.nodes))
         print("Graph built !")
