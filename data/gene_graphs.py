@@ -362,4 +362,4 @@ class StringDBGraph(GeneInteractionGraph):
             self.nx_graph = nx.OrderedGraph(edgelist)
             print(" writing graph")
             nx.write_adjlist(self.nx_graph, savefile)
-        print("Graph built !")
+            print("Graph built !")
