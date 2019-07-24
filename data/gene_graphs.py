@@ -21,7 +21,7 @@ class GeneInteractionGraph(object):
         It has an nx_graph, and some helper functions.
     """
 
-    def __init__(self, relabel_genes=True, datastore=None):
+    def __init__(self, relabel_genes=True, datastore=None, randomize=False):
         
         if datastore is None:
             self.datastore = os.path.dirname(os.path.abspath(__file__))
@@ -29,6 +29,12 @@ class GeneInteractionGraph(object):
             self.datastore = datastore
         self.load_data()
         self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, symbol_map(self.nx_graph.nodes))
+        
+        # Randomize
+        self.randomize = randomize
+        if self.randomize:
+            print("Randomizing the graph")
+            self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, randmap(self.nx_graph.nodes))
 
     def load_data(self):
         raise NotImplementedError
@@ -66,34 +72,48 @@ class GeneInteractionGraph(object):
 
 class RegNetGraph(GeneInteractionGraph):
     
-    def __init__(self, at_hash="e109e087a8fc8aec45bae3a74a193922ce27fc58", randomize=False, **kwargs):
+    def __init__(self, graph_name="regnet", at_hash="e109e087a8fc8aec45bae3a74a193922ce27fc58", randomize=False, **kwargs):
+        self.graph_name = graph_name
         self.at_hash = at_hash
-        self.datastore = datastore
-        self.randomize = randomize
         super(RegNetGraph, self).__init__(**kwargs)
 
     def load_data(self):
-        self.nx_graph = nx.OrderedGraph(
-            nx.readwrite.gpickle.read_gpickle(at.get(self.at_hash, datastore=self.datastore)))
-        # Randomize
-        if self.randomize:
-            self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, randmap(self.nx_graph.nodes))
-
+        
+        savefile = os.path.join(self.datastore,"graphs", self.graph_name + ".adjlist.gz")
+        
+        if os.path.isfile(savefile):
+            print(" loading from cache file" + savefile)
+            self.nx_graph = nx.read_adjlist(savefile)
+        else:
+        
+            self.nx_graph = nx.OrderedGraph(
+                nx.readwrite.gpickle.read_gpickle(at.get(self.at_hash, datastore=self.datastore)))
+            
+            print(" writing graph")
+            nx.write_adjlist(self.nx_graph, savefile)
 
 class GeneManiaGraph(GeneInteractionGraph):
 
-    def __init__(self, at_hash="5adbacb0b7ea663ac4a7758d39250a1bd28c5b40", randomize=False, **kwargs):
+    def __init__(self, graph_name="genemania", at_hash="5adbacb0b7ea663ac4a7758d39250a1bd28c5b40", **kwargs):
+        self.graph_name = graph_name
         self.at_hash = at_hash
-        self.randomize = randomize
         super(GeneManiaGraph, self).__init__(**kwargs)
 
 
     def load_data(self):
-        self.nx_graph = nx.OrderedGraph(
-            nx.readwrite.gpickle.read_gpickle(at.get(self.at_hash, datastore=self.datastore)))
-        # Randomize
-        if self.randomize:
-            self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, randmap(self.nx_graph.nodes))
+        
+        savefile = os.path.join(self.datastore,"graphs", self.graph_name + ".adjlist.gz")
+        
+        if os.path.isfile(savefile):
+            print(" loading from cache file" + savefile)
+            self.nx_graph = nx.read_adjlist(savefile)
+        else:
+        
+            self.nx_graph = nx.OrderedGraph(
+                nx.readwrite.gpickle.read_gpickle(at.get(self.at_hash, datastore=self.datastore)))
+            
+            print(" writing graph")
+            nx.write_adjlist(self.nx_graph, savefile)
 
 
 class EcoliEcocycGraph(GeneInteractionGraph):
@@ -173,7 +193,6 @@ class HumanNetV2Graph(GeneInteractionGraph):
     """
 
     def __init__(self, randomize=False, **kwargs):
-        self.randomize = randomize
         super(HumanNetV2Graph, self).__init__(**kwargs)
 
     def load_data(self):
@@ -186,9 +205,6 @@ class HumanNetV2Graph(GeneInteractionGraph):
         for node in list(self.nx_graph.nodes):
             if isinstance(node, float):
                 self.nx_graph.remove_node(node)
-        # Randomize
-        if self.randomize:
-            self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, randmap(self.nx_graph.nodes))
 
 
 class FunCoupGraph(GeneInteractionGraph):
@@ -199,25 +215,30 @@ class FunCoupGraph(GeneInteractionGraph):
     graphs folder before instantiating this class
     """
 
-    def __init__(self, filename='funcoup.pkl', randomize=False, **kwargs):
-        self.filename = filename
-        self.randomize = randomize
+    def __init__(self, graph_name='funcoup', randomize=False, **kwargs):
+        self.graph_name = graph_name
         super(FunCoupGraph, self).__init__(**kwargs)
 
     def load_data(self):
-        dir_path = os.path.dirname(os.path.realpath(__file__))
-        self.location = os.path.join(dir_path, 'graphs/')
-        pkl_file = os.path.join(self.location, self.filename)
-        if not os.path.isfile(pkl_file):
-            self._preprocess_and_pickle(save_name=pkl_file)
-        self.nx_graph = nx.OrderedGraph(nx.read_gpickle(pkl_file))
-        # Randomize
-        if self.randomize:
-            self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, randmap(self.nx_graph.nodes))
+        
+        savefile = os.path.join(self.datastore,"graphs", self.graph_name + ".adjlist.gz")
+        
+        if os.path.isfile(savefile):
+            print(" loading from cache file" + savefile)
+            self.nx_graph = nx.read_adjlist(savefile)
+        else:
+            pkl_file = os.path.join(self.datastore,"graphs", self.graph_name + ".pkl")
+            if not os.path.isfile(pkl_file):
+                print(" creating graph")
+                self._preprocess_and_pickle(save_name=pkl_file)
+            self.nx_graph = nx.OrderedGraph(nx.read_gpickle(pkl_file))
+                                
+            print(" writing graph")
+            nx.write_adjlist(self.nx_graph, savefile)
 
     def _preprocess_and_pickle(self, save_name):
-        names_map_file = os.path.join(self.location, 'ensembl_to_hugo.tsv')
-        data_file = os.path.join(self.location, 'FC4.0_H.sapiens_full.gz')
+        names_map_file = os.path.join(self.datastore,"graphs", 'ensembl_to_hugo.tsv')
+        data_file = os.path.join(self.datastore,"graphs", 'FC4.0_H.sapiens_full.gz')
 
         names = pd.read_csv(names_map_file, sep='\t')
         names.columns = ['symbol', 'ensembl']
@@ -243,30 +264,37 @@ class HetIOGraph(GeneInteractionGraph):
     het.io
     """
 
-    def __init__(self, graph_type='interaction', randomize=False, **kwargs):
+    def __init__(self, graph_name="hetio", graph_type='interaction', randomize=False, **kwargs):
+        self.graph_name = graph_name
         name_to_edge = {'interaction': 'GiG', 'regulation': 'Gr>G', 'covariation': 'GcG',
                         'all': 'GiG|Gr>G|GcG'}
         assert graph_type in name_to_edge.keys()
         self.graph_type = graph_type
         self.edge = name_to_edge[graph_type]
         self.filename = 'hetio_{}_graph.pkl'.format(graph_type)
-        self.randomize = randomize
         super(HetIOGraph, self).__init__(**kwargs)
         
     def load_data(self):
-        dir_path = self.datastore#os.path.dirname(os.path.realpath(__file__))
-        self.location = os.path.join(dir_path, 'graphs/')
-        pkl_file = os.path.join(self.location, self.filename)
-        if not os.path.isfile(pkl_file):
-            self._process_and_pickle(save_name=pkl_file)
-        self.nx_graph = nx.OrderedGraph(nx.read_gpickle(pkl_file))
-        # Randomize
-        if self.randomize:
-            self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, randmap(self.nx_graph.nodes))
+        
+        savefile = os.path.join(self.datastore,"graphs", 'hetio_{}'.format(self.graph_type) + ".adjlist.gz")
+        
+        if os.path.isfile(savefile):
+            print(" loading from cache file" + savefile)
+            self.nx_graph = nx.read_adjlist(savefile)
+        else:
+            pkl_file = os.path.join(self.datastore,"graphs", 'hetio_{}_graph'.format(self.graph_type) + ".pkl")
+        
+            if not os.path.isfile(pkl_file):
+                self._process_and_pickle(save_name=pkl_file)
+            self.nx_graph = nx.OrderedGraph(nx.read_gpickle(pkl_file))
+            
+            print(" writing graph")
+            nx.write_adjlist(self.nx_graph, savefile)
+            
 
     def _process_and_pickle(self, save_name):
-        names_map_file = os.path.join(self.location, 'hetionet-v1.0-nodes.tsv')
-        data_file = os.path.join(self.location, 'hetionet-v1.0-edges.sif.gz')
+        names_map_file = os.path.join(self.datastore,"graphs", 'hetionet-v1.0-nodes.tsv')
+        data_file = os.path.join(self.datastore,"graphs", 'hetionet-v1.0-edges.sif.gz')
         if not (os.path.isfile(names_map_file) or os.path.isfile(data_file)):
             print(""" Please download the files from https://github.com/hetio/hetionet/tree/master/hetnet/tsv:
             
@@ -310,16 +338,18 @@ class StringDBGraph(GeneInteractionGraph):
                              "all": "combined_score"}
         assert graph_type in self.name_to_edge.keys()
         self.graph_type = graph_type
-        self.randomize = randomize
         super(StringDBGraph, self).__init__(**kwargs)
 
     def load_data(self):
-        print("Building StringDB Graph. It can take a while the first time...")
-        self.proteinlinks = self.datastore + "/graphs/9606.protein.links.detailed.v11.0.txt"
+        
         savefile = self.datastore + "/graphs/stringdb_graph_" + self.graph_type + "_edges.adjlist"
+        
         if os.path.isfile(savefile):
+            print(" loading from cache file" + savefile)
             self.nx_graph = nx.read_adjlist(savefile)
         else:
+            print("Building StringDB Graph. It can take a while the first time...")
+            self.proteinlinks = self.datastore + "/graphs/9606.protein.links.detailed.v11.0.txt"
             print(" ensp_to_hugo_map")
             ensmap = ensp_to_hugo_map(self.datastore)
             print(" reading self.proteinlinks")
@@ -332,7 +362,30 @@ class StringDBGraph(GeneInteractionGraph):
             self.nx_graph = nx.OrderedGraph(edgelist)
             print(" writing graph")
             nx.write_adjlist(self.nx_graph, savefile)
-        # Randomize
-        if self.randomize:
-            self.nx_graph = nx.relabel.relabel_nodes(self.nx_graph, randmap(self.nx_graph.nodes))
-        print("Graph built !")
+            print("Graph built !")
+
+            
+class LandmarkGraph(GeneInteractionGraph):
+    
+    def __init__(self, gene_names, graph_name="landmark", **kwargs):
+        self.graph_name = graph_name
+        self.gene_names = gene_names
+        super(LandmarkGraph, self).__init__(**kwargs)
+
+    def load_data(self):
+        from tqdm import tqdm
+        self.nx_graph = nx.Graph()
+        
+        landmark_genes = list(np.load(self.datastore + "/datastore/landmarkgenes.npy"))
+        self.nx_graph.add_nodes_from(landmark_genes)
+        print(" loaded landmark genes. nodes="+str(len(self.nx_graph.nodes)))
+        
+        self.nx_graph.add_nodes_from(self.gene_names)
+        print(" merged gene_names to graph. nodes="+str(len(self.nx_graph.nodes)))
+
+        print(" attaching edges to landmark genes...")
+        to_add = itertools.product(self.nx_graph.nodes, landmark_genes)
+        self.nx_graph.add_edges_from(tqdm(to_add, total=(len(self.nx_graph.nodes)*len(landmark_genes))))
+        
+        
+        
