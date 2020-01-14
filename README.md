@@ -2,6 +2,8 @@
 
 ### Francis Dutil*, Joseph Paul Cohen*, Martin Weiss, Georgy Derevyanko, Yoshua Bengio
 
+**NB** : There is now a separate repository for the paper **Analysis of Gene Interaction Graphs as Prior Knowledge for Machine Learning Models** : [gene-graph-analysis](https://github.com/Bertinus/gene-graph-analysis)
+
 This is a research codebase developed to incorporate gene interaction graphs as a prior for neural networks. With it, you can load a gene expression dataset like The Cancer Genome Atlas (TCGA) and a gene interaction graph like GeneMania, then instantiate a Graph Convolutional Neural Network using the structure of the gene interaction graph and train it on your gene expression data. The pipeline looks like this:
 
 <img src="./data/img/pipeline.png" alt="conv-graph-pipeline">
