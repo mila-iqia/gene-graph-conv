@@ -1,8 +1,10 @@
+gtfparse
+tables==3.6.1
 pytest
 h5py
 numpy
 pandas
-torch
+torch>=1.8
 torchvision
 sklearn
 networkx
