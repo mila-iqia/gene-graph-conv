@@ -22,10 +22,8 @@ from data import datasets
 from data.gene_graphs import GeneManiaGraph
 from data.utils import record_result
 
-
 dataset = datasets.TCGADataset()
 dataset.df = dataset.df - dataset.df.mean(axis=0)
-
 # Setup the results dictionary
 filename = "experiments/results/fig-5.pkl"
 try:
@@ -36,8 +34,12 @@ except Exception as e:
     print("Created a New Results Dictionary")
 
 gene_graph = GeneManiaGraph()
+gene_graph_name_set = set(gene_graph.nx_graph.nodes)
+dataset_name_set = set(dataset.df.columns)
+difference = gene_graph_name_set.difference(dataset_name_set)
+gene_graph.nx_graph.remove_nodes_from(difference)
 
-search_num_genes=[50, 100, 200, 300, 500, 1000, 2000, 4000, 8000, 16300]
+search_num_genes=[50, 100, 200, 300, 500, 1000, 2000, 4000, 8000, len(gene_graph.nx_graph)]
 test_size=300
 search_train_size=[50]
 cuda = torch.cuda.is_available()
@@ -82,7 +84,7 @@ for row in todo:
     gene = row["gene"]
     model_name = row["model"]
     seed = row["seed"]
-    num_genes = row["num_genes"] if row["num_genes"] < 10000 else 16300
+    num_genes = row["num_genes"] if row["num_genes"] < 10000 else len(gene_graph.nx_graph)
     train_size = row["train_size"]
     model = [copy.deepcopy(model) for model in models if model.name == row["model"]][0]
     experiment = {
@@ -96,7 +98,8 @@ for row in todo:
     dataset.labels = dataset.df[gene].where(dataset.df[gene] > 0).notnull().astype("int")
     dataset.labels = dataset.labels.values if type(dataset.labels) == pd.Series else dataset.labels
     X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(dataset.df, dataset.labels, stratify=dataset.labels, train_size=train_size, test_size=test_size, random_state=seed)
-    if num_genes == 16300:
+
+    if num_genes == len(gene_graph.nx_graph):
         neighbors = gene_graph.nx_graph
     else:
         neighbors = gene_graph.bfs_sample_neighbors(gene, num_genes)

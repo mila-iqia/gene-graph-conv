@@ -43,10 +43,7 @@ class GCNLayer(nn.Module):
         nb_examples, nb_channels, nb_nodes = x.size()
         x = x.view(-1, nb_nodes)
 
-        # Needs this hack to work: https://discuss.pytorch.org/t/does-pytorch-support-autograd-on-sparse-matrix/6156/7
-        #x = D.mm(x.t()).t()
-        x = SparseMM(D)(x.t()).t()
-
+        x = torch.matmul(D, x.t()).t()
         x = x.contiguous().view(nb_examples, nb_channels, nb_nodes)
         return x
 
@@ -64,29 +61,6 @@ class GCNLayer(nn.Module):
         x = torch.index_select(x, 2, self.centroids)
         x = x.permute(0, 2, 1).contiguous()
         return x
-
-
-class SparseMM(torch.autograd.Function):
-    """
-    Sparse x dense matrix multiplication with autograd support.
-    Implementation by Soumith Chintala:
-    https://discuss.pytorch.org/t/
-    does-pytorch-support-autograd-on-sparse-matrix/6156/7
-    From: https://github.com/tkipf/pygcn/blob/master/pygcn/layers.py
-    """
-
-    def __init__(self, sparse):
-        super(SparseMM, self).__init__()
-        self.sparse = sparse
-
-    def forward(self, dense):
-        return torch.mm(self.sparse, dense)
-
-    def backward(self, grad_output):
-        grad_input = None
-        if self.needs_input_grad[0]:
-            grad_input = torch.mm(self.sparse.t(), grad_output)
-        return grad_input
 
 
 class EmbeddingLayer(nn.Module):
